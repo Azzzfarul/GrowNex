@@ -1,0 +1,1 @@
+{"flutter":{"platforms":{"android":{"default":{"projectId":"grownex-iot","appId":"1:724621911469:android:c9367542025d15ae976d24","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"grownex-iot","configurations":{"android":"1:724621911469:android:c9367542025d15ae976d24","ios":"1:724621911469:ios:e322903e0e65f847976d24"}}}}}}
