@@ -16,6 +16,11 @@ class DeviceService {
     return Device.fromDocument(doc);
   }
 
+  Future<void> updateDevice(Device device) async {
+    if (device.id.isEmpty) throw ArgumentError('Device id is required');
+    await _firestore.collection('devices').doc(device.id).update(device.toMap());
+  }
+
   Future<void> assignDeviceToZone(String deviceId, String zoneId) async {
     await _firestore.collection('devices').doc(deviceId).set({'assignedZoneId': zoneId}, SetOptions(merge: true));
   }

@@ -5,10 +5,10 @@ class Device {
   final String userId;
   final String? assignedZoneId;
   final String deviceName;
+  final String deviceType;
   final String status;
   final int totalSlots;
   final bool hasLightingModule;
-  final bool hasCameraModule;
   final bool hasFertilizerModule;
   final DateTime? lastSync;
 
@@ -17,10 +17,10 @@ class Device {
     required this.userId,
     this.assignedZoneId,
     required this.deviceName,
+    required this.deviceType,
     required this.status,
-    required this.totalSlots,
+    this.totalSlots = 4,
     required this.hasLightingModule,
-    required this.hasCameraModule,
     required this.hasFertilizerModule,
     this.lastSync,
   });
@@ -35,17 +35,19 @@ class Device {
     DateTime? lastSync;
     if (lastSyncValue is Timestamp) {
       lastSync = lastSyncValue.toDate();
-    } else if (lastSyncValue is DateTime) lastSync = lastSyncValue;
+    } else if (lastSyncValue is DateTime) {
+      lastSync = lastSyncValue;
+    }
 
     return Device(
       id: id,
       userId: map['userId'] as String? ?? '',
       assignedZoneId: map['assignedZoneId'] as String?,
       deviceName: map['deviceName'] as String? ?? 'Device',
-      status: map['status'] as String? ?? 'unknown',
-      totalSlots: (map['totalSlots'] as num?)?.toInt() ?? 0,
+      deviceType: map['deviceType'] as String? ?? 'indoor',
+      status: map['status'] as String? ?? 'offline',
+      totalSlots: 4,
       hasLightingModule: map['hasLightingModule'] as bool? ?? false,
-      hasCameraModule: map['hasCameraModule'] as bool? ?? false,
       hasFertilizerModule: map['hasFertilizerModule'] as bool? ?? false,
       lastSync: lastSync,
     );
@@ -56,10 +58,10 @@ class Device {
       'userId': userId,
       'assignedZoneId': assignedZoneId,
       'deviceName': deviceName,
+      'deviceType': deviceType,
       'status': status,
-      'totalSlots': totalSlots,
+      'totalSlots': 4,
       'hasLightingModule': hasLightingModule,
-      'hasCameraModule': hasCameraModule,
       'hasFertilizerModule': hasFertilizerModule,
       'lastSync': lastSync != null ? Timestamp.fromDate(lastSync!) : null,
     };
