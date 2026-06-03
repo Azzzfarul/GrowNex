@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class PlantScreen extends StatelessWidget {
+  static const routeName = '/plants';
+
   const PlantScreen({super.key});
 
   Widget _buildPlantCard(String name, String zone, String status, Color badgeColor) {
@@ -20,8 +22,14 @@ class PlantScreen extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                child: Text(
+                  name, 
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
@@ -35,9 +43,10 @@ class PlantScreen extends StatelessWidget {
           const SizedBox(height: 12),
           Text(zone, style: const TextStyle(color: Colors.black54)),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+          const Wrap(
+            spacing: 20,
+            runSpacing: 12,
+            children: [
               _AttributeItem(label: 'Light', value: '75%'),
               _AttributeItem(label: 'Water', value: '54%'),
               _AttributeItem(label: 'Temp', value: '24°C'),
@@ -50,13 +59,18 @@ class PlantScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.grey[100],
-      child: ListView(
-        padding: const EdgeInsets.all(20),
+    // Wrapping with Scaffold introduces the necessary Material design canvas
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        title: const Text('Plant zones', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.grey[100],
+        elevation: 0,
+        foregroundColor: Colors.black, // Ensures the back arrow is visible
+      ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         children: [
-          const Text('Plant zones', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
           const Text('Monitor each plant cluster and zone at a glance.', style: TextStyle(color: Colors.black54)),
           const SizedBox(height: 20),
           _buildPlantCard('Aloe Vera', 'Zone 1', 'Healthy', Colors.green),

@@ -1,45 +1,93 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../../models/zone_model.dart';
+import '../../services/firestore/zone_service.dart';
+import '../../widgets/zone_card_widget.dart';
+import '../plants/plant_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
-  Widget _buildCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(18),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: Color((color.toARGB32() & 0x00FFFFFF) | 0x26000000),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(color: Colors.black54)),
-                const SizedBox(height: 8),
-                Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ],
-      ),
+  static const _contentPadding = EdgeInsets.all(20);
+  static final ZoneService _zoneService = ZoneService();
+
+  @override
+  Widget build(BuildContext context) {
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser == null) {
+      return const Center(
+        child: Text('Please sign in to see your dashboard.'),
+      );
+    }
+
+    return FutureBuilder<String?>(
+      // prefer FirebaseAuth displayName for username; fall back to null
+      future: Future.value(authUser.displayName),
+      builder: (context, usernameSnapshot) {
+        if (usernameSnapshot.connectionState != ConnectionState.done) {
+          return _buildLoading();
+        }
+
+        final username = usernameSnapshot.data ?? 'gardener';
+
+        return StreamBuilder<List<Zone>>(
+          stream: _zoneService.watchZones(authUser.uid),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(child: Text('Unable to load dashboard: ${snapshot.error}'));
+            }
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return _buildLoading();
+            }
+
+            final zones = snapshot.data ?? [];
+            final activeZones = zones.where((zone) => zone.status.toLowerCase().contains('healthy')).length;
+            final attentionZones = zones.length - activeZones;
+
+            return SingleChildScrollView(
+              padding: _contentPadding,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Good morning, $username', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  const Text('Here is today\'s plant performance overview.', style: TextStyle(color: Colors.black54)),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(child: _buildSummaryCard('Active zones', '$activeZones active zone${activeZones == 1 ? '' : 's'}', Colors.green)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _buildSummaryCard('Attention', '$attentionZones zone${attentionZones == 1 ? '' : 's'} require attention', Colors.orange)),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  if (zones.isEmpty)
+                    _buildEmptyState()
+                  else ...[
+                    const Text('Zone overview', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    ...zones.map((zone) => ZoneCardWidget(
+                          zone: zone,
+                          onViewDetails: () {
+                            Navigator.pushNamed(context, PlantScreen.routeName, arguments: zone);
+                          },
+                        )),
+                  ],
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _buildSectionCard(String title, String value, String label) {
+  Widget _buildLoading() {
+    return const Center(child: CircularProgressIndicator());
+  }
+
+  Widget _buildSummaryCard(String title, String value, Color color) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -52,47 +100,28 @@ class DashboardScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Text(label, style: const TextStyle(color: Colors.black54)),
+          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Good morning, gardener', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          const Text('Here is today\'s plant performance overview.', style: TextStyle(color: Colors.black54)),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(child: _buildCard('Plants active', '12', Icons.grass, Colors.green)),
-              const SizedBox(width: 16),
-              Expanded(child: _buildCard('Humidity', '72%', Icons.water_drop, Colors.blue)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(child: _buildCard('Health score', '88', Icons.favorite, Colors.teal)),
-              const SizedBox(width: 16),
-              Expanded(child: _buildCard('Energy', 'Good', Icons.sunny, Colors.amber)),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _buildSectionCard('Growth status', 'Stable and thriving', 'No immediate actions required.'),
-          const SizedBox(height: 16),
-          _buildSectionCard('Environment', 'Optimal', 'Temperature and moisture are within healthy range.'),
+  Widget _buildEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(color: Colors.black12, blurRadius: 14, offset: const Offset(0, 6)),
         ],
+      ),
+      child: const Text(
+        'No zones found yet. Add a zone first, then the dashboard will show the latest sensor summaries and alerts.',
+        style: TextStyle(color: Colors.black54),
       ),
     );
   }
