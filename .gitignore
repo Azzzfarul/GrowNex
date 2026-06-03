@@ -32,6 +32,7 @@ migrate_working_dir/
 .pub/
 /build/
 /mobile_app/build/
+/mobile_app/android/build/reports/problems/
 /coverage/
 
 # Symbolication related
