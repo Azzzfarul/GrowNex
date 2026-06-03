@@ -1,103 +1,134 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
-class PlantScreen extends StatelessWidget {
+import '../../models/zone_model.dart';
+import 'widgets/zone_summary_card.dart';
+import 'zone_detail/zone_detail_screen.dart';
+import 'add_zone_screen.dart';
+
+class PlantScreen extends StatefulWidget {
   static const routeName = '/plants';
 
   const PlantScreen({super.key});
 
-  Widget _buildPlantCard(String name, String zone, String status, Color badgeColor) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 5)),
-        ],
-      ),
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  name, 
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Color((badgeColor.toARGB32() & 0x00FFFFFF) | 0x33000000),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(status, style: TextStyle(color: badgeColor, fontWeight: FontWeight.w600)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(zone, style: const TextStyle(color: Colors.black54)),
-          const SizedBox(height: 16),
-          const Wrap(
-            spacing: 20,
-            runSpacing: 12,
-            children: [
-              _AttributeItem(label: 'Light', value: '75%'),
-              _AttributeItem(label: 'Water', value: '54%'),
-              _AttributeItem(label: 'Temp', value: '24°C'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  @override
+  State<PlantScreen> createState() => _PlantScreenState();
+}
+
+class _PlantScreenState extends State<PlantScreen> {
+  String _selectedFilter = 'All';
+
+  final List<Zone> _zones = [
+    Zone(
+      id: 'zone1',
+      userId: 'user1',
+      zoneName: 'Indoor Zone',
+      zoneType: 'indoor',
+      status: 'healthy',
+      totalPlantSlots: 5,
+      zonePhotoUrl: null,
+      deviceId: 'ESP32-01',
+      latestTemp: 24,
+      latestHumid: 62,
+      latestLight: 480,
+      latestMoisture: 56,
+      latestTimestamp: DateTime.now(),
+      alertSummary: 'Conditions are stable.',
+      createdAt: DateTime.now(),
+    ),
+    Zone(
+      id: 'zone2',
+      userId: 'user1',
+      zoneName: 'Outdoor Patch',
+      zoneType: 'outdoor',
+      status: 'needs attention',
+      totalPlantSlots: 4,
+      zonePhotoUrl: null,
+      deviceId: null,
+      latestTemp: 28,
+      latestHumid: 70,
+      latestLight: 900,
+      latestMoisture: 42,
+      latestTimestamp: DateTime.now(),
+      alertSummary: 'Moisture is low.',
+      createdAt: DateTime.now(),
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    // Wrapping with Scaffold introduces the necessary Material design canvas
+    final filteredZones = _selectedFilter == 'All'
+        ? _zones
+        : _zones.where((zone) => zone.zoneType.toLowerCase() == _selectedFilter.toLowerCase()).toList();
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text('Plant zones', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.grey[100],
         elevation: 0,
-        foregroundColor: Colors.black, // Ensures the back arrow is visible
+        foregroundColor: Colors.black,
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         children: [
-          const Text('Monitor each plant cluster and zone at a glance.', style: TextStyle(color: Colors.black54)),
-          const SizedBox(height: 20),
-          _buildPlantCard('Aloe Vera', 'Zone 1', 'Healthy', Colors.green),
-          _buildPlantCard('Basil', 'Zone 2', 'Needs water', Colors.orange),
-          _buildPlantCard('Ficus', 'Zone 3', 'Stable', Colors.teal),
-          _buildPlantCard('Orchid', 'Zone 4', 'Check soil', Colors.amber),
+          Row(
+            children: [
+              const Expanded(child: Text('Filter zones by type', style: TextStyle(color: Colors.black54))),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddZoneScreen()));
+                  if (result != null && result is Map<String, dynamic>) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Zone "${result['zoneName']}" created')));
+                  }
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Add zone'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _buildFilterButton('All'),
+              const SizedBox(width: 10),
+              _buildFilterButton('Indoor'),
+              const SizedBox(width: 10),
+              _buildFilterButton('Outdoor'),
+            ],
+          ),
+          const SizedBox(height: 22),
+          if (filteredZones.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: Text('No zones found for this filter.')),
+            )
+          else
+            ...filteredZones.map((zone) => ZoneSummaryCard(
+                  zone: zone,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => ZoneDetailScreen(zone: zone)),
+                  ),
+                )),
         ],
       ),
     );
   }
-}
 
-class _AttributeItem extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _AttributeItem({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(color: Colors.black54)),
-        const SizedBox(height: 6),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-      ],
+  Widget _buildFilterButton(String label) {
+    final bool isSelected = label == _selectedFilter;
+    return Expanded(
+      child: OutlinedButton(
+        onPressed: () => setState(() => _selectedFilter = label),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: isSelected ? Colors.green[700] : Colors.white,
+          foregroundColor: isSelected ? Colors.white : Colors.black87,
+          side: BorderSide(color: isSelected ? Colors.green[700]! : Colors.grey.shade300),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        child: Text(label),
+      ),
     );
   }
 }
