@@ -1,9 +1,11 @@
-﻿import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 
 import '../../models/zone_model.dart';
+import '../../services/firestore/zone_service.dart';
+import 'add_zone_screen.dart';
 import 'widgets/zone_summary_card.dart';
 import 'zone_detail/zone_detail_screen.dart';
-import 'add_zone_screen.dart';
 
 class PlantScreen extends StatefulWidget {
   static const routeName = '/plants';
@@ -16,50 +18,17 @@ class PlantScreen extends StatefulWidget {
 
 class _PlantScreenState extends State<PlantScreen> {
   String _selectedFilter = 'All';
+  late final Stream<List<Zone>> _zonesStream;
 
-  final List<Zone> _zones = [
-    Zone(
-      id: 'zone1',
-      userId: 'user1',
-      zoneName: 'Indoor Zone',
-      zoneType: 'indoor',
-      status: 'healthy',
-      totalPlantSlots: 5,
-      zonePhotoUrl: null,
-      deviceId: 'ESP32-01',
-      latestTemp: 24,
-      latestHumid: 62,
-      latestLight: 480,
-      latestMoisture: 56,
-      latestTimestamp: DateTime.now(),
-      alertSummary: 'Conditions are stable.',
-      createdAt: DateTime.now(),
-    ),
-    Zone(
-      id: 'zone2',
-      userId: 'user1',
-      zoneName: 'Outdoor Patch',
-      zoneType: 'outdoor',
-      status: 'needs attention',
-      totalPlantSlots: 4,
-      zonePhotoUrl: null,
-      deviceId: null,
-      latestTemp: 28,
-      latestHumid: 70,
-      latestLight: 900,
-      latestMoisture: 42,
-      latestTimestamp: DateTime.now(),
-      alertSummary: 'Moisture is low.',
-      createdAt: DateTime.now(),
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    _zonesStream = ZoneService().watchZones(userId);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final filteredZones = _selectedFilter == 'All'
-        ? _zones
-        : _zones.where((zone) => zone.zoneType.toLowerCase() == _selectedFilter.toLowerCase()).toList();
-
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -68,50 +37,64 @@ class _PlantScreenState extends State<PlantScreen> {
         elevation: 0,
         foregroundColor: Colors.black,
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        children: [
-          Row(
+      body: StreamBuilder<List<Zone>>(
+        stream: _zonesStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error loading zones: ${snapshot.error}'));
+          }
+
+          final allZones = snapshot.data ?? [];
+          final filteredZones = _selectedFilter == 'All'
+              ? allZones
+              : allZones.where((z) => z.zoneType.toLowerCase() == _selectedFilter.toLowerCase()).toList();
+
+          return ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             children: [
-              const Expanded(child: Text('Filter zones by type', style: TextStyle(color: Colors.black54))),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddZoneScreen()));
-                  if (result != null && result is Map<String, dynamic>) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Zone "${result['zoneName']}" created')));
-                  }
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Add zone'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              _buildFilterButton('All'),
-              const SizedBox(width: 10),
-              _buildFilterButton('Indoor'),
-              const SizedBox(width: 10),
-              _buildFilterButton('Outdoor'),
-            ],
-          ),
-          const SizedBox(height: 22),
-          if (filteredZones.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(child: Text('No zones found for this filter.')),
-            )
-          else
-            ...filteredZones.map((zone) => ZoneSummaryCard(
-                  zone: zone,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => ZoneDetailScreen(zone: zone)),
+              Row(
+                children: [
+                  const Expanded(child: Text('Filter zones by type', style: TextStyle(color: Colors.black54))),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AddZoneScreen()));
+                    },
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add zone'),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
                   ),
-                )),
-        ],
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  _buildFilterButton('All'),
+                  const SizedBox(width: 10),
+                  _buildFilterButton('Indoor'),
+                  const SizedBox(width: 10),
+                  _buildFilterButton('Outdoor'),
+                ],
+              ),
+              const SizedBox(height: 22),
+              if (filteredZones.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(child: Text('No zones found for this filter.')),
+                )
+              else
+                ...filteredZones.map((zone) => ZoneSummaryCard(
+                      zone: zone,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => ZoneDetailScreen(zoneId: zone.id)),
+                      ),
+                    )),
+            ],
+          );
+        },
       ),
     );
   }

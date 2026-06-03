@@ -1,4 +1,9 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../../models/zone_model.dart';
+import '../../services/firestore/device_service.dart';
+import '../../services/firestore/zone_service.dart';
 
 class AddZoneScreen extends StatefulWidget {
   const AddZoneScreen({super.key});
@@ -9,9 +14,10 @@ class AddZoneScreen extends StatefulWidget {
 
 class _AddZoneScreenState extends State<AddZoneScreen> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _nameCtrl = TextEditingController();
-  final TextEditingController _deviceCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  final _deviceCtrl = TextEditingController();
   String _zoneType = 'indoor';
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -20,16 +26,53 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final result = {
-      'zoneName': _nameCtrl.text.trim(),
-      'zoneType': _zoneType,
-      'deviceId': _deviceCtrl.text.trim().isEmpty ? null : _deviceCtrl.text.trim(),
-    };
+    setState(() => _loading = true);
+    try {
+      final deviceId = _deviceCtrl.text.trim().isEmpty ? null : _deviceCtrl.text.trim();
 
-    Navigator.of(context).pop(result);
+      if (deviceId != null) {
+        final device = await DeviceService().getDevice(deviceId);
+        if (device == null) {
+          _showError('Device "$deviceId" not found. Check the device ID and try again.');
+          return;
+        }
+        if (device.assignedZoneId != null && device.assignedZoneId!.isNotEmpty) {
+          _showError('Device "$deviceId" is already assigned to another zone.');
+          return;
+        }
+      }
+
+      final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final zone = Zone(
+        id: '',
+        userId: userId,
+        zoneName: _nameCtrl.text.trim(),
+        zoneType: _zoneType,
+        status: 'healthy',
+        totalPlantSlots: 0,
+        deviceId: deviceId,
+        createdAt: DateTime.now(),
+      );
+
+      final newZoneId = await ZoneService().createZone(zone);
+
+      if (deviceId != null) {
+        await DeviceService().assignDeviceToZone(deviceId, newZoneId);
+      }
+
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) _showError('Failed to create zone: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -74,11 +117,16 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _submit,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    child: Text('Create zone'),
+                  onPressed: _loading ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[700],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: _loading
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text('Create zone'),
                   ),
                 ),
               ),

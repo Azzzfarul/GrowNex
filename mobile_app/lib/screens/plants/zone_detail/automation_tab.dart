@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../../models/automation_config_model.dart';
 import '../../../models/zone_model.dart';
+import '../../../services/firestore/automation_config_service.dart';
 
 class AutomationTab extends StatefulWidget {
   final Zone zone;
@@ -12,9 +16,59 @@ class AutomationTab extends StatefulWidget {
 }
 
 class _AutomationTabState extends State<AutomationTab> {
+  final _configService = AutomationConfigService();
+  Timer? _debounce;
+
   bool _autoWater = false;
   bool _autoLight = false;
   bool _autoFertilizer = false;
+  final _wateringThresholdCtrl = TextEditingController();
+  final _lightingScheduleCtrl = TextEditingController();
+  final _fertilizingScheduleCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadConfig();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _wateringThresholdCtrl.dispose();
+    _lightingScheduleCtrl.dispose();
+    _fertilizingScheduleCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadConfig() async {
+    final config = await _configService.getConfig(widget.zone.id);
+    if (config != null && mounted) {
+      setState(() {
+        _autoWater = config.autoWateringEnabled;
+        _autoLight = config.autoLightingEnabled;
+        _autoFertilizer = config.autoFertilizingEnabled;
+        _wateringThresholdCtrl.text = config.wateringThreshold?.toString() ?? '';
+        _lightingScheduleCtrl.text = config.lightingSchedule ?? '';
+        _fertilizingScheduleCtrl.text = config.fertilizingSchedule ?? '';
+      });
+    }
+  }
+
+  void _scheduleSave() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      final config = AutomationConfig(
+        autoWateringEnabled: _autoWater,
+        wateringThreshold: num.tryParse(_wateringThresholdCtrl.text),
+        autoLightingEnabled: _autoLight,
+        lightingSchedule: _lightingScheduleCtrl.text.trim().isEmpty ? null : _lightingScheduleCtrl.text.trim(),
+        autoFertilizingEnabled: _autoFertilizer,
+        fertilizingSchedule: _fertilizingScheduleCtrl.text.trim().isEmpty ? null : _fertilizingScheduleCtrl.text.trim(),
+      );
+      _configService.saveConfig(widget.zone.id, config);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,11 +89,51 @@ class _AutomationTabState extends State<AutomationTab> {
         const SizedBox(height: 24),
         const Text('Automation settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
-        _buildToggleSetting('Water automation', _autoWater, (value) => setState(() => _autoWater = value), 'Trigger at moisture threshold'),
+        _buildToggleSetting(
+          title: 'Water automation',
+          subtitle: 'Trigger at moisture threshold',
+          value: _autoWater,
+          onChanged: (v) {
+            setState(() => _autoWater = v);
+            _scheduleSave();
+          },
+          expandedContent: TextField(
+            controller: _wateringThresholdCtrl,
+            decoration: const InputDecoration(labelText: 'Moisture threshold (%)', border: OutlineInputBorder()),
+            keyboardType: TextInputType.number,
+            onChanged: (_) => _scheduleSave(),
+          ),
+        ),
         const SizedBox(height: 12),
-        _buildToggleSetting('Light automation', _autoLight, (value) => setState(() => _autoLight = value), 'Schedule lighting times'),
+        _buildToggleSetting(
+          title: 'Light automation',
+          subtitle: 'Schedule lighting times',
+          value: _autoLight,
+          onChanged: (v) {
+            setState(() => _autoLight = v);
+            _scheduleSave();
+          },
+          expandedContent: TextField(
+            controller: _lightingScheduleCtrl,
+            decoration: const InputDecoration(labelText: 'Schedule (e.g. 08:00–18:00)', border: OutlineInputBorder()),
+            onChanged: (_) => _scheduleSave(),
+          ),
+        ),
         const SizedBox(height: 12),
-        _buildToggleSetting('Fertilizer automation', _autoFertilizer, (value) => setState(() => _autoFertilizer = value), 'Trigger on schedule'),
+        _buildToggleSetting(
+          title: 'Fertilizer automation',
+          subtitle: 'Trigger on schedule',
+          value: _autoFertilizer,
+          onChanged: (v) {
+            setState(() => _autoFertilizer = v);
+            _scheduleSave();
+          },
+          expandedContent: TextField(
+            controller: _fertilizingScheduleCtrl,
+            decoration: const InputDecoration(labelText: 'Schedule (e.g. weekly)', border: OutlineInputBorder()),
+            onChanged: (_) => _scheduleSave(),
+          ),
+        ),
       ],
     );
   }
@@ -68,7 +162,13 @@ class _AutomationTabState extends State<AutomationTab> {
     );
   }
 
-  Widget _buildToggleSetting(String title, bool value, ValueChanged<bool> onChanged, String subtitle) {
+  Widget _buildToggleSetting({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    required Widget expandedContent,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -82,19 +182,13 @@ class _AutomationTabState extends State<AutomationTab> {
           Row(
             children: [
               Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold))),
-              Switch(value: value, onChanged: onChanged, activeColor: Colors.green[700]),
+              Switch(value: value, onChanged: onChanged, activeThumbColor: Colors.green[700]),
             ],
           ),
           Text(subtitle, style: const TextStyle(color: Colors.black54)),
           if (value) ...[
             const SizedBox(height: 14),
-            const Text('Configure threshold or schedule', style: TextStyle(color: Colors.black54)),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(child: TextField(decoration: const InputDecoration(labelText: 'Value / time', border: OutlineInputBorder()))),
-              ],
-            ),
+            expandedContent,
           ],
         ],
       ),

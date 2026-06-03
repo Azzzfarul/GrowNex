@@ -34,6 +34,14 @@ class ZoneService {
     return Zone.fromDocument(doc);
   }
 
+  Stream<Zone?> watchZone(String zoneId) {
+    return _firestore
+        .collection('zones')
+        .doc(zoneId)
+        .snapshots()
+        .map((doc) => doc.exists ? Zone.fromDocument(doc) : null);
+  }
+
   Future<void> updateLatestSensor(String zoneId,
       {num? latestTemp,
       num? latestHumid,

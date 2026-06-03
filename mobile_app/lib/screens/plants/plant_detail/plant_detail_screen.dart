@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/plant_model.dart';
+import '../../../services/firestore/plant_service.dart';
 
 class PlantDetailScreen extends StatefulWidget {
   final Plant plant;
@@ -15,6 +16,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _speciesController;
   late final TextEditingController _notesController;
+  bool _loading = false;
 
   @override
   void initState() {
@@ -30,6 +32,39 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     _speciesController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _loading = true);
+    try {
+      final updated = Plant(
+        id: widget.plant.id,
+        zoneId: widget.plant.zoneId,
+        plantName: _nameController.text.trim(),
+        species: _speciesController.text.trim(),
+        status: widget.plant.status,
+        slotNumber: widget.plant.slotNumber,
+        preferredMoistureMin: widget.plant.preferredMoistureMin,
+        preferredMoistureMax: widget.plant.preferredMoistureMax,
+        preferredHumidityMin: widget.plant.preferredHumidityMin,
+        preferredHumidityMax: widget.plant.preferredHumidityMax,
+        preferredTemperatureMin: widget.plant.preferredTemperatureMin,
+        preferredTemperatureMax: widget.plant.preferredTemperatureMax,
+        preferredLightCondition: widget.plant.preferredLightCondition,
+        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+        createdAt: widget.plant.createdAt,
+      );
+      await PlantService().updatePlant(updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Changes saved.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -53,11 +88,16 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
           _buildNotesField(),
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 14),
-              child: Text('Save changes'),
+            onPressed: _loading ? null : _save,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green[700],
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: _loading
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Save changes'),
             ),
           ),
         ],
@@ -68,10 +108,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   Widget _buildPhotoSection() {
     return Container(
       height: 180,
-      decoration: BoxDecoration(
-        color: Colors.grey[200],
-        borderRadius: BorderRadius.circular(18),
-      ),
+      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(18)),
       child: const Center(child: Icon(Icons.local_florist, size: 60, color: Colors.black38)),
     );
   }

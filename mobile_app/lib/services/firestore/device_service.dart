@@ -10,6 +10,12 @@ class DeviceService {
     return docRef.id;
   }
 
+  Future<Device?> getDevice(String deviceId) async {
+    final doc = await _firestore.collection('devices').doc(deviceId).get();
+    if (!doc.exists) return null;
+    return Device.fromDocument(doc);
+  }
+
   Future<void> assignDeviceToZone(String deviceId, String zoneId) async {
     await _firestore.collection('devices').doc(deviceId).set({'assignedZoneId': zoneId}, SetOptions(merge: true));
   }

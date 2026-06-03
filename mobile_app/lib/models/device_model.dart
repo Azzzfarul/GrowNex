@@ -33,8 +33,9 @@ class Device {
   factory Device.fromMap(String id, Map<String, dynamic> map) {
     final lastSyncValue = map['lastSync'];
     DateTime? lastSync;
-    if (lastSyncValue is Timestamp) lastSync = lastSyncValue.toDate();
-    else if (lastSyncValue is DateTime) lastSync = lastSyncValue;
+    if (lastSyncValue is Timestamp) {
+      lastSync = lastSyncValue.toDate();
+    } else if (lastSyncValue is DateTime) lastSync = lastSyncValue;
 
     return Device(
       id: id,

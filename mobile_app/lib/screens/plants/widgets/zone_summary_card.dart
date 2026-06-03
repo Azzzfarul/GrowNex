@@ -29,7 +29,7 @@ class ZoneSummaryCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: zone.deviceId != null ? Colors.green.withOpacity(0.16) : Colors.grey.withOpacity(0.16),
+                    color: zone.deviceId != null ? Colors.green.withValues(alpha: 0.16) : Colors.grey.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(

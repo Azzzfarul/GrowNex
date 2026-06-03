@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../models/plant_model.dart';
+import '../../services/firestore/plant_service.dart';
+
 class AddPlantScreen extends StatefulWidget {
   final String zoneId;
+  final int totalPlantSlots;
 
-  const AddPlantScreen({super.key, required this.zoneId});
+  const AddPlantScreen({super.key, required this.zoneId, required this.totalPlantSlots});
 
   @override
   State<AddPlantScreen> createState() => _AddPlantScreenState();
@@ -11,9 +15,10 @@ class AddPlantScreen extends StatefulWidget {
 
 class _AddPlantScreenState extends State<AddPlantScreen> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _speciesCtrl = TextEditingController();
-  final TextEditingController _nameCtrl = TextEditingController();
-  final TextEditingController _slotCtrl = TextEditingController();
+  final _speciesCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  final _slotCtrl = TextEditingController();
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -23,17 +28,29 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final result = {
-      'zoneId': widget.zoneId,
-      'species': _speciesCtrl.text.trim(),
-      'name': _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
-      'slotNumber': _slotCtrl.text.trim().isEmpty ? null : int.tryParse(_slotCtrl.text.trim()),
-    };
-
-    Navigator.of(context).pop(result);
+    setState(() => _loading = true);
+    try {
+      final plant = Plant(
+        id: '',
+        zoneId: widget.zoneId,
+        plantName: _nameCtrl.text.trim().isEmpty ? _speciesCtrl.text.trim() : _nameCtrl.text.trim(),
+        species: _speciesCtrl.text.trim(),
+        status: 'healthy',
+        slotNumber: int.tryParse(_slotCtrl.text.trim()) ?? 0,
+        createdAt: DateTime.now(),
+      );
+      await PlantService().createPlant(plant);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add plant: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -56,7 +73,8 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
                 validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter the plant species' : null,
               ),
               const SizedBox(height: 8),
-              const Text('Providing an accurate species helps the AI give better care recommendations.', style: TextStyle(color: Colors.black54, fontSize: 12)),
+              const Text('Providing an accurate species helps the AI give better care recommendations.',
+                  style: TextStyle(color: Colors.black54, fontSize: 12)),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _nameCtrl,
@@ -65,18 +83,33 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
               const SizedBox(height: 12),
               TextFormField(
                 controller: _slotCtrl,
-                decoration: const InputDecoration(labelText: 'Slot number (optional)', border: OutlineInputBorder()),
+                decoration: InputDecoration(
+                  labelText: 'Slot number (1–${widget.totalPlantSlots})',
+                  border: const OutlineInputBorder(),
+                ),
                 keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final n = int.tryParse(v.trim());
+                  if (n == null) return 'Enter a valid number';
+                  if (n < 1 || n > widget.totalPlantSlots) return 'Slot must be between 1 and ${widget.totalPlantSlots}';
+                  return null;
+                },
               ),
               const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _submit,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    child: Text('Add plant'),
+                  onPressed: _loading ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[700],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: _loading
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text('Add plant'),
                   ),
                 ),
               ),
