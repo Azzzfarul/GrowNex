@@ -19,6 +19,9 @@ class _AutomationTabState extends State<AutomationTab> {
   final _configService = AutomationConfigService();
   Timer? _debounce;
 
+  bool _waterOn = false;
+  bool _lightOn = false;
+  bool _fertilizerOn = false;
   bool _autoWater = false;
   bool _autoLight = false;
   bool _autoFertilizer = false;
@@ -72,6 +75,28 @@ class _AutomationTabState extends State<AutomationTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.zone.deviceId == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.settings_remote, size: 64, color: Colors.grey[350]),
+              const SizedBox(height: 20),
+              const Text('No device connected', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              const Text(
+                'Connect a device to this zone from the Overview tab to access automation controls.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -79,13 +104,13 @@ class _AutomationTabState extends State<AutomationTab> {
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(child: _buildActionCard('Water', Icons.water_drop, Colors.blue)),
+            Expanded(child: _buildActionCard('Water', Icons.water_drop, Colors.blue, isOn: _waterOn, onToggle: () => setState(() => _waterOn = !_waterOn))),
             const SizedBox(width: 12),
-            Expanded(child: _buildActionCard('Fertilize', Icons.grass, Colors.amber)),
+            Expanded(child: _buildActionCard('Fertilize', Icons.grass, Colors.amber, isOn: _fertilizerOn, onToggle: () => setState(() => _fertilizerOn = !_fertilizerOn))),
           ],
         ),
         const SizedBox(height: 12),
-        _buildActionCard('Light', Icons.sunny, Colors.orange),
+        _buildActionCard('Light', Icons.sunny, Colors.orange, isOn: _lightOn, onToggle: () => setState(() => _lightOn = !_lightOn)),
         const SizedBox(height: 24),
         const Text('Automation settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
@@ -138,14 +163,14 @@ class _AutomationTabState extends State<AutomationTab> {
     );
   }
 
-  Widget _buildActionCard(String title, IconData icon, Color color) {
+  Widget _buildActionCard(String title, IconData icon, Color color, {required bool isOn, required VoidCallback onToggle}) {
     return SizedBox(
       height: 110,
       child: ElevatedButton(
-        onPressed: () {},
+        onPressed: onToggle,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: color,
+          backgroundColor: isOn ? Colors.green[700] : Colors.white,
+          foregroundColor: isOn ? Colors.white : color,
           elevation: 1,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           padding: const EdgeInsets.all(16),
@@ -155,7 +180,7 @@ class _AutomationTabState extends State<AutomationTab> {
           children: [
             Icon(icon, size: 28),
             const SizedBox(height: 16),
-            Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+            Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isOn ? Colors.white : color)),
           ],
         ),
       ),

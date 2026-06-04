@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import ZoneDetailPage from './pages/ZoneDetailPage'
+import DeviceDetailPage from './pages/DeviceDetailPage'
 import DashboardPage from './pages/DashboardPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import PlantsPage from './pages/PlantsPage'
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="plants" element={<PlantsPage />} />
             <Route path="zones/:zoneId" element={<ZoneDetailPage />} />
             <Route path="devices" element={<DevicesPage />} />
+            <Route path="devices/:deviceId" element={<DeviceDetailPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Routes>
