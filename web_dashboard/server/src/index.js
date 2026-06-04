@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import './firebase-admin.js'
+import { init as initMqttBridge } from './services/mqttBridge.js'
 import express from 'express'
 import cors from 'cors'
 import authRoutes from './routes/auth.js'
@@ -24,4 +25,5 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 
 app.listen(PORT, () => {
   console.log(`GrowNex server running on http://localhost:${PORT}`)
+  initMqttBridge()
 })

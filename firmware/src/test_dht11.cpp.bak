@@ -1,0 +1,28 @@
+#include <Arduino.h>
+#include <DHT.h>
+
+#define DHT_PIN  4      // GPIO pin connected to DHT11 data pin
+#define DHT_TYPE DHT11
+
+DHT dht(DHT_PIN, DHT_TYPE);
+
+void setup() {
+  Serial.begin(115200);
+  delay(500);
+  dht.begin();
+  Serial.println("DHT11 test started");
+}
+
+void loop() {
+  delay(2000);  // DHT11 needs at least 1s between reads
+
+  float humidity    = dht.readHumidity();
+  float temperature = dht.readTemperature();  // Celsius
+
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("Failed to read from DHT11 — check wiring");
+    return;
+  }
+
+  Serial.printf("Temperature: %.1f °C  |  Humidity: %.1f %%\n", temperature, humidity);
+}
