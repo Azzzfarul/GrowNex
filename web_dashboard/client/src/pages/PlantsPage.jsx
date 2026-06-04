@@ -1,8 +1,87 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, query, where, onSnapshot } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+
+function AddZoneModal({ userId, onClose }) {
+  const [zoneName, setZoneName] = useState('')
+  const [zoneType, setZoneType] = useState('indoor')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!zoneName.trim()) return
+    setLoading(true)
+    setError('')
+    try {
+      await addDoc(collection(db, 'zones'), {
+        userId,
+        zoneName: zoneName.trim(),
+        zoneType,
+        status: 'healthy',
+        totalPlantSlots: 0,
+        createdAt: serverTimestamp(),
+      })
+      onClose()
+    } catch {
+      setError('Failed to create zone. Please try again.')
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-5">Add Zone</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-500 mb-1">Zone name</label>
+            <input
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={zoneName}
+              onChange={(e) => setZoneName(e.target.value)}
+              placeholder="e.g. Tomato bed"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-500 mb-1">Zone type</label>
+            <select
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              value={zoneType}
+              onChange={(e) => setZoneType(e.target.value)}
+            >
+              <option value="indoor">Indoor</option>
+              <option value="outdoor">Outdoor</option>
+            </select>
+          </div>
+          <p className="text-xs text-gray-400">
+            You can assign a device to this zone after creation from the zone's Overview tab.
+          </p>
+          {error && <p className="text-sm text-red-500">{error}</p>}
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
+            >
+              {loading ? 'Creating…' : 'Create zone'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 const MAX_PLANTS = 4
 const FILTERS = ['All', 'Indoor', 'Outdoor']
@@ -23,6 +102,7 @@ export default function PlantsPage() {
   const [plantCounts, setPlantCounts] = useState({})
   const [loading,     setLoading]     = useState(true)
   const [filter,      setFilter]      = useState('All')
+  const [showAdd,     setShowAdd]     = useState(false)
 
   // Subscribe to zones
   useEffect(() => {
@@ -64,11 +144,20 @@ export default function PlantsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900">Plant zones</h1>
-      <p className="text-sm text-gray-500 mt-1 mb-5">Monitor each plant cluster and zone at a glance.</p>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold text-gray-900">Plant zones</h1>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
+        >
+          <span className="text-base leading-none">+</span>
+          <span>Add zone</span>
+        </button>
+      </div>
 
-      {/* Filter chips */}
-      <div className="flex gap-2 mb-6">
+      {/* Filter row */}
+      <div className="flex items-center gap-2 mb-6">
+        <span className="text-sm text-gray-400 mr-1">Filter zones by type</span>
         {FILTERS.map((f) => (
           <button
             key={f}
@@ -87,7 +176,7 @@ export default function PlantsPage() {
       {filteredZones.length === 0 ? (
         <p className="text-sm text-gray-400">
           {zones.length === 0
-            ? 'No zones found. Add zones in the mobile app.'
+            ? 'No zones found yet. Add a zone to get started.'
             : `No ${filter.toLowerCase()} zones found.`}
         </p>
       ) : (
@@ -136,12 +225,18 @@ export default function PlantsPage() {
                   <SensorPill label="Light"    value={z.latestLight    != null ? `${z.latestLight} lx`  : null} />
                 </div>
 
-                <p className="text-xs text-brand-500 font-medium mt-4">Tap to view zone →</p>
+                <p className="text-xs text-gray-400 mt-3">
+                  {z.alertSummary ?? 'Summary unavailable'}
+                </p>
+
+                <p className="text-xs text-brand-500 font-medium mt-2">Tap to view zone →</p>
               </button>
             )
           })}
         </div>
       )}
+
+      {showAdd && <AddZoneModal userId={user.uid} onClose={() => setShowAdd(false)} />}
     </div>
   )
 }

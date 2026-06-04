@@ -16,6 +16,8 @@ class Zone {
   final DateTime? latestTimestamp;
   final String? alertSummary;
   final DateTime? createdAt;
+  final bool hasFertilizer;
+  final bool hasLight;
 
   Zone({
     required this.id,
@@ -33,6 +35,8 @@ class Zone {
     this.latestTimestamp,
     this.alertSummary,
     this.createdAt,
+    this.hasFertilizer = false,
+    this.hasLight = false,
   });
 
   factory Zone.fromDocument(DocumentSnapshot doc) {
@@ -75,6 +79,8 @@ class Zone {
       latestTimestamp: latestTimestamp,
       alertSummary: map['alertSummary'] as String?,
       createdAt: createdAt,
+      hasFertilizer: map['hasFertilizer'] as bool? ?? false,
+      hasLight: map['hasLight'] as bool? ?? false,
     );
   }
 
@@ -94,6 +100,8 @@ class Zone {
       'latestTimestamp': latestTimestamp != null ? Timestamp.fromDate(latestTimestamp!) : null,
       'alertSummary': alertSummary,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
+      'hasFertilizer': hasFertilizer,
+      'hasLight': hasLight,
     };
   }
 }

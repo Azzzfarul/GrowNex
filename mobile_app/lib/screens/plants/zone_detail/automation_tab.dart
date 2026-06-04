@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../models/automation_config_model.dart';
+import '../../../models/device_model.dart';
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/automation_config_service.dart';
+import '../../../services/firestore/device_service.dart';
 
 class AutomationTab extends StatefulWidget {
   final Zone zone;
@@ -18,6 +20,8 @@ class AutomationTab extends StatefulWidget {
 class _AutomationTabState extends State<AutomationTab> {
   final _configService = AutomationConfigService();
   Timer? _debounce;
+
+  Stream<Device?>? _deviceStream;
 
   bool _waterOn = false;
   bool _lightOn = false;
@@ -33,6 +37,21 @@ class _AutomationTabState extends State<AutomationTab> {
   void initState() {
     super.initState();
     _loadConfig();
+    if (widget.zone.deviceId != null) {
+      _deviceStream = DeviceService().watchDevice(widget.zone.deviceId!);
+    }
+  }
+
+  @override
+  void didUpdateWidget(AutomationTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.zone.deviceId != widget.zone.deviceId) {
+      setState(() {
+        _deviceStream = widget.zone.deviceId != null
+            ? DeviceService().watchDevice(widget.zone.deviceId!)
+            : null;
+      });
+    }
   }
 
   @override
@@ -97,69 +116,87 @@ class _AutomationTabState extends State<AutomationTab> {
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        const Text('Manual controls', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        Row(
+    return StreamBuilder<Device?>(
+      stream: _deviceStream,
+      builder: (context, snap) {
+        final device   = snap.data;
+        final hasFert  = device?.hasFertilizerModule ?? false;
+        final hasLight = device?.hasLightingModule   ?? false;
+
+        return ListView(
+          padding: const EdgeInsets.all(20),
           children: [
-            Expanded(child: _buildActionCard('Water', Icons.water_drop, Colors.blue, isOn: _waterOn, onToggle: () => setState(() => _waterOn = !_waterOn))),
-            const SizedBox(width: 12),
-            Expanded(child: _buildActionCard('Fertilize', Icons.grass, Colors.amber, isOn: _fertilizerOn, onToggle: () => setState(() => _fertilizerOn = !_fertilizerOn))),
+            const Text('Manual controls', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            if (hasFert)
+              Row(
+                children: [
+                  Expanded(child: _buildActionCard('Water', Icons.water_drop, Colors.blue, isOn: _waterOn, onToggle: () => setState(() => _waterOn = !_waterOn))),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildActionCard('Fertilize', Icons.grass, Colors.amber, isOn: _fertilizerOn, onToggle: () => setState(() => _fertilizerOn = !_fertilizerOn))),
+                ],
+              )
+            else
+              _buildActionCard('Water', Icons.water_drop, Colors.blue, isOn: _waterOn, onToggle: () => setState(() => _waterOn = !_waterOn)),
+            if (hasLight) ...[
+              const SizedBox(height: 12),
+              _buildActionCard('Light', Icons.sunny, Colors.orange, isOn: _lightOn, onToggle: () => setState(() => _lightOn = !_lightOn)),
+            ],
+            const SizedBox(height: 24),
+            const Text('Automation settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            _buildToggleSetting(
+              title: 'Water automation',
+              subtitle: 'Trigger at moisture threshold',
+              value: _autoWater,
+              onChanged: (v) {
+                setState(() => _autoWater = v);
+                _scheduleSave();
+              },
+              expandedContent: TextField(
+                controller: _wateringThresholdCtrl,
+                decoration: const InputDecoration(labelText: 'Moisture threshold (%)', border: OutlineInputBorder()),
+                keyboardType: TextInputType.number,
+                onChanged: (_) => _scheduleSave(),
+              ),
+            ),
+            if (hasLight) ...[
+              const SizedBox(height: 12),
+              _buildToggleSetting(
+                title: 'Light automation',
+                subtitle: 'Schedule lighting times',
+                value: _autoLight,
+                onChanged: (v) {
+                  setState(() => _autoLight = v);
+                  _scheduleSave();
+                },
+                expandedContent: TextField(
+                  controller: _lightingScheduleCtrl,
+                  decoration: const InputDecoration(labelText: 'Schedule (e.g. 08:00–18:00)', border: OutlineInputBorder()),
+                  onChanged: (_) => _scheduleSave(),
+                ),
+              ),
+            ],
+            if (hasFert) ...[
+              const SizedBox(height: 12),
+              _buildToggleSetting(
+                title: 'Fertilizer automation',
+                subtitle: 'Trigger on schedule',
+                value: _autoFertilizer,
+                onChanged: (v) {
+                  setState(() => _autoFertilizer = v);
+                  _scheduleSave();
+                },
+                expandedContent: TextField(
+                  controller: _fertilizingScheduleCtrl,
+                  decoration: const InputDecoration(labelText: 'Schedule (e.g. weekly)', border: OutlineInputBorder()),
+                  onChanged: (_) => _scheduleSave(),
+                ),
+              ),
+            ],
           ],
-        ),
-        const SizedBox(height: 12),
-        _buildActionCard('Light', Icons.sunny, Colors.orange, isOn: _lightOn, onToggle: () => setState(() => _lightOn = !_lightOn)),
-        const SizedBox(height: 24),
-        const Text('Automation settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        _buildToggleSetting(
-          title: 'Water automation',
-          subtitle: 'Trigger at moisture threshold',
-          value: _autoWater,
-          onChanged: (v) {
-            setState(() => _autoWater = v);
-            _scheduleSave();
-          },
-          expandedContent: TextField(
-            controller: _wateringThresholdCtrl,
-            decoration: const InputDecoration(labelText: 'Moisture threshold (%)', border: OutlineInputBorder()),
-            keyboardType: TextInputType.number,
-            onChanged: (_) => _scheduleSave(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        _buildToggleSetting(
-          title: 'Light automation',
-          subtitle: 'Schedule lighting times',
-          value: _autoLight,
-          onChanged: (v) {
-            setState(() => _autoLight = v);
-            _scheduleSave();
-          },
-          expandedContent: TextField(
-            controller: _lightingScheduleCtrl,
-            decoration: const InputDecoration(labelText: 'Schedule (e.g. 08:00–18:00)', border: OutlineInputBorder()),
-            onChanged: (_) => _scheduleSave(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        _buildToggleSetting(
-          title: 'Fertilizer automation',
-          subtitle: 'Trigger on schedule',
-          value: _autoFertilizer,
-          onChanged: (v) {
-            setState(() => _autoFertilizer = v);
-            _scheduleSave();
-          },
-          expandedContent: TextField(
-            controller: _fertilizingScheduleCtrl,
-            decoration: const InputDecoration(labelText: 'Schedule (e.g. weekly)', border: OutlineInputBorder()),
-            onChanged: (_) => _scheduleSave(),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 

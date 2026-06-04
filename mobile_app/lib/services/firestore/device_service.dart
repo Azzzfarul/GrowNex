@@ -41,8 +41,18 @@ class DeviceService {
     await _firestore.collection('devices').doc(device.id).update(device.toMap());
   }
 
-  Future<void> assignDeviceToZone(String deviceId, String zoneId) async {
-    await _firestore.collection('devices').doc(deviceId).set({'assignedZoneId': zoneId}, SetOptions(merge: true));
+  Future<void> claimDevice(String deviceId, String userId) async {
+    await _firestore.collection('devices').doc(deviceId).set(
+      {'userId': userId},
+      SetOptions(merge: true),
+    );
+  }
+
+  Future<void> assignDeviceToZone(String deviceId, String zoneId, String userId) async {
+    await _firestore.collection('devices').doc(deviceId).set(
+      {'assignedZoneId': zoneId, 'userId': userId},
+      SetOptions(merge: true),
+    );
   }
 
   Future<void> updateDeviceStatus(String deviceId, String status) async {

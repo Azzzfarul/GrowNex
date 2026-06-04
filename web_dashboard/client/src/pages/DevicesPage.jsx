@@ -1,111 +1,143 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, query, where, onSnapshot, addDoc } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 
-function AddDeviceModal({ userId, onClose }) {
-  const [deviceName, setDeviceName] = useState('')
-  const [deviceType, setDeviceType] = useState('indoor')
-  const [hasLightingModule, setHasLightingModule] = useState(false)
-  const [hasFertilizerModule, setHasFertilizerModule] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+function AddDeviceModal({ user, onClose }) {
+  const [searchId,    setSearchId]    = useState('')
+  const [foundDevice, setFoundDevice] = useState(null)
+  const [searching,   setSearching]   = useState(false)
+  const [searchError, setSearchError] = useState(null)
+  const [claiming,    setClaiming]    = useState(false)
+  const [claimError,  setClaimError]  = useState(null)
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (!deviceName.trim()) return
-    setLoading(true)
-    setError('')
+  async function search() {
+    const id = searchId.trim()
+    if (!id) return
+    setSearching(true)
+    setSearchError(null)
+    setFoundDevice(null)
     try {
-      await addDoc(collection(db, 'devices'), {
-        userId,
-        deviceName: deviceName.trim(),
-        deviceType,
-        status: 'offline',
-        totalSlots: 4,
-        hasLightingModule,
-        hasFertilizerModule,
-        lastSync: null,
-        assignedZoneId: null,
-      })
-      onClose()
+      const snap = await getDoc(doc(db, 'devices', id))
+      if (!snap.exists()) {
+        setSearchError('Device not found. Check the ID and try again.')
+      } else {
+        const d = { id: snap.id, ...snap.data() }
+        if (d.userId && d.userId !== user.uid) {
+          setSearchError('This device is already registered to another account.')
+        } else {
+          setFoundDevice(d)
+        }
+      }
     } catch {
-      setError('Failed to add device. Please try again.')
-      setLoading(false)
+      setSearchError('Search failed. Please try again.')
+    } finally {
+      setSearching(false)
     }
   }
+
+  async function claim() {
+    if (!foundDevice) return
+    setClaiming(true)
+    setClaimError(null)
+    try {
+      await setDoc(doc(db, 'devices', foundDevice.id), { userId: user.uid }, { merge: true })
+      onClose()
+    } catch {
+      setClaimError('Failed to claim device. Please try again.')
+      setClaiming(false)
+    }
+  }
+
+  const isIndoor = foundDevice?.deviceType?.toLowerCase() === 'indoor'
+  const isOnline = foundDevice?.status === 'online'
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-5">Add Device</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-gray-500 mb-1">Device name</label>
-            <input
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              value={deviceName}
-              onChange={(e) => setDeviceName(e.target.value)}
-              placeholder="e.g. Greenhouse sensor"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-500 mb-1">Device type</label>
-            <select
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              value={deviceType}
-              onChange={(e) => setDeviceType(e.target.value)}
-            >
-              <option value="indoor">Indoor</option>
-              <option value="outdoor">Outdoor</option>
-            </select>
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-800 mb-1">Optional modules</p>
-            <p className="text-xs text-gray-400 mb-3">Camera module is built-in on all devices.</p>
-            <div className="space-y-2">
-              <label className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-50">
-                <span className="text-lg leading-none">☀️</span>
-                <span className="flex-1 text-sm text-gray-800">Light module</span>
-                <input
-                  type="checkbox"
-                  checked={hasLightingModule}
-                  onChange={(e) => setHasLightingModule(e.target.checked)}
-                  className="w-4 h-4 accent-green-600"
-                />
-              </label>
-              <label className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-50">
-                <span className="text-lg leading-none">🧪</span>
-                <span className="flex-1 text-sm text-gray-800">Fertilizer module</span>
-                <input
-                  type="checkbox"
-                  checked={hasFertilizerModule}
-                  onChange={(e) => setHasFertilizerModule(e.target.checked)}
-                  className="w-4 h-4 accent-green-600"
-                />
-              </label>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">Add Device</h2>
+        <p className="text-sm text-gray-400 mb-5">Enter your ESP32 device ID to link it to your account.</p>
+
+        {/* Search row */}
+        <div className="flex gap-2 mb-3">
+          <input
+            type="text"
+            value={searchId}
+            onChange={(e) => setSearchId(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && search()}
+            placeholder="e.g. ESP32-ABCD1234"
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <button
+            onClick={search}
+            disabled={searching || !searchId.trim()}
+            className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+          >
+            {searching ? '…' : 'Find'}
+          </button>
+        </div>
+
+        {searchError && (
+          <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-3">{searchError}</p>
+        )}
+
+        {/* Found device card */}
+        {foundDevice && (
+          <div className="border border-green-200 bg-green-50 rounded-xl p-4 mb-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-green-600 font-bold text-base">✓</span>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">{foundDevice.deviceName}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
+                  <span className="text-xs text-gray-500 capitalize">
+                    {foundDevice.deviceType ?? 'Unknown'} · {isOnline ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+              </div>
             </div>
+            {(foundDevice.hasFertilizerModule || (isIndoor && foundDevice.hasLightingModule)) && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-1.5">Installed modules</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {foundDevice.hasFertilizerModule && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                      🧪 Fertilizer
+                    </span>
+                  )}
+                  {isIndoor && foundDevice.hasLightingModule && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                      ☀️ Light
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <div className="flex gap-3 pt-2">
+        )}
+
+        {claimError && (
+          <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-3">{claimError}</p>
+        )}
+
+        <div className="flex gap-3 pt-1">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          {foundDevice && (
             <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
+              onClick={claim}
+              disabled={claiming}
               className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
             >
-              {loading ? 'Registering…' : 'Register device'}
+              {claiming ? 'Claiming…' : 'Claim device'}
             </button>
-          </div>
-        </form>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -206,7 +238,7 @@ export default function DevicesPage() {
         </div>
       )}
 
-      {showAdd && <AddDeviceModal userId={user.uid} onClose={() => setShowAdd(false)} />}
+      {showAdd && <AddDeviceModal user={user} onClose={() => setShowAdd(false)} />}
     </div>
   )
 }

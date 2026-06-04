@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase'
 
 function Toggle({ value, onChange }) {
@@ -35,12 +35,6 @@ function ToggleSetting({ title, subtitle, value, onChange, children }) {
   )
 }
 
-const ACTUATORS = [
-  { label: 'Water',     icon: '💧', activeRing: 'ring-blue-300'  },
-  { label: 'Fertilize', icon: '🌿', activeRing: 'ring-green-300' },
-  { label: 'Light',     icon: '☀️', activeRing: 'ring-amber-300' },
-]
-
 export default function AutomationTab({ zone }) {
   const [waterOn,      setWaterOn]      = useState(false)
   const [lightOn,      setLightOn]      = useState(false)
@@ -51,13 +45,25 @@ export default function AutomationTab({ zone }) {
   const [waterThresh,  setWaterThresh]  = useState('')
   const [lightSched,   setLightSched]   = useState('')
   const [fertSched,    setFertSched]    = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading,  setLoading]  = useState(true)
+  const [device,   setDevice]   = useState(null)
   const debounce = useRef(null)
 
-  const actuatorStates = [
-    { on: waterOn, setOn: setWaterOn },
-    { on: fertOn,  setOn: setFertOn  },
-    { on: lightOn, setOn: setLightOn },
+  // Watch device doc for live module flag updates
+  useEffect(() => {
+    if (!zone.deviceId) { setDevice(null); return }
+    return onSnapshot(doc(db, 'devices', zone.deviceId), (snap) => {
+      setDevice(snap.exists() ? { id: snap.id, ...snap.data() } : null)
+    })
+  }, [zone.deviceId])
+
+  const hasFert  = device?.hasFertilizerModule ?? false
+  const hasLight = device?.hasLightingModule   ?? false
+
+  const actuators = [
+    { label: 'Water',     icon: '💧', activeRing: 'ring-blue-300',  on: waterOn, setOn: setWaterOn },
+    ...(hasFert  ? [{ label: 'Fertilize', icon: '🌿', activeRing: 'ring-green-300', on: fertOn,  setOn: setFertOn  }] : []),
+    ...(hasLight ? [{ label: 'Light',     icon: '☀️', activeRing: 'ring-amber-300', on: lightOn, setOn: setLightOn }] : []),
   ]
 
   useEffect(() => {
@@ -104,23 +110,20 @@ export default function AutomationTab({ zone }) {
       <div>
         <h3 className="font-bold text-gray-900 mb-3">Manual controls</h3>
         <div className="grid grid-cols-3 gap-3">
-          {ACTUATORS.map(({ label, icon, activeRing }, i) => {
-            const { on, setOn } = actuatorStates[i]
-            return (
-              <button
-                key={label}
-                onClick={() => setOn(!on)}
-                className={`rounded-2xl border shadow-sm p-4 flex flex-col gap-3 text-left transition-all ring-2 ${
-                  on
-                    ? `bg-green-600 border-green-600 ${activeRing} text-white`
-                    : `bg-white border-gray-100 ring-transparent hover:ring-2 hover:${activeRing}`
-                }`}
-              >
-                <span className="text-2xl">{icon}</span>
-                <span className={`text-sm font-bold ${on ? 'text-white' : 'text-gray-700'}`}>{label}</span>
-              </button>
-            )
-          })}
+          {actuators.map(({ label, icon, activeRing, on, setOn }) => (
+            <button
+              key={label}
+              onClick={() => setOn(!on)}
+              className={`rounded-2xl border shadow-sm p-4 flex flex-col gap-3 text-left transition-all ring-2 ${
+                on
+                  ? `bg-green-600 border-green-600 ${activeRing} text-white`
+                  : `bg-white border-gray-100 ring-transparent hover:ring-2 hover:${activeRing}`
+              }`}
+            >
+              <span className="text-2xl">{icon}</span>
+              <span className={`text-sm font-bold ${on ? 'text-white' : 'text-gray-700'}`}>{label}</span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -144,37 +147,41 @@ export default function AutomationTab({ zone }) {
             />
           </ToggleSetting>
 
-          <ToggleSetting
-            title="Light automation"
-            subtitle="Schedule lighting times"
-            value={autoLight}
-            onChange={(v) => { setAutoLight(v); save({ autoLightingEnabled: v }) }}
-          >
-            <label className="block text-sm font-medium text-gray-700 mb-1">Schedule (e.g. 08:00–18:00)</label>
-            <input
-              type="text"
-              value={lightSched}
-              onChange={(e) => { setLightSched(e.target.value); save({ lightingSchedule: e.target.value || null }) }}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              placeholder="08:00–18:00"
-            />
-          </ToggleSetting>
+          {hasLight && (
+            <ToggleSetting
+              title="Light automation"
+              subtitle="Schedule lighting times"
+              value={autoLight}
+              onChange={(v) => { setAutoLight(v); save({ autoLightingEnabled: v }) }}
+            >
+              <label className="block text-sm font-medium text-gray-700 mb-1">Schedule (e.g. 08:00–18:00)</label>
+              <input
+                type="text"
+                value={lightSched}
+                onChange={(e) => { setLightSched(e.target.value); save({ lightingSchedule: e.target.value || null }) }}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                placeholder="08:00–18:00"
+              />
+            </ToggleSetting>
+          )}
 
-          <ToggleSetting
-            title="Fertilizer automation"
-            subtitle="Trigger on schedule"
-            value={autoFert}
-            onChange={(v) => { setAutoFert(v); save({ autoFertilizingEnabled: v }) }}
-          >
-            <label className="block text-sm font-medium text-gray-700 mb-1">Schedule (e.g. weekly)</label>
-            <input
-              type="text"
-              value={fertSched}
-              onChange={(e) => { setFertSched(e.target.value); save({ fertilizingSchedule: e.target.value || null }) }}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              placeholder="weekly"
-            />
-          </ToggleSetting>
+          {hasFert && (
+            <ToggleSetting
+              title="Fertilizer automation"
+              subtitle="Trigger on schedule"
+              value={autoFert}
+              onChange={(v) => { setAutoFert(v); save({ autoFertilizingEnabled: v }) }}
+            >
+              <label className="block text-sm font-medium text-gray-700 mb-1">Schedule (e.g. weekly)</label>
+              <input
+                type="text"
+                value={fertSched}
+                onChange={(e) => { setFertSched(e.target.value); save({ fertilizingSchedule: e.target.value || null }) }}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                placeholder="weekly"
+              />
+            </ToggleSetting>
+          )}
         </div>
       </div>
     </div>

@@ -16,14 +16,15 @@ class OverviewTab extends StatefulWidget {
 }
 
 class _OverviewTabState extends State<OverviewTab> {
-  Device? _selectedDevice;
-  bool _assignLoading = false;
+  // Assigned device display
+  Future<Device?>? _assignedDeviceFuture;
   bool _removeLoading = false;
+
+  // Dropdown assignment
+  Device? _selectedDevice;
   Future<List<Device>>? _availableDevicesFuture;
   int _dropdownKey = 0;
-  // Keyed fetch of the currently assigned device name
-  Future<Device?>? _assignedDeviceFuture;
-  String? _lastFetchedDeviceId;
+  bool _assignLoading = false;
 
   @override
   void initState() {
@@ -35,18 +36,18 @@ class _OverviewTabState extends State<OverviewTab> {
   void didUpdateWidget(OverviewTab oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.zone.deviceId != widget.zone.deviceId) {
-      _selectedDevice = null;
-      _syncDeviceState(widget.zone);
+      setState(() {
+        _selectedDevice = null;
+        _syncDeviceState(widget.zone);
+      });
     }
   }
 
   void _syncDeviceState(Zone zone) {
-    if (zone.deviceId != null && zone.deviceId != _lastFetchedDeviceId) {
-      _lastFetchedDeviceId = zone.deviceId;
+    if (zone.deviceId != null) {
       _assignedDeviceFuture = DeviceService().getDevice(zone.deviceId!);
       _availableDevicesFuture = null;
-    } else if (zone.deviceId == null) {
-      _lastFetchedDeviceId = null;
+    } else {
       _assignedDeviceFuture = null;
       _dropdownKey++;
       final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -58,10 +59,18 @@ class _OverviewTabState extends State<OverviewTab> {
     if (_selectedDevice == null) return;
     setState(() => _assignLoading = true);
     try {
-      await ZoneService().updateZoneDevice(widget.zone.id, _selectedDevice!.id);
-      await DeviceService().assignDeviceToZone(_selectedDevice!.id, widget.zone.id);
+      final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+      await ZoneService().updateZoneDevice(
+        widget.zone.id,
+        _selectedDevice!.id,
+        hasFertilizer: _selectedDevice!.hasFertilizerModule,
+        hasLight: _selectedDevice!.hasLightingModule,
+      );
+      await DeviceService().assignDeviceToZone(_selectedDevice!.id, widget.zone.id, userId);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign device: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign device: $e')));
+      }
     } finally {
       if (mounted) setState(() => _assignLoading = false);
     }
@@ -75,7 +84,9 @@ class _OverviewTabState extends State<OverviewTab> {
       await DeviceService().unassignDevice(deviceId);
       await ZoneService().updateZoneDevice(widget.zone.id, null);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove device: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove device: $e')));
+      }
     } finally {
       if (mounted) setState(() => _removeLoading = false);
     }
@@ -118,7 +129,8 @@ class _OverviewTabState extends State<OverviewTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(widget.zone.zoneType.toUpperCase(), style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+          Text(widget.zone.zoneType.toUpperCase(),
+              style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           Text('Total plants: ${widget.zone.totalPlantSlots}', style: const TextStyle(fontSize: 16)),
         ],
@@ -167,6 +179,18 @@ class _OverviewTabState extends State<OverviewTab> {
                       ),
                     ],
                   ),
+                  if (widget.zone.hasFertilizer || widget.zone.hasLight) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        if (widget.zone.hasFertilizer)
+                          _ModuleChip(label: 'Fertilizer', icon: Icons.grass),
+                        if (widget.zone.hasLight)
+                          _ModuleChip(label: 'Light', icon: Icons.wb_sunny),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -196,7 +220,7 @@ class _OverviewTabState extends State<OverviewTab> {
 
         if (devices.isEmpty) {
           return const Text(
-            'No unassigned devices available. Register a device first.',
+            'No available devices. Claim a device first from the Devices screen.',
             style: TextStyle(color: Colors.black45, fontSize: 13),
           );
         }
@@ -212,7 +236,12 @@ class _OverviewTabState extends State<OverviewTab> {
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
-              items: devices.map((d) => DropdownMenuItem(value: d, child: Text(d.deviceName))).toList(),
+              items: devices
+                  .map((d) => DropdownMenuItem(
+                        value: d,
+                        child: Text(d.deviceName),
+                      ))
+                  .toList(),
               onChanged: (v) => setState(() => _selectedDevice = v),
             ),
             const SizedBox(height: 10),
@@ -224,6 +253,7 @@ class _OverviewTabState extends State<OverviewTab> {
               label: const Text('Assign device'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green[700],
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
@@ -245,6 +275,8 @@ class _OverviewTabState extends State<OverviewTab> {
           _sensorRow('Humidity', widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%' : '--'),
           const SizedBox(height: 12),
           _sensorRow('Light', widget.zone.latestLight != null ? '${widget.zone.latestLight} lx' : '--'),
+          const SizedBox(height: 12),
+          _sensorRow('Moisture', widget.zone.latestMoisture != null ? '${widget.zone.latestMoisture}%' : '--'),
         ],
       ),
     );
@@ -257,6 +289,32 @@ class _OverviewTabState extends State<OverviewTab> {
         Text(label, style: const TextStyle(color: Colors.black54)),
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
       ],
+    );
+  }
+}
+
+class _ModuleChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+
+  const _ModuleChip({required this.label, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.green[100],
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: Colors.green[700]),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 11, color: Colors.green[700], fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 }
