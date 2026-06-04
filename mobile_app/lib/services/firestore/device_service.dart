@@ -16,6 +16,26 @@ class DeviceService {
     return Device.fromDocument(doc);
   }
 
+  Stream<Device?> watchDevice(String deviceId) {
+    return _firestore
+        .collection('devices')
+        .doc(deviceId)
+        .snapshots()
+        .map((doc) => doc.exists ? Device.fromDocument(doc) : null);
+  }
+
+  Future<List<Device>> getAvailableDevices(String userId) async {
+    final snap = await _firestore.collection('devices').where('userId', isEqualTo: userId).get();
+    return snap.docs
+        .map((d) => Device.fromDocument(d))
+        .where((d) => d.assignedZoneId == null || d.assignedZoneId!.isEmpty)
+        .toList();
+  }
+
+  Future<void> unassignDevice(String deviceId) async {
+    await _firestore.collection('devices').doc(deviceId).update({'assignedZoneId': null});
+  }
+
   Future<void> updateDevice(Device device) async {
     if (device.id.isEmpty) throw ArgumentError('Device id is required');
     await _firestore.collection('devices').doc(device.id).update(device.toMap());

@@ -37,24 +37,29 @@ class _PlantsTabState extends State<PlantsTab> {
         }
 
         final plants = snapshot.data ?? [];
+        const maxPlants = 4;
+        final isFull = plants.length >= maxPlants;
+        final takenSlots = plants.map((p) => p.slotNumber).toSet();
 
         return ListView(
           padding: const EdgeInsets.all(20),
           children: [
             ElevatedButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AddPlantScreen(
-                    zoneId: widget.zone.id,
-                    totalPlantSlots: widget.zone.totalPlantSlots,
-                  ),
-                ),
-              ),
-              icon: const Icon(Icons.add),
-              label: const Text('Add plant'),
+              onPressed: isFull
+                  ? null
+                  : () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AddPlantScreen(
+                            zoneId: widget.zone.id,
+                            takenSlots: takenSlots,
+                          ),
+                        ),
+                      ),
+              icon: Icon(isFull ? Icons.block : Icons.add),
+              label: Text(isFull ? 'Zone full (${plants.length}/$maxPlants)' : 'Add plant'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[700],
+                backgroundColor: isFull ? Colors.grey[400] : Colors.green[700],
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),

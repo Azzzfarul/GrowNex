@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/device_model.dart';
 import '../../models/zone_model.dart';
 import '../../services/firestore/device_service.dart';
 import '../../services/firestore/zone_service.dart';
@@ -15,14 +16,21 @@ class AddZoneScreen extends StatefulWidget {
 class _AddZoneScreenState extends State<AddZoneScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
-  final _deviceCtrl = TextEditingController();
   String _zoneType = 'indoor';
+  Device? _selectedDevice;
   bool _loading = false;
+  late final Future<List<Device>> _availableDevicesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    _availableDevicesFuture = DeviceService().getAvailableDevices(userId);
+  }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _deviceCtrl.dispose();
     super.dispose();
   }
 
@@ -31,20 +39,6 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
 
     setState(() => _loading = true);
     try {
-      final deviceId = _deviceCtrl.text.trim().isEmpty ? null : _deviceCtrl.text.trim();
-
-      if (deviceId != null) {
-        final device = await DeviceService().getDevice(deviceId);
-        if (device == null) {
-          _showError('Device "$deviceId" not found. Check the device ID and try again.');
-          return;
-        }
-        if (device.assignedZoneId != null && device.assignedZoneId!.isNotEmpty) {
-          _showError('Device "$deviceId" is already assigned to another zone.');
-          return;
-        }
-      }
-
       final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
       final zone = Zone(
         id: '',
@@ -53,26 +47,24 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
         zoneType: _zoneType,
         status: 'healthy',
         totalPlantSlots: 0,
-        deviceId: deviceId,
+        deviceId: _selectedDevice?.id,
         createdAt: DateTime.now(),
       );
 
       final newZoneId = await ZoneService().createZone(zone);
 
-      if (deviceId != null) {
-        await DeviceService().assignDeviceToZone(deviceId, newZoneId);
+      if (_selectedDevice != null) {
+        await DeviceService().assignDeviceToZone(_selectedDevice!.id, newZoneId);
       }
 
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      if (mounted) _showError('Failed to create zone: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create zone: $e')));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -109,9 +101,28 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _deviceCtrl,
-                decoration: const InputDecoration(labelText: 'Assign device ID (optional)', border: OutlineInputBorder()),
+              FutureBuilder<List<Device>>(
+                future: _availableDevicesFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const InputDecorator(
+                      decoration: InputDecoration(labelText: 'Assign device (optional)', border: OutlineInputBorder()),
+                      child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    );
+                  }
+
+                  final devices = snapshot.data ?? [];
+                  return DropdownButtonFormField<Device?>(
+                    initialValue: _selectedDevice,
+                    decoration: const InputDecoration(labelText: 'Assign device (optional)', border: OutlineInputBorder()),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('None')),
+                      ...devices.map((d) => DropdownMenuItem(value: d, child: Text(d.deviceName))),
+                    ],
+                    onChanged: (v) => setState(() => _selectedDevice = v),
+                    hint: devices.isEmpty ? const Text('No unassigned devices available') : null,
+                  );
+                },
               ),
               const SizedBox(height: 18),
               SizedBox(

@@ -18,12 +18,13 @@ class ZoneDetailScreen extends StatefulWidget {
 
 class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  final _zoneService = ZoneService();
+  late final Stream<Zone?> _zoneStream;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _zoneStream = ZoneService().watchZone(widget.zoneId);
   }
 
   @override
@@ -35,7 +36,7 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Zone?>(
-      stream: _zoneService.watchZone(widget.zoneId),
+      stream: _zoneStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return Scaffold(
