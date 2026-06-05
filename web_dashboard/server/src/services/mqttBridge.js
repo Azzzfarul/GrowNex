@@ -103,12 +103,15 @@ async function handleStatus(deviceId, payload) {
 async function handleActuatorState(deviceId, payload) {
   const { lightState, fertilizerState, irrigationState } = payload
   await getOrCreateDevice(deviceId)
+  // Write to *Confirmed fields only — never touch irrigationActive/fertilizerActive/lightActive
+  // (those are written by the app/bridge as user intent; overwriting them here causes a
+  // watchDeviceActuators → publishCommand feedback loop via a debounce race condition).
   await db.collection('devices').doc(deviceId).update({
-    lightActive:      lightState,
-    fertilizerActive: fertilizerState,
-    irrigationActive: irrigationState,
+    irrigationConfirmed: irrigationState,
+    fertilizerConfirmed: fertilizerState,
+    lightConfirmed:      lightState,
   })
-  console.log(`[MQTT bridge] actuator state saved for ${deviceId}`)
+  console.log(`[MQTT bridge] actuator state confirmed for ${deviceId}`)
 }
 
 // ─── Publish helper ───────────────────────────────────────────────────────────
@@ -207,6 +210,14 @@ async function triggerActuator(zoneId, actuator, state) {
     fertilizerActive: actuator === 'fertilizer' ? state : !!deviceData.fertilizerActive,
     lightActive:      actuator === 'light'      ? state : !!deviceData.lightActive,
   }
+
+  // Update Firestore first so watchDeviceActuators sees matching values
+  // and does not re-publish an opposite command after the cache sync.
+  await db.collection('devices').doc(deviceId).update({
+    irrigationActive: merged.irrigationActive,
+    fertilizerActive: merged.fertilizerActive,
+    lightActive:      merged.lightActive,
+  })
 
   publishCommand(deviceId, merged)
 }

@@ -15,7 +15,7 @@ const int   MQTT_PORT   = 8883;
 const char* MQTT_USER   = "grownex-iot";
 const char* MQTT_PASS   = "Abcd_123456";
 
-const unsigned long PUBLISH_INTERVAL_MS = 30000; // 30 seconds
+const unsigned long PUBLISH_INTERVAL_MS = 60000; // 30 seconds
 
 // ─── Sensors ──────────────────────────────────────────────────────────────────
 #define DHT_PIN      4    // DHT11 data pin
