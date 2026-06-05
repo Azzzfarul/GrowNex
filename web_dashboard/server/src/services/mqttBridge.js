@@ -99,13 +99,25 @@ async function handleActuatorState(deviceId, payload) {
 // Uses a cache to detect real value changes and avoid looping with handleActuatorState.
 // The first onSnapshot callback delivers all existing docs as 'added' — used to
 // populate the cache without sending any MQTT commands (prevents startup spam).
-const actuatorCache = new Map()  // Map<deviceId, { irrigationActive, fertilizerActive, lightActive }>
+const actuatorCache  = new Map()  // Map<deviceId, { irrigationActive, fertilizerActive, lightActive }>
+const debounceTimers = new Map()  // Map<deviceId, TimeoutId>
+const DEBOUNCE_MS    = 600        // wait 600ms after last click before sending command
 let devicesListenerInitialized = false
+
+function publishCommand(deviceId, data) {
+  const command = JSON.stringify({
+    irrigationState: !!data.irrigationActive,
+    fertilizerState: !!data.fertilizerActive,
+    lightState:      !!data.lightActive,
+  })
+  const topic = `grownex/${deviceId}/actuators/command`
+  client.publish(topic, command, { retain: true })
+  console.log(`[MQTT bridge] manual command → ${topic}: ${command}`)
+}
 
 function watchDeviceActuators() {
   db.collection('devices').onSnapshot(snapshot => {
     if (!devicesListenerInitialized) {
-      // Populate cache from initial state; do not publish any MQTT commands
       snapshot.docs.forEach(d => {
         const { irrigationActive, fertilizerActive, lightActive } = d.data()
         actuatorCache.set(d.id, {
@@ -130,28 +142,21 @@ function watchDeviceActuators() {
       const fertilizerChanged = cached.fertilizerActive !== !!data.fertilizerActive
       const lightChanged      = cached.lightActive      !== !!data.lightActive
 
-      // Always update cache regardless of whether we publish
       actuatorCache.set(deviceId, {
         irrigationActive: !!data.irrigationActive,
         fertilizerActive: !!data.fertilizerActive,
         lightActive:      !!data.lightActive,
       })
 
-      // Ignore changes unrelated to actuator fields (sensor reads, timestamps, etc.)
       if (!irrigationChanged && !fertilizerChanged && !lightChanged) return
-
-      // Skip unassigned devices — no zone means no ESP32 to command
       if (!data.assignedZoneId) return
 
-      const command = JSON.stringify({
-        irrigationState: !!data.irrigationActive,
-        fertilizerState: !!data.fertilizerActive,
-        lightState:      !!data.lightActive,
-      })
-
-      const topic = `grownex/${deviceId}/actuators/command`
-      client.publish(topic, command, { retain: true })
-      console.log(`[MQTT bridge] manual command → ${topic}: ${command}`)
+      // Debounce — cancel any pending publish for this device and restart the timer
+      if (debounceTimers.has(deviceId)) clearTimeout(debounceTimers.get(deviceId))
+      debounceTimers.set(deviceId, setTimeout(() => {
+        debounceTimers.delete(deviceId)
+        publishCommand(deviceId, actuatorCache.get(deviceId))
+      }, DEBOUNCE_MS))
     })
   })
 }
@@ -165,8 +170,9 @@ export function init() {
     client.subscribe('grownex/+/sensors')
     client.subscribe('grownex/+/actuators/state')
     client.subscribe('grownex/+/status')
-    watchDeviceActuators()
   })
+
+  watchDeviceActuators()  // register once — outside connect to prevent stacking on reconnect
 
 
   client.on('message', (topic, buf) => {

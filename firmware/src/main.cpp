@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <DHT.h>
@@ -9,8 +10,10 @@ const char* SSID     = "Kanon";
 const char* PASSWORD = "1sampai9";
 
 // ─── MQTT Broker ──────────────────────────────────────────────────────────────
-const char* MQTT_BROKER = "broker.hivemq.com";
-const int   MQTT_PORT   = 1883;
+const char* MQTT_BROKER = "b6da2a10099e464284c8e7011e086e00.s1.eu.hivemq.cloud";
+const int   MQTT_PORT   = 8883;
+const char* MQTT_USER   = "grownex-iot";
+const char* MQTT_PASS   = "Abcd_123456";
 
 const unsigned long PUBLISH_INTERVAL_MS = 30000; // 30 seconds
 
@@ -41,8 +44,8 @@ bool irrigationState = false;
 
 unsigned long lastPublish = 0;
 
-WiFiClient   wifiClient;
-PubSubClient mqtt(wifiClient);
+WiFiClientSecure wifiClient;
+PubSubClient     mqtt(wifiClient);
 DHT          dht(DHT_PIN, DHT_TYPE);
 
 // ─── Actuator helpers ─────────────────────────────────────────────────────────
@@ -119,7 +122,7 @@ void connectMQTT() {
   while (!mqtt.connected()) {
     Serial.printf("Connecting to MQTT %s ...\n", MQTT_BROKER);
     bool ok = mqtt.connect(
-      DEVICE_ID.c_str(), "", "",
+      DEVICE_ID.c_str(), MQTT_USER, MQTT_PASS,
       TOPIC_STATUS.c_str(), 1, true, "offline"
     );
     if (ok) {
@@ -139,6 +142,7 @@ void setup() {
   delay(500);
 
   dht.begin();
+  wifiClient.setInsecure();  // skip cert verification — HiveMQ Cloud uses valid TLS
 
   uint8_t mac[6];
   WiFi.macAddress(mac);
