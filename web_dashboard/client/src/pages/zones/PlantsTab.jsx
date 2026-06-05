@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   collection, query, where, onSnapshot,
-  addDoc, updateDoc, doc, serverTimestamp,
+  addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../../firebase'
 
@@ -257,8 +257,10 @@ function PlantDetailModal({ plant, onClose }) {
     preferredTemperatureMax: plant.preferredTemperatureMax ?? null,
     preferredLightCondition: plant.preferredLightCondition ?? null,
   })
-  const [loading, setLoading] = useState(false)
-  const [saved,   setSaved]   = useState(false)
+  const [loading,        setLoading]        = useState(false)
+  const [saved,          setSaved]          = useState(false)
+  const [showDelConfirm, setShowDelConfirm] = useState(false)
+  const [deleting,       setDeleting]       = useState(false)
 
   async function handleSave() {
     setLoading(true)
@@ -276,13 +278,59 @@ function PlantDetailModal({ plant, onClose }) {
     }
   }
 
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await deleteDoc(doc(db, 'plants', plant.id))
+      onClose()
+    } catch (e) {
+      console.error('Failed to delete plant:', e)
+      setDeleting(false)
+      setShowDelConfirm(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-md shadow-xl p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-bold text-gray-900">Plant details</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowDelConfirm(true)}
+              className="text-red-400 hover:text-red-600 text-sm transition-colors"
+              title="Remove plant"
+            >
+              🗑
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+          </div>
         </div>
+
+        {/* Delete confirmation inline */}
+        {showDelConfirm && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+            <p className="text-sm font-medium text-red-700 mb-3">
+              Remove <span className="font-bold">{plant.plantName}</span>? This cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDelConfirm(false)}
+                disabled={deleting}
+                className="flex-1 border border-gray-200 text-gray-600 font-medium py-1.5 rounded-lg text-sm hover:bg-white transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-1.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+              >
+                {deleting ? 'Removing…' : 'Remove'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="w-full h-36 rounded-xl bg-gray-100 flex items-center justify-center mb-5">
           <span className="text-5xl text-gray-300">🌿</span>

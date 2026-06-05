@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { doc, deleteDoc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '../firebase'
 import OverviewTab from './zones/OverviewTab'
 import PlantsTab from './zones/PlantsTab'
@@ -24,6 +24,26 @@ export default function ZoneDetailPage() {
   const [zone, setZone] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState(0)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  async function handleDeleteZone() {
+    setDeleting(true)
+    try {
+      // Delete all plants in this zone
+      const plantsSnap = await getDocs(query(collection(db, 'plants'), where('zoneId', '==', zoneId)))
+      await Promise.all(plantsSnap.docs.map((d) => deleteDoc(d.ref)))
+      // Delete automationConfig
+      await deleteDoc(doc(db, 'automationConfig', zoneId)).catch(() => {})
+      // Delete zone
+      await deleteDoc(doc(db, 'zones', zoneId))
+      navigate('/plants')
+    } catch (e) {
+      console.error('Failed to delete zone:', e)
+      setDeleting(false)
+      setShowDeleteConfirm(false)
+    }
+  }
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'zones', zoneId), (snap) => {
@@ -42,6 +62,35 @@ export default function ZoneDetailPage() {
 
   return (
     <div>
+      {/* Delete confirmation dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Delete zone?</h2>
+            <p className="text-sm text-gray-500 mb-5">
+              This will permanently delete <span className="font-semibold text-gray-800">"{zone.zoneName}"</span> and
+              all its plants. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="flex-1 border border-gray-200 text-gray-600 font-medium py-2.5 rounded-xl text-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteZone}
+                disabled={deleting}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-60"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button
@@ -61,6 +110,13 @@ export default function ZoneDetailPage() {
             {zone.zoneType} · {zone.totalPlantSlots} slot{zone.totalPlantSlots !== 1 ? 's' : ''}
           </p>
         </div>
+        <button
+          onClick={() => setShowDeleteConfirm(true)}
+          className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 px-3 py-1.5 rounded-xl transition-colors flex-shrink-0"
+        >
+          <span>🗑</span>
+          <span className="font-medium">Delete zone</span>
+        </button>
       </div>
 
       {/* Tab bar */}

@@ -1,6 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/zone_model.dart';
+import '../../../services/firestore/device_service.dart';
+import '../../../services/firestore/plant_service.dart';
 import '../../../services/firestore/zone_service.dart';
 import 'automation_tab.dart';
 import 'monitoring_tab.dart';
@@ -33,6 +36,58 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
     super.dispose();
   }
 
+  Future<void> _confirmDeleteZone(Zone zone) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete zone?'),
+        content: Text(
+          'This will permanently delete "${zone.zoneName}" and all its plants. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      // Delete plants in this zone
+      final plants = await PlantService().getPlantsByZone(zone.id);
+      for (final plant in plants) {
+        await PlantService().deletePlant(plant.id);
+      }
+      // Delete automationConfig
+      await FirebaseFirestore.instance
+          .collection('automationConfig')
+          .doc(zone.id)
+          .delete()
+          .catchError((_) {});
+      // Unassign connected device
+      if (zone.deviceId != null) {
+        await DeviceService().unassignDevice(zone.deviceId!);
+      }
+      // Delete zone document
+      await ZoneService().deleteZone(zone.id);
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete zone: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Zone?>(
@@ -57,8 +112,19 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
           appBar: AppBar(
             title: Text(zone.zoneName),
             backgroundColor: Colors.green[700],
+            foregroundColor: Colors.white,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: 'Delete zone',
+                onPressed: () => _confirmDeleteZone(zone),
+              ),
+            ],
             bottom: TabBar(
               controller: _tabController,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              indicatorColor: Colors.white,
               tabs: const [
                 Tab(text: 'Overview'),
                 Tab(text: 'Plants'),

@@ -41,6 +41,17 @@ class DeviceService {
     await _firestore.collection('devices').doc(device.id).update(device.toMap());
   }
 
+  Future<void> deleteDevice(String deviceId, {String? assignedZoneId}) async {
+    if (assignedZoneId != null) {
+      await _firestore.collection('zones').doc(assignedZoneId).update({
+        'deviceId': null,
+        'hasFertilizer': false,
+        'hasLight': false,
+      });
+    }
+    await _firestore.collection('devices').doc(deviceId).delete();
+  }
+
   Future<void> claimDevice(String deviceId, String userId) async {
     await _firestore.collection('devices').doc(deviceId).set(
       {'userId': userId},

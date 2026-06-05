@@ -46,6 +46,45 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     return (zone: zone, plants: plants);
   }
 
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete device?'),
+        content: Text(
+          'This will permanently remove "${widget.device.deviceName}". '
+          'If it is assigned to a zone, it will be unassigned first.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await DeviceService().deleteDevice(
+        widget.device.id,
+        assignedZoneId: widget.device.assignedZoneId,
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete device: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _save() async {
     setState(() => _loading = true);
     try {
@@ -81,6 +120,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       appBar: AppBar(
         title: Text(widget.device.deviceName),
         backgroundColor: Colors.green[700],
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Delete device',
+            onPressed: _confirmDelete,
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),

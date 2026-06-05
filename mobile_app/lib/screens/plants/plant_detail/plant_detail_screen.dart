@@ -100,6 +100,39 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
         p.preferredLightCondition != null;
   }
 
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove plant?'),
+        content: Text('This will permanently remove "${widget.plant.plantName}". This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await PlantService().deletePlant(widget.plant.id);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to remove plant: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -109,6 +142,13 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
         title: const Text('Plant details'),
         backgroundColor: Colors.green[700],
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Remove plant',
+            onPressed: _confirmDelete,
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),

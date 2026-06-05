@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { doc, onSnapshot, updateDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
+import { doc, onSnapshot, updateDoc, deleteDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '../firebase'
 
 function formatLastSync(ts) {
@@ -33,6 +33,8 @@ export default function DeviceDetailPage() {
   const [saving, setSaving] = useState(false)
   const [saveLabel, setSaveLabel] = useState('Save changes')
   const [zoneInfo, setZoneInfo] = useState({ zone: null, plantsUsed: 0, loaded: false })
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'devices', deviceId), (snap) => {
@@ -68,6 +70,23 @@ export default function DeviceDetailPage() {
     loadZone()
   }, [device?.assignedZoneId])
 
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      if (device.assignedZoneId) {
+        await updateDoc(doc(db, 'zones', device.assignedZoneId), {
+          deviceId: null, hasFertilizer: false, hasLight: false,
+        })
+      }
+      await deleteDoc(doc(db, 'devices', deviceId))
+      navigate('/devices')
+    } catch (e) {
+      console.error('Failed to delete device:', e)
+      setDeleting(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
   async function handleSave() {
     if (!device) return
     setSaving(true)
@@ -93,6 +112,34 @@ export default function DeviceDetailPage() {
 
   return (
     <div>
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Delete device?</h2>
+            <p className="text-sm text-gray-500 mb-5">
+              This will permanently remove <span className="font-semibold text-gray-800">"{device.deviceName}"</span>.
+              {device.assignedZoneId && ' It will be unassigned from its zone first.'}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="flex-1 border border-gray-200 text-gray-600 font-medium py-2.5 rounded-xl text-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-60"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => navigate('/devices')}
@@ -100,7 +147,14 @@ export default function DeviceDetailPage() {
         >
           ← Back
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">{device.deviceName}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 flex-1">{device.deviceName}</h1>
+        <button
+          onClick={() => setShowDeleteConfirm(true)}
+          className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 px-3 py-1.5 rounded-xl transition-colors flex-shrink-0"
+        >
+          <span>🗑</span>
+          <span className="font-medium">Delete device</span>
+        </button>
       </div>
 
       <div className="flex flex-col gap-4">
