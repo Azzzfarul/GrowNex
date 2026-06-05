@@ -59,6 +59,18 @@ class DeviceService {
     await _firestore.collection('devices').doc(deviceId).set({'status': status, 'lastSync': Timestamp.now()}, SetOptions(merge: true));
   }
 
+  Future<void> updateIrrigationState(String deviceId, bool state) async {
+    await _firestore.collection('devices').doc(deviceId).update({'irrigationActive': state});
+  }
+
+  Future<void> updateFertilizerState(String deviceId, bool state) async {
+    await _firestore.collection('devices').doc(deviceId).update({'fertilizerActive': state});
+  }
+
+  Future<void> updateLightState(String deviceId, bool state) async {
+    await _firestore.collection('devices').doc(deviceId).update({'lightActive': state});
+  }
+
   Stream<List<Device>> watchDevices(String userId) {
     return _firestore
         .collection('devices')

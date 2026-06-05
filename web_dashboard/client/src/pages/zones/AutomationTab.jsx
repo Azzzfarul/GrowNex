@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase'
 
 function Toggle({ value, onChange }) {
@@ -36,9 +36,6 @@ function ToggleSetting({ title, subtitle, value, onChange, children }) {
 }
 
 export default function AutomationTab({ zone }) {
-  const [waterOn,      setWaterOn]      = useState(false)
-  const [lightOn,      setLightOn]      = useState(false)
-  const [fertOn,       setFertOn]       = useState(false)
   const [autoWater,    setAutoWater]    = useState(false)
   const [autoLight,    setAutoLight]    = useState(false)
   const [autoFert,     setAutoFert]     = useState(false)
@@ -59,11 +56,19 @@ export default function AutomationTab({ zone }) {
 
   const hasFert  = device?.hasFertilizerModule ?? false
   const hasLight = device?.hasLightingModule   ?? false
+  const waterOn  = device?.irrigationActive    ?? false
+  const fertOn   = device?.fertilizerActive    ?? false
+  const lightOn  = device?.lightActive         ?? false
+
+  const devRef = zone.deviceId ? doc(db, 'devices', zone.deviceId) : null
 
   const actuators = [
-    { label: 'Water',     icon: '💧', activeRing: 'ring-blue-300',  on: waterOn, setOn: setWaterOn },
-    ...(hasFert  ? [{ label: 'Fertilize', icon: '🌿', activeRing: 'ring-green-300', on: fertOn,  setOn: setFertOn  }] : []),
-    ...(hasLight ? [{ label: 'Light',     icon: '☀️', activeRing: 'ring-amber-300', on: lightOn, setOn: setLightOn }] : []),
+    { label: 'Water',     icon: '💧', activeRing: 'ring-blue-300',  on: waterOn,
+      onToggle: () => devRef && updateDoc(devRef, { irrigationActive: !waterOn }) },
+    ...(hasFert  ? [{ label: 'Fertilize', icon: '🌿', activeRing: 'ring-green-300', on: fertOn,
+      onToggle: () => devRef && updateDoc(devRef, { fertilizerActive: !fertOn }) }] : []),
+    ...(hasLight ? [{ label: 'Light',     icon: '☀️', activeRing: 'ring-amber-300', on: lightOn,
+      onToggle: () => devRef && updateDoc(devRef, { lightActive: !lightOn }) }] : []),
   ]
 
   useEffect(() => {
@@ -110,10 +115,10 @@ export default function AutomationTab({ zone }) {
       <div>
         <h3 className="font-bold text-gray-900 mb-3">Manual controls</h3>
         <div className="grid grid-cols-3 gap-3">
-          {actuators.map(({ label, icon, activeRing, on, setOn }) => (
+          {actuators.map(({ label, icon, activeRing, on, onToggle }) => (
             <button
               key={label}
-              onClick={() => setOn(!on)}
+              onClick={onToggle}
               className={`rounded-2xl border shadow-sm p-4 flex flex-col gap-3 text-left transition-all ring-2 ${
                 on
                   ? `bg-green-600 border-green-600 ${activeRing} text-white`

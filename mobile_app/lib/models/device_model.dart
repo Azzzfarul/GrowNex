@@ -10,6 +10,9 @@ class Device {
   final int totalSlots;
   final bool hasLightingModule;
   final bool hasFertilizerModule;
+  final bool irrigationActive;
+  final bool fertilizerActive;
+  final bool lightActive;
   final DateTime? lastSync;
 
   Device({
@@ -22,6 +25,9 @@ class Device {
     this.totalSlots = 4,
     required this.hasLightingModule,
     required this.hasFertilizerModule,
+    this.irrigationActive = false,
+    this.fertilizerActive = false,
+    this.lightActive = false,
     this.lastSync,
   });
 
@@ -49,6 +55,9 @@ class Device {
       totalSlots: 4,
       hasLightingModule: map['hasLightingModule'] as bool? ?? false,
       hasFertilizerModule: map['hasFertilizerModule'] as bool? ?? false,
+      irrigationActive: map['irrigationActive'] as bool? ?? false,
+      fertilizerActive: map['fertilizerActive'] as bool? ?? false,
+      lightActive: map['lightActive'] as bool? ?? false,
       lastSync: lastSync,
     );
   }
@@ -63,6 +72,9 @@ class Device {
       'totalSlots': 4,
       'hasLightingModule': hasLightingModule,
       'hasFertilizerModule': hasFertilizerModule,
+      'irrigationActive': irrigationActive,
+      'fertilizerActive': fertilizerActive,
+      'lightActive': lightActive,
       'lastSync': lastSync != null ? Timestamp.fromDate(lastSync!) : null,
     };
   }

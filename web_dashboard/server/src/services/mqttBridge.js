@@ -118,6 +118,67 @@ function watchAutomationConfig() {
   })
 }
 
+// ─── Firestore → MQTT: push manual actuator control changes to device ────────
+// Uses a cache to detect real value changes and avoid looping with handleActuatorState.
+// The first onSnapshot callback delivers all existing docs as 'added' — used to
+// populate the cache without sending any MQTT commands (prevents startup spam).
+const actuatorCache = new Map()  // Map<deviceId, { irrigationActive, fertilizerActive, lightActive }>
+let devicesListenerInitialized = false
+
+function watchDeviceActuators() {
+  db.collection('devices').onSnapshot(snapshot => {
+    if (!devicesListenerInitialized) {
+      // Populate cache from initial state; do not publish any MQTT commands
+      snapshot.docs.forEach(d => {
+        const { irrigationActive, fertilizerActive, lightActive } = d.data()
+        actuatorCache.set(d.id, {
+          irrigationActive: !!irrigationActive,
+          fertilizerActive: !!fertilizerActive,
+          lightActive:      !!lightActive,
+        })
+      })
+      devicesListenerInitialized = true
+      console.log(`[MQTT bridge] device actuator cache initialized (${actuatorCache.size} devices)`)
+      return
+    }
+
+    snapshot.docChanges().forEach(change => {
+      if (change.type === 'removed') return
+
+      const deviceId = change.doc.id
+      const data     = change.doc.data()
+      const cached   = actuatorCache.get(deviceId) ?? {}
+
+      const irrigationChanged = cached.irrigationActive !== !!data.irrigationActive
+      const fertilizerChanged = cached.fertilizerActive !== !!data.fertilizerActive
+      const lightChanged      = cached.lightActive      !== !!data.lightActive
+
+      // Always update cache regardless of whether we publish
+      actuatorCache.set(deviceId, {
+        irrigationActive: !!data.irrigationActive,
+        fertilizerActive: !!data.fertilizerActive,
+        lightActive:      !!data.lightActive,
+      })
+
+      // Ignore changes unrelated to actuator fields (sensor reads, timestamps, etc.)
+      if (!irrigationChanged && !fertilizerChanged && !lightChanged) return
+
+      // Skip unassigned devices — no zone means no ESP32 to command
+      if (!data.assignedZoneId) return
+
+      const command = JSON.stringify({
+        irrigationState: !!data.irrigationActive,
+        fertilizerState: !!data.fertilizerActive,
+        lightState:      !!data.lightActive,
+      })
+
+      const topic = `grownex/${deviceId}/actuators/command`
+      client.publish(topic, command, { retain: true })
+      console.log(`[MQTT bridge] manual command → ${topic}: ${command}`)
+    })
+  })
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 export function init() {
   client = mqtt.connect(BROKER, { clientId: 'grownex-bridge' })
@@ -127,6 +188,7 @@ export function init() {
     client.subscribe('grownex/+/sensors')
     client.subscribe('grownex/+/actuators/state')
     watchAutomationConfig()
+    watchDeviceActuators()
   })
 
   client.on('message', (topic, buf) => {

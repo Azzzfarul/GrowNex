@@ -23,9 +23,6 @@ class _AutomationTabState extends State<AutomationTab> {
 
   Stream<Device?>? _deviceStream;
 
-  bool _waterOn = false;
-  bool _lightOn = false;
-  bool _fertilizerOn = false;
   bool _autoWater = false;
   bool _autoLight = false;
   bool _autoFertilizer = false;
@@ -119,9 +116,14 @@ class _AutomationTabState extends State<AutomationTab> {
     return StreamBuilder<Device?>(
       stream: _deviceStream,
       builder: (context, snap) {
-        final device   = snap.data;
-        final hasFert  = device?.hasFertilizerModule ?? false;
-        final hasLight = device?.hasLightingModule   ?? false;
+        final device      = snap.data;
+        final hasFert     = device?.hasFertilizerModule ?? false;
+        final hasLight    = device?.hasLightingModule   ?? false;
+        final isWaterOn   = device?.irrigationActive    ?? false;
+        final isFertOn    = device?.fertilizerActive    ?? false;
+        final isLightOn   = device?.lightActive         ?? false;
+        final deviceId    = widget.zone.deviceId!;
+        final svc         = DeviceService();
 
         return ListView(
           padding: const EdgeInsets.all(20),
@@ -131,16 +133,24 @@ class _AutomationTabState extends State<AutomationTab> {
             if (hasFert)
               Row(
                 children: [
-                  Expanded(child: _buildActionCard('Water', Icons.water_drop, Colors.blue, isOn: _waterOn, onToggle: () => setState(() => _waterOn = !_waterOn))),
+                  Expanded(child: _buildActionCard('Water', Icons.water_drop, Colors.blue,
+                    isOn: isWaterOn,
+                    onToggle: () => svc.updateIrrigationState(deviceId, !isWaterOn))),
                   const SizedBox(width: 12),
-                  Expanded(child: _buildActionCard('Fertilize', Icons.grass, Colors.amber, isOn: _fertilizerOn, onToggle: () => setState(() => _fertilizerOn = !_fertilizerOn))),
+                  Expanded(child: _buildActionCard('Fertilize', Icons.grass, Colors.amber,
+                    isOn: isFertOn,
+                    onToggle: () => svc.updateFertilizerState(deviceId, !isFertOn))),
                 ],
               )
             else
-              _buildActionCard('Water', Icons.water_drop, Colors.blue, isOn: _waterOn, onToggle: () => setState(() => _waterOn = !_waterOn)),
+              _buildActionCard('Water', Icons.water_drop, Colors.blue,
+                isOn: isWaterOn,
+                onToggle: () => svc.updateIrrigationState(deviceId, !isWaterOn)),
             if (hasLight) ...[
               const SizedBox(height: 12),
-              _buildActionCard('Light', Icons.sunny, Colors.orange, isOn: _lightOn, onToggle: () => setState(() => _lightOn = !_lightOn)),
+              _buildActionCard('Light', Icons.sunny, Colors.orange,
+                isOn: isLightOn,
+                onToggle: () => svc.updateLightState(deviceId, !isLightOn)),
             ],
             const SizedBox(height: 24),
             const Text('Automation settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
