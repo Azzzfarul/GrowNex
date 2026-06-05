@@ -28,20 +28,21 @@ class _DevicesScreenState extends State<DevicesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text('Devices', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.grey[100],
         elevation: 0,
-        foregroundColor: Colors.black,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: ElevatedButton.icon(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddDeviceScreen())),
+              onPressed: () => Navigator.push(
+                  context, MaterialPageRoute(builder: (_) => const AddDeviceScreen())),
               icon: const Icon(Icons.add),
               label: const Text('Add device'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[700],
+                foregroundColor: Colors.white,
+              ),
             ),
           ),
         ],
@@ -62,7 +63,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
           return ListView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             children: [
-              _buildSummaryCard(devices.length, onlineCount),
+              _buildSummaryCard(context, devices.length, onlineCount),
               const SizedBox(height: 24),
               if (devices.isEmpty)
                 const Padding(
@@ -78,27 +79,26 @@ class _DevicesScreenState extends State<DevicesScreen> {
     );
   }
 
-  Widget _buildSummaryCard(int total, int online) {
+  Widget _buildSummaryCard(BuildContext context, int total, int online) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.green[700],
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.green.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.green.withValues(alpha: 0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6))
+        ],
       ),
       child: Row(
         children: [
-          Expanded(
-            child: _summaryStatColumn('Total devices', total.toString(), Icons.developer_board),
-          ),
+          Expanded(child: _summaryStatColumn('Total devices', total.toString(), Icons.developer_board)),
           Container(width: 1, height: 48, color: Colors.white24),
-          Expanded(
-            child: _summaryStatColumn('Online', online.toString(), Icons.wifi),
-          ),
+          Expanded(child: _summaryStatColumn('Online', online.toString(), Icons.wifi)),
           Container(width: 1, height: 48, color: Colors.white24),
-          Expanded(
-            child: _summaryStatColumn('Offline', (total - online).toString(), Icons.wifi_off),
-          ),
+          Expanded(child: _summaryStatColumn('Offline', (total - online).toString(), Icons.wifi_off)),
         ],
       ),
     );
@@ -109,7 +109,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
       children: [
         Icon(icon, color: Colors.white70, size: 22),
         const SizedBox(height: 6),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+        Text(value,
+            style: const TextStyle(
+                color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
         const SizedBox(height: 2),
         Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
       ],
@@ -117,34 +119,54 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   Widget _buildDeviceCard(BuildContext context, Device device) {
+    final cs     = Theme.of(context).colorScheme;
     final online = _isOnline(device);
+
+    final chipBg  = online
+        ? Colors.green.withValues(alpha: 0.15)
+        : cs.onSurface.withValues(alpha: 0.08);
+    final chipColor = online ? Colors.green[700]! : cs.onSurface.withValues(alpha: 0.5);
+
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => DeviceDetailScreen(device: device))),
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => DeviceDetailScreen(device: device))),
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surfaceContainer,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 6))],
+          boxShadow: [
+            BoxShadow(
+                color: cs.shadow.withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 6))
+          ],
         ),
         child: Row(
           children: [
             CircleAvatar(
               radius: 24,
-              backgroundColor: online ? Colors.green[50] : Colors.grey[100],
-              child: Icon(Icons.developer_board, color: online ? Colors.green[700] : Colors.grey, size: 24),
+              backgroundColor: chipBg,
+              child: Icon(
+                Icons.developer_board,
+                color: online ? Colors.green[700] : cs.onSurface.withValues(alpha: 0.5),
+                size: 24,
+              ),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(device.deviceName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(device.deviceName,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Text(
                     device.deviceType == 'indoor' ? 'Indoor' : 'Outdoor',
-                    style: const TextStyle(color: Colors.black45, fontSize: 13),
+                    style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.5), fontSize: 13),
                   ),
                 ],
               ),
@@ -152,21 +174,20 @@ class _DevicesScreenState extends State<DevicesScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: online ? Colors.green[50] : Colors.grey[100],
+                color: chipBg,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircleAvatar(radius: 4, backgroundColor: online ? Colors.green[700] : Colors.grey),
+                  CircleAvatar(radius: 4, backgroundColor: chipColor),
                   const SizedBox(width: 6),
                   Text(
                     online ? 'Online' : 'Offline',
                     style: TextStyle(
-                      color: online ? Colors.green[700] : Colors.grey,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
+                        color: chipColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13),
                   ),
                 ],
               ),

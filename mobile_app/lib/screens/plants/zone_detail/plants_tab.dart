@@ -60,6 +60,7 @@ class _PlantsTabState extends State<PlantsTab> {
               label: Text(isFull ? 'Zone full (${plants.length}/$maxPlants)' : 'Add plant'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: isFull ? Colors.grey[400] : Colors.green[700],
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),
@@ -78,15 +79,16 @@ class _PlantsTabState extends State<PlantsTab> {
   }
 
   Widget _buildPlantCard(BuildContext context, Plant plant) {
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PlantDetailScreen(plant: plant))),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surfaceContainer,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 6))],
+          boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,7 +104,7 @@ class _PlantsTabState extends State<PlantsTab> {
               ],
             ),
             const SizedBox(height: 10),
-            Text(plant.species, style: const TextStyle(color: Colors.black54)),
+            Text(plant.species, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -127,9 +129,10 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(12)),
       child: Text('$label: $value', style: const TextStyle(fontSize: 12)),
     );
   }

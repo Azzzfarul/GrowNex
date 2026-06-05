@@ -14,15 +14,16 @@ class ZoneCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final hasSensorData = zone.latestTemp != null || zone.latestHumid != null || zone.latestLight != null || zone.latestMoisture != null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 14, offset: const Offset(0, 6)),
+          BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 14, offset: const Offset(0, 6)),
         ],
       ),
       padding: const EdgeInsets.all(18),
@@ -64,10 +65,11 @@ class ZoneCardWidget extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               zone.alertSummary ?? _defaultAlertMessage(zone.status),
-              style: const TextStyle(color: Colors.black54),
+              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55)),
             ),
           ] else ...[
-            const Text('No sensor data available yet.', style: TextStyle(color: Colors.black54)),
+            Text('No sensor data available yet.',
+                style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
           ],
           const SizedBox(height: 16),
           SizedBox(
@@ -76,6 +78,7 @@ class ZoneCardWidget extends StatelessWidget {
               onPressed: onViewDetails,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green[700],
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
@@ -101,15 +104,9 @@ class ZoneCardWidget extends StatelessWidget {
 
   Color _statusColor(String status) {
     final normalized = status.toLowerCase();
-    if (normalized.contains('healthy') || normalized.contains('stable')) {
-      return Colors.green;
-    }
-    if (normalized.contains('warning') || normalized.contains('attention') || normalized.contains('needs')) {
-      return Colors.orange;
-    }
-    if (normalized.contains('critical') || normalized.contains('alert')) {
-      return Colors.red;
-    }
+    if (normalized.contains('healthy') || normalized.contains('stable')) return Colors.green;
+    if (normalized.contains('warning') || normalized.contains('attention') || normalized.contains('needs')) return Colors.orange;
+    if (normalized.contains('critical') || normalized.contains('alert')) return Colors.red;
     return Colors.blueGrey;
   }
 }
@@ -122,10 +119,11 @@ class _AttributeItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+        Text(label, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55), fontSize: 12)),
         const SizedBox(height: 6),
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
       ],

@@ -3,14 +3,15 @@ import 'package:flutter/material.dart';
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
 
-  Widget _buildMetricCard(String title, String value, String description, Color accent) {
+  Widget _buildMetricCard(BuildContext context, String title, String value, String description, Color accent) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 5)),
+          BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 5)),
         ],
       ),
       padding: const EdgeInsets.all(18),
@@ -26,7 +27,7 @@ class AnalyticsScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Color((accent.toARGB32() & 0x00FFFFFF) | 0x26000000),
+                  color: accent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text('Stable', style: TextStyle(color: accent, fontWeight: FontWeight.w600)),
@@ -34,20 +35,21 @@ class AnalyticsScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(description, style: const TextStyle(color: Colors.black54)),
+          Text(description, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
         ],
       ),
     );
   }
 
-  Widget _buildProgress(String label, double progress, Color color) {
+  Widget _buildProgress(BuildContext context, String label, double progress, Color color) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(color: Colors.black54)),
+            Text(label, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
             Text('${(progress * 100).round()}%', style: TextStyle(color: color, fontWeight: FontWeight.w600)),
           ],
         ),
@@ -55,7 +57,7 @@ class AnalyticsScreen extends StatelessWidget {
         LinearProgressIndicator(
           value: progress,
           color: color,
-          backgroundColor: Colors.grey[200],
+          backgroundColor: cs.surfaceContainerHigh,
           minHeight: 8,
         ),
       ],
@@ -71,17 +73,18 @@ class AnalyticsScreen extends StatelessWidget {
         children: [
           const Text('Analytics', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
-          const Text('Track plant health and growing conditions in one place.', style: TextStyle(color: Colors.black54)),
+          Text('Track plant health and growing conditions in one place.',
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55))),
           const SizedBox(height: 24),
-          _buildMetricCard('Moisture level', '72%', 'Latest sensor readings are in the ideal range.', Colors.blue),
-          _buildMetricCard('Temperature', '24°C', 'Stable ambient temperature for growth.', Colors.orange),
-          _buildMetricCard('Growth score', '88', 'Your garden is progressing smoothly.', Colors.green),
+          _buildMetricCard(context, 'Moisture level', '72%', 'Latest sensor readings are in the ideal range.', Colors.blue),
+          _buildMetricCard(context, 'Temperature', '24°C', 'Stable ambient temperature for growth.', Colors.orange),
+          _buildMetricCard(context, 'Growth score', '88', 'Your garden is progressing smoothly.', Colors.green),
           const SizedBox(height: 16),
-          _buildProgress('Water absorption', 0.68, Colors.blue),
+          _buildProgress(context, 'Water absorption', 0.68, Colors.blue),
           const SizedBox(height: 16),
-          _buildProgress('Light exposure', 0.82, Colors.amber),
+          _buildProgress(context, 'Light exposure', 0.82, Colors.amber),
           const SizedBox(height: 16),
-          _buildProgress('Nutrient balance', 0.76, Colors.green),
+          _buildProgress(context, 'Nutrient balance', 0.76, Colors.green),
         ],
       ),
     );

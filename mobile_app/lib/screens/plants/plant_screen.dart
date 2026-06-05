@@ -29,13 +29,12 @@ class _PlantScreenState extends State<PlantScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text('Plant zones', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.grey[100],
         elevation: 0,
-        foregroundColor: Colors.black,
       ),
       body: StreamBuilder<List<Zone>>(
         stream: _zonesStream,
@@ -57,25 +56,29 @@ class _PlantScreenState extends State<PlantScreen> {
             children: [
               Row(
                 children: [
-                  const Expanded(child: Text('Filter zones by type', style: TextStyle(color: Colors.black54))),
+                  Expanded(child: Text('Filter zones by type',
+                      style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55)))),
                   ElevatedButton.icon(
                     onPressed: () {
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const AddZoneScreen()));
                     },
                     icon: const Icon(Icons.add),
                     label: const Text('Add zone'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[700],
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 14),
               Row(
                 children: [
-                  _buildFilterButton('All'),
+                  _buildFilterButton(cs, 'All'),
                   const SizedBox(width: 10),
-                  _buildFilterButton('Indoor'),
+                  _buildFilterButton(cs, 'Indoor'),
                   const SizedBox(width: 10),
-                  _buildFilterButton('Outdoor'),
+                  _buildFilterButton(cs, 'Outdoor'),
                 ],
               ),
               const SizedBox(height: 22),
@@ -99,15 +102,15 @@ class _PlantScreenState extends State<PlantScreen> {
     );
   }
 
-  Widget _buildFilterButton(String label) {
+  Widget _buildFilterButton(ColorScheme cs, String label) {
     final bool isSelected = label == _selectedFilter;
     return Expanded(
       child: OutlinedButton(
         onPressed: () => setState(() => _selectedFilter = label),
         style: OutlinedButton.styleFrom(
-          backgroundColor: isSelected ? Colors.green[700] : Colors.white,
-          foregroundColor: isSelected ? Colors.white : Colors.black87,
-          side: BorderSide(color: isSelected ? Colors.green[700]! : Colors.grey.shade300),
+          backgroundColor: isSelected ? Colors.green[700] : cs.surfaceContainer,
+          foregroundColor: isSelected ? Colors.white : cs.onSurface,
+          side: BorderSide(color: isSelected ? Colors.green[700]! : cs.outline),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
         child: Text(label),

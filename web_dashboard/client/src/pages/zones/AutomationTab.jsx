@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase'
 
@@ -41,11 +41,20 @@ export default function AutomationTab({ zone }) {
   const [autoFert,     setAutoFert]     = useState(false)
   const [waterThresh,  setWaterThresh]  = useState('')
   const [waterSched,   setWaterSched]   = useState('')
+  const [waterDuration, setWaterDuration] = useState('')
   const [lightSched,   setLightSched]   = useState('')
   const [fertSched,    setFertSched]    = useState('')
+  const [fertDuration, setFertDuration] = useState('')
   const [loading,  setLoading]  = useState(true)
   const [device,   setDevice]   = useState(null)
-  const debounce = useRef(null)
+
+  // Saved-value mirrors for dirty detection and Cancel revert
+  const [waterThreshOrig, setWaterThreshOrig] = useState('')
+  const [waterSchedOrig,  setWaterSchedOrig]  = useState('')
+  const [waterDurOrig,    setWaterDurOrig]    = useState('')
+  const [lightSchedOrig,  setLightSchedOrig]  = useState('')
+  const [fertSchedOrig,   setFertSchedOrig]   = useState('')
+  const [fertDurOrig,     setFertDurOrig]     = useState('')
 
   // Watch device doc for live module flag updates
   useEffect(() => {
@@ -79,21 +88,55 @@ export default function AutomationTab({ zone }) {
         setAutoWater(d.autoWateringEnabled   ?? false)
         setAutoLight(d.autoLightingEnabled   ?? false)
         setAutoFert(d.autoFertilizingEnabled ?? false)
-        setWaterThresh(d.wateringThreshold?.toString() ?? '')
-        setWaterSched(d.wateringSchedule   ?? '')
-        setLightSched(d.lightingSchedule   ?? '')
-        setFertSched(d.fertilizingSchedule ?? '')
+
+        const wt  = d.wateringThreshold?.toString()  ?? ''
+        const ws  = d.wateringSchedule               ?? ''
+        const wd  = d.wateringDuration?.toString()   ?? ''
+        const ls  = d.lightingSchedule               ?? ''
+        const fs  = d.fertilizingSchedule            ?? ''
+        const fd  = d.fertilizingDuration?.toString() ?? ''
+
+        setWaterThresh(wt);  setWaterThreshOrig(wt)
+        setWaterSched(ws);   setWaterSchedOrig(ws)
+        setWaterDuration(wd); setWaterDurOrig(wd)
+        setLightSched(ls);   setLightSchedOrig(ls)
+        setFertSched(fs);    setFertSchedOrig(fs)
+        setFertDuration(fd); setFertDurOrig(fd)
       }
       setLoading(false)
     })
   }, [zone.id])
 
-  function save(patch) {
-    clearTimeout(debounce.current)
-    debounce.current = setTimeout(() => {
-      setDoc(doc(db, 'automationConfig', zone.id), patch, { merge: true })
-    }, 500)
+  // Toggles save immediately
+  function saveToggle(patch) {
+    setDoc(doc(db, 'automationConfig', zone.id), patch, { merge: true })
   }
+
+  async function saveTextConfig() {
+    await setDoc(doc(db, 'automationConfig', zone.id), {
+      wateringThreshold:   waterThresh    ? parseFloat(waterThresh)   : null,
+      wateringSchedule:    waterSched     || null,
+      wateringDuration:    waterDuration  ? parseInt(waterDuration)   : null,
+      lightingSchedule:    lightSched     || null,
+      fertilizingSchedule: fertSched      || null,
+      fertilizingDuration: fertDuration   ? parseInt(fertDuration)    : null,
+    }, { merge: true })
+    setWaterThreshOrig(waterThresh); setWaterSchedOrig(waterSched)
+    setWaterDurOrig(waterDuration);  setLightSchedOrig(lightSched)
+    setFertSchedOrig(fertSched);     setFertDurOrig(fertDuration)
+  }
+
+  function cancelTextConfig() {
+    setWaterThresh(waterThreshOrig); setWaterSched(waterSchedOrig)
+    setWaterDuration(waterDurOrig);  setLightSched(lightSchedOrig)
+    setFertSched(fertSchedOrig);     setFertDuration(fertDurOrig)
+  }
+
+  const isDirty = waterThresh !== waterThreshOrig || waterSched !== waterSchedOrig ||
+    waterDuration !== waterDurOrig || lightSched !== lightSchedOrig ||
+    fertSched !== fertSchedOrig    || fertDuration !== fertDurOrig
+
+  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
 
   if (!zone.deviceId) {
     return (
@@ -142,23 +185,31 @@ export default function AutomationTab({ zone }) {
             title="Water automation"
             subtitle="Trigger at moisture threshold or daily schedule"
             value={autoWater}
-            onChange={(v) => { setAutoWater(v); save({ autoWateringEnabled: v }) }}
+            onChange={(v) => { setAutoWater(v); saveToggle({ autoWateringEnabled: v }) }}
           >
             <label className="block text-sm font-medium text-gray-700 mb-1">Moisture threshold (%)</label>
             <input
               type="number"
               value={waterThresh}
-              onChange={(e) => { setWaterThresh(e.target.value); save({ wateringThreshold: e.target.value ? parseFloat(e.target.value) : null }) }}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              onChange={(e) => setWaterThresh(e.target.value)}
+              className={inputCls}
               placeholder="e.g. 30"
             />
             <label className="block text-sm font-medium text-gray-700 mb-1 mt-3">Daily schedule (e.g. 07:00)</label>
             <input
               type="text"
               value={waterSched}
-              onChange={(e) => { setWaterSched(e.target.value); save({ wateringSchedule: e.target.value || null }) }}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              onChange={(e) => setWaterSched(e.target.value)}
+              className={inputCls}
               placeholder="07:00"
+            />
+            <label className="block text-sm font-medium text-gray-700 mb-1 mt-3">Duration (seconds)</label>
+            <input
+              type="number"
+              value={waterDuration}
+              onChange={(e) => setWaterDuration(e.target.value)}
+              className={inputCls}
+              placeholder="300"
             />
           </ToggleSetting>
 
@@ -167,14 +218,14 @@ export default function AutomationTab({ zone }) {
               title="Light automation"
               subtitle="Schedule lighting times"
               value={autoLight}
-              onChange={(v) => { setAutoLight(v); save({ autoLightingEnabled: v }) }}
+              onChange={(v) => { setAutoLight(v); saveToggle({ autoLightingEnabled: v }) }}
             >
               <label className="block text-sm font-medium text-gray-700 mb-1">Schedule (e.g. 08:00–18:00)</label>
               <input
                 type="text"
                 value={lightSched}
-                onChange={(e) => { setLightSched(e.target.value); save({ lightingSchedule: e.target.value || null }) }}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                onChange={(e) => setLightSched(e.target.value)}
+                className={inputCls}
                 placeholder="08:00–18:00"
               />
             </ToggleSetting>
@@ -185,19 +236,44 @@ export default function AutomationTab({ zone }) {
               title="Fertilizer automation"
               subtitle="Trigger on schedule"
               value={autoFert}
-              onChange={(v) => { setAutoFert(v); save({ autoFertilizingEnabled: v }) }}
+              onChange={(v) => { setAutoFert(v); saveToggle({ autoFertilizingEnabled: v }) }}
             >
               <label className="block text-sm font-medium text-gray-700 mb-1">Weekly schedule (e.g. MON 06:00)</label>
               <input
                 type="text"
                 value={fertSched}
-                onChange={(e) => { setFertSched(e.target.value); save({ fertilizingSchedule: e.target.value || null }) }}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                onChange={(e) => setFertSched(e.target.value)}
+                className={inputCls}
                 placeholder="MON 06:00"
+              />
+              <label className="block text-sm font-medium text-gray-700 mb-1 mt-3">Duration (seconds)</label>
+              <input
+                type="number"
+                value={fertDuration}
+                onChange={(e) => setFertDuration(e.target.value)}
+                className={inputCls}
+                placeholder="600"
               />
             </ToggleSetting>
           )}
         </div>
+
+        {isDirty && (
+          <div className="flex gap-3 mt-4">
+            <button
+              onClick={cancelTextConfig}
+              className="flex-1 border border-gray-300 rounded-xl py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveTextConfig}
+              className="flex-1 bg-brand-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-brand-700"
+            >
+              Save
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

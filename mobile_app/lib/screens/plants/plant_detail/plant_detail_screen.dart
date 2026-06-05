@@ -102,23 +102,26 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Plant details'),
         backgroundColor: Colors.green[700],
+        foregroundColor: Colors.white,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          _buildPhotoSection(),
+          _buildPhotoSection(cs),
           const SizedBox(height: 20),
           _buildField('Name', _nameCtrl),
           const SizedBox(height: 16),
           _buildField('Species', _speciesCtrl),
           const SizedBox(height: 20),
-          _buildSensorOverview(),
+          _buildSensorOverview(cs),
           const SizedBox(height: 20),
-          _buildPreferredConditions(),
+          _buildPreferredConditions(cs),
           const SizedBox(height: 20),
           _buildNotesField(),
           const SizedBox(height: 24),
@@ -126,6 +129,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
             onPressed: _loading ? null : _save,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green[700],
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             child: Padding(
@@ -140,11 +144,11 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     );
   }
 
-  Widget _buildPhotoSection() {
+  Widget _buildPhotoSection(ColorScheme cs) {
     return Container(
       height: 180,
-      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(18)),
-      child: const Center(child: Icon(Icons.local_florist, size: 60, color: Colors.black38)),
+      decoration: BoxDecoration(color: cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(18)),
+      child: Center(child: Icon(Icons.local_florist, size: 60, color: cs.onSurface.withValues(alpha: 0.38))),
     );
   }
 
@@ -159,33 +163,33 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     );
   }
 
-  Widget _buildSensorOverview() {
+  Widget _buildSensorOverview(ColorScheme cs) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
       ),
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Plant overview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 14),
-          const Text('Latest moisture: --'),
-          const SizedBox(height: 8),
-          const Text('Condition: Good', style: TextStyle(fontWeight: FontWeight.bold)),
+          Text('Plant overview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          SizedBox(height: 14),
+          Text('Latest moisture: --'),
+          SizedBox(height: 8),
+          Text('Condition: Good', style: TextStyle(fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
 
-  Widget _buildPreferredConditions() {
+  Widget _buildPreferredConditions(ColorScheme cs) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -195,7 +199,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
           initiallyExpanded: _hasAnyCondition(),
           leading: Icon(Icons.tune, color: Colors.green[700]),
           title: const Text('Preferred growing conditions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          subtitle: const Text('Used to compute ideal zone environment', style: TextStyle(fontSize: 11, color: Colors.black45)),
+          subtitle: Text('Used to compute ideal zone environment',
+              style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.45))),
           children: [
             _rangeRow('Moisture (%)', _moistureMinCtrl, _moistureMaxCtrl),
             const SizedBox(height: 12),

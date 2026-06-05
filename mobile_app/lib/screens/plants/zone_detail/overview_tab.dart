@@ -16,11 +16,9 @@ class OverviewTab extends StatefulWidget {
 }
 
 class _OverviewTabState extends State<OverviewTab> {
-  // Assigned device display
   Future<Device?>? _assignedDeviceFuture;
   bool _removeLoading = false;
 
-  // Dropdown assignment
   Device? _selectedDevice;
   Future<List<Device>>? _availableDevicesFuture;
   int _dropdownKey = 0;
@@ -109,17 +107,18 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   Widget _buildPhotoCard() {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       height: 180,
       decoration: BoxDecoration(
-        color: Colors.grey[200],
+        color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(18),
         image: widget.zone.zonePhotoUrl != null
             ? DecorationImage(image: NetworkImage(widget.zone.zonePhotoUrl!), fit: BoxFit.cover)
             : null,
       ),
       child: widget.zone.zonePhotoUrl == null
-          ? const Center(child: Icon(Icons.photo, size: 48, color: Colors.black38))
+          ? Center(child: Icon(Icons.photo, size: 48, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)))
           : null,
     );
   }
@@ -209,6 +208,7 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   Widget _buildAssignDropdown() {
+    final cs = Theme.of(context).colorScheme;
     return FutureBuilder<List<Device>>(
       future: _availableDevicesFuture,
       builder: (context, snapshot) {
@@ -219,9 +219,9 @@ class _OverviewTabState extends State<OverviewTab> {
         final devices = snapshot.data ?? [];
 
         if (devices.isEmpty) {
-          return const Text(
+          return Text(
             'No available devices. Claim a device first from the Devices screen.',
-            style: TextStyle(color: Colors.black45, fontSize: 13),
+            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45), fontSize: 13),
           );
         }
 
@@ -264,29 +264,30 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   Widget _buildSensorCard() {
+    final cs = Theme.of(context).colorScheme;
     return _SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Latest sensor readings', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
           const SizedBox(height: 14),
-          _sensorRow('Temperature', widget.zone.latestTemp != null ? '${widget.zone.latestTemp}°C' : '--'),
+          _sensorRow(cs, 'Temperature', widget.zone.latestTemp != null ? '${widget.zone.latestTemp}°C' : '--'),
           const SizedBox(height: 12),
-          _sensorRow('Humidity', widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%' : '--'),
+          _sensorRow(cs, 'Humidity', widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%' : '--'),
           const SizedBox(height: 12),
-          _sensorRow('Light', widget.zone.latestLight != null ? '${widget.zone.latestLight} lx' : '--'),
+          _sensorRow(cs, 'Light', widget.zone.latestLight != null ? '${widget.zone.latestLight} lx' : '--'),
           const SizedBox(height: 12),
-          _sensorRow('Moisture', widget.zone.latestMoisture != null ? '${widget.zone.latestMoisture}%' : '--'),
+          _sensorRow(cs, 'Moisture', widget.zone.latestMoisture != null ? '${widget.zone.latestMoisture}%' : '--'),
         ],
       ),
     );
   }
 
-  Widget _sensorRow(String label, String value) {
+  Widget _sensorRow(ColorScheme cs, String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.black54)),
+        Text(label, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
       ],
     );
@@ -304,7 +305,7 @@ class _ModuleChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.green[100],
+        color: Colors.green.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -326,12 +327,13 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
       ),
       child: child,
     );

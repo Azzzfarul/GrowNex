@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../../models/automation_config_model.dart';
@@ -19,17 +17,26 @@ class AutomationTab extends StatefulWidget {
 
 class _AutomationTabState extends State<AutomationTab> {
   final _configService = AutomationConfigService();
-  Timer? _debounce;
 
   Stream<Device?>? _deviceStream;
 
-  bool _autoWater = false;
-  bool _autoLight = false;
+  bool _autoWater     = false;
+  bool _autoLight     = false;
   bool _autoFertilizer = false;
-  final _wateringThresholdCtrl  = TextEditingController();
-  final _wateringScheduleCtrl   = TextEditingController();
-  final _lightingScheduleCtrl   = TextEditingController();
+
+  final _wateringThresholdCtrl   = TextEditingController();
+  final _wateringScheduleCtrl    = TextEditingController();
+  final _wateringDurationCtrl    = TextEditingController();
+  final _lightingScheduleCtrl    = TextEditingController();
   final _fertilizingScheduleCtrl = TextEditingController();
+  final _fertilizingDurationCtrl = TextEditingController();
+
+  String _savedWaterThreshold = '';
+  String _savedWaterSchedule  = '';
+  String _savedWaterDuration  = '';
+  String _savedLightSchedule  = '';
+  String _savedFertSchedule   = '';
+  String _savedFertDuration   = '';
 
   @override
   void initState() {
@@ -54,11 +61,12 @@ class _AutomationTabState extends State<AutomationTab> {
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _wateringThresholdCtrl.dispose();
     _wateringScheduleCtrl.dispose();
+    _wateringDurationCtrl.dispose();
     _lightingScheduleCtrl.dispose();
     _fertilizingScheduleCtrl.dispose();
+    _fertilizingDurationCtrl.dispose();
     super.dispose();
   }
 
@@ -66,32 +74,76 @@ class _AutomationTabState extends State<AutomationTab> {
     final config = await _configService.getConfig(widget.zone.id);
     if (config != null && mounted) {
       setState(() {
-        _autoWater = config.autoWateringEnabled;
-        _autoLight = config.autoLightingEnabled;
+        _autoWater      = config.autoWateringEnabled;
+        _autoLight      = config.autoLightingEnabled;
         _autoFertilizer = config.autoFertilizingEnabled;
-        _wateringThresholdCtrl.text = config.wateringThreshold?.toString() ?? '';
-        _wateringScheduleCtrl.text = config.wateringSchedule ?? '';
-        _lightingScheduleCtrl.text = config.lightingSchedule ?? '';
+
+        _wateringThresholdCtrl.text   = config.wateringThreshold?.toString() ?? '';
+        _wateringScheduleCtrl.text    = config.wateringSchedule ?? '';
+        _wateringDurationCtrl.text    = config.wateringDuration?.toString() ?? '';
+        _lightingScheduleCtrl.text    = config.lightingSchedule ?? '';
         _fertilizingScheduleCtrl.text = config.fertilizingSchedule ?? '';
+        _fertilizingDurationCtrl.text = config.fertilizingDuration?.toString() ?? '';
+
+        _savedWaterThreshold = _wateringThresholdCtrl.text;
+        _savedWaterSchedule  = _wateringScheduleCtrl.text;
+        _savedWaterDuration  = _wateringDurationCtrl.text;
+        _savedLightSchedule  = _lightingScheduleCtrl.text;
+        _savedFertSchedule   = _fertilizingScheduleCtrl.text;
+        _savedFertDuration   = _fertilizingDurationCtrl.text;
       });
     }
   }
 
-  void _scheduleSave() {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
-      final config = AutomationConfig(
-        autoWateringEnabled: _autoWater,
-        wateringThreshold: num.tryParse(_wateringThresholdCtrl.text),
-        wateringSchedule: _wateringScheduleCtrl.text.trim().isEmpty ? null : _wateringScheduleCtrl.text.trim(),
-        autoLightingEnabled: _autoLight,
-        lightingSchedule: _lightingScheduleCtrl.text.trim().isEmpty ? null : _lightingScheduleCtrl.text.trim(),
-        autoFertilizingEnabled: _autoFertilizer,
-        fertilizingSchedule: _fertilizingScheduleCtrl.text.trim().isEmpty ? null : _fertilizingScheduleCtrl.text.trim(),
-      );
-      _configService.saveConfig(widget.zone.id, config);
+  Future<void> _saveToggle(AutomationConfig config) async {
+    await _configService.saveConfig(widget.zone.id, config);
+  }
+
+  Future<void> _saveTextConfig() async {
+    final config = AutomationConfig(
+      autoWateringEnabled:    _autoWater,
+      wateringThreshold:      num.tryParse(_wateringThresholdCtrl.text),
+      wateringSchedule:       _wateringScheduleCtrl.text.trim().isEmpty ? null : _wateringScheduleCtrl.text.trim(),
+      wateringDuration:       int.tryParse(_wateringDurationCtrl.text),
+      autoLightingEnabled:    _autoLight,
+      lightingSchedule:       _lightingScheduleCtrl.text.trim().isEmpty ? null : _lightingScheduleCtrl.text.trim(),
+      autoFertilizingEnabled: _autoFertilizer,
+      fertilizingSchedule:    _fertilizingScheduleCtrl.text.trim().isEmpty ? null : _fertilizingScheduleCtrl.text.trim(),
+      fertilizingDuration:    int.tryParse(_fertilizingDurationCtrl.text),
+    );
+    await _configService.saveConfig(widget.zone.id, config);
+    setState(() {
+      _savedWaterThreshold = _wateringThresholdCtrl.text;
+      _savedWaterSchedule  = _wateringScheduleCtrl.text;
+      _savedWaterDuration  = _wateringDurationCtrl.text;
+      _savedLightSchedule  = _lightingScheduleCtrl.text;
+      _savedFertSchedule   = _fertilizingScheduleCtrl.text;
+      _savedFertDuration   = _fertilizingDurationCtrl.text;
     });
   }
+
+  void _cancelTextConfig() {
+    setState(() {
+      _wateringThresholdCtrl.text   = _savedWaterThreshold;
+      _wateringScheduleCtrl.text    = _savedWaterSchedule;
+      _wateringDurationCtrl.text    = _savedWaterDuration;
+      _lightingScheduleCtrl.text    = _savedLightSchedule;
+      _fertilizingScheduleCtrl.text = _savedFertSchedule;
+      _fertilizingDurationCtrl.text = _savedFertDuration;
+    });
+  }
+
+  AutomationConfig _currentConfig() => AutomationConfig(
+    autoWateringEnabled:    _autoWater,
+    wateringThreshold:      num.tryParse(_wateringThresholdCtrl.text),
+    wateringSchedule:       _wateringScheduleCtrl.text.trim().isEmpty ? null : _wateringScheduleCtrl.text.trim(),
+    wateringDuration:       int.tryParse(_wateringDurationCtrl.text),
+    autoLightingEnabled:    _autoLight,
+    lightingSchedule:       _lightingScheduleCtrl.text.trim().isEmpty ? null : _lightingScheduleCtrl.text.trim(),
+    autoFertilizingEnabled: _autoFertilizer,
+    fertilizingSchedule:    _fertilizingScheduleCtrl.text.trim().isEmpty ? null : _fertilizingScheduleCtrl.text.trim(),
+    fertilizingDuration:    int.tryParse(_fertilizingDurationCtrl.text),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -117,17 +169,24 @@ class _AutomationTabState extends State<AutomationTab> {
       );
     }
 
+    final isDirty = _wateringThresholdCtrl.text != _savedWaterThreshold ||
+        _wateringScheduleCtrl.text    != _savedWaterSchedule  ||
+        _wateringDurationCtrl.text    != _savedWaterDuration  ||
+        _lightingScheduleCtrl.text    != _savedLightSchedule  ||
+        _fertilizingScheduleCtrl.text != _savedFertSchedule   ||
+        _fertilizingDurationCtrl.text != _savedFertDuration;
+
     return StreamBuilder<Device?>(
       stream: _deviceStream,
       builder: (context, snap) {
-        final device      = snap.data;
-        final hasFert     = device?.hasFertilizerModule ?? false;
-        final hasLight    = device?.hasLightingModule   ?? false;
-        final isWaterOn   = device?.irrigationActive    ?? false;
-        final isFertOn    = device?.fertilizerActive    ?? false;
-        final isLightOn   = device?.lightActive         ?? false;
-        final deviceId    = widget.zone.deviceId!;
-        final svc         = DeviceService();
+        final device   = snap.data;
+        final hasFert  = device?.hasFertilizerModule ?? false;
+        final hasLight = device?.hasLightingModule   ?? false;
+        final isWaterOn  = device?.irrigationActive  ?? false;
+        final isFertOn   = device?.fertilizerActive  ?? false;
+        final isLightOn  = device?.lightActive        ?? false;
+        final deviceId   = widget.zone.deviceId!;
+        final svc        = DeviceService();
 
         return ListView(
           padding: const EdgeInsets.all(20),
@@ -165,7 +224,7 @@ class _AutomationTabState extends State<AutomationTab> {
               value: _autoWater,
               onChanged: (v) {
                 setState(() => _autoWater = v);
-                _scheduleSave();
+                _saveToggle(_currentConfig().copyWith(autoWateringEnabled: v));
               },
               expandedContent: Column(
                 children: [
@@ -173,13 +232,23 @@ class _AutomationTabState extends State<AutomationTab> {
                     controller: _wateringThresholdCtrl,
                     decoration: const InputDecoration(labelText: 'Moisture threshold (%)', border: OutlineInputBorder()),
                     keyboardType: TextInputType.number,
-                    onChanged: (_) => _scheduleSave(),
+                    onChanged: (_) => setState(() {}),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _wateringScheduleCtrl,
                     decoration: const InputDecoration(labelText: 'Daily schedule (e.g. 07:00)', border: OutlineInputBorder()),
-                    onChanged: (_) => _scheduleSave(),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _wateringDurationCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Watering duration (seconds, e.g. 300)',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setState(() {}),
                   ),
                 ],
               ),
@@ -192,12 +261,12 @@ class _AutomationTabState extends State<AutomationTab> {
                 value: _autoLight,
                 onChanged: (v) {
                   setState(() => _autoLight = v);
-                  _scheduleSave();
+                  _saveToggle(_currentConfig().copyWith(autoLightingEnabled: v));
                 },
                 expandedContent: TextField(
                   controller: _lightingScheduleCtrl,
                   decoration: const InputDecoration(labelText: 'Schedule (e.g. 08:00–18:00)', border: OutlineInputBorder()),
-                  onChanged: (_) => _scheduleSave(),
+                  onChanged: (_) => setState(() {}),
                 ),
               ),
             ],
@@ -209,13 +278,48 @@ class _AutomationTabState extends State<AutomationTab> {
                 value: _autoFertilizer,
                 onChanged: (v) {
                   setState(() => _autoFertilizer = v);
-                  _scheduleSave();
+                  _saveToggle(_currentConfig().copyWith(autoFertilizingEnabled: v));
                 },
-                expandedContent: TextField(
-                  controller: _fertilizingScheduleCtrl,
-                  decoration: const InputDecoration(labelText: 'Weekly schedule (e.g. MON 06:00)', border: OutlineInputBorder()),
-                  onChanged: (_) => _scheduleSave(),
+                expandedContent: Column(
+                  children: [
+                    TextField(
+                      controller: _fertilizingScheduleCtrl,
+                      decoration: const InputDecoration(labelText: 'Weekly schedule (e.g. MON 06:00)', border: OutlineInputBorder()),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _fertilizingDurationCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Fertilizing duration (seconds, e.g. 600)',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ],
                 ),
+              ),
+            ],
+            if (isDirty) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _cancelTextConfig,
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _saveTextConfig,
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
+                      child: const Text('Save', style: TextStyle(color: Colors.white)),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -225,12 +329,13 @@ class _AutomationTabState extends State<AutomationTab> {
   }
 
   Widget _buildActionCard(String title, IconData icon, Color color, {required bool isOn, required VoidCallback onToggle}) {
+    final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: 110,
       child: ElevatedButton(
         onPressed: onToggle,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isOn ? Colors.green[700] : Colors.white,
+          backgroundColor: isOn ? Colors.green[700] : cs.surfaceContainer,
           foregroundColor: isOn ? Colors.white : color,
           elevation: 1,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -255,12 +360,13 @@ class _AutomationTabState extends State<AutomationTab> {
     required ValueChanged<bool> onChanged,
     required Widget expandedContent,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,7 +377,7 @@ class _AutomationTabState extends State<AutomationTab> {
               Switch(value: value, onChanged: onChanged, activeThumbColor: Colors.green[700]),
             ],
           ),
-          Text(subtitle, style: const TextStyle(color: Colors.black54)),
+          Text(subtitle, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
           if (value) ...[
             const SizedBox(height: 14),
             expandedContent,

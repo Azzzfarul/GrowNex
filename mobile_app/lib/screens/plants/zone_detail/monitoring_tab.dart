@@ -56,21 +56,30 @@ class _MonitoringTabState extends State<MonitoringTab> {
     );
   }
 
-  Widget _buildDeviceStatus() {
+  Widget _card({required Widget child}) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
       ),
+      child: child,
+    );
+  }
+
+  Widget _buildDeviceStatus() {
+    final cs = Theme.of(context).colorScheme;
+    return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Device status', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           if (_deviceStream == null)
-            const Text('No device connected', style: TextStyle(fontSize: 16, color: Colors.black54))
+            Text('No device connected',
+                style: TextStyle(fontSize: 16, color: cs.onSurface.withValues(alpha: 0.55)))
           else
             StreamBuilder<Device?>(
               stream: _deviceStream,
@@ -112,42 +121,32 @@ class _MonitoringTabState extends State<MonitoringTab> {
   }
 
   Widget _buildSensorOverview() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 6))],
-      ),
+    final cs = Theme.of(context).colorScheme;
+    return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Latest readings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 14),
-          _sensorValue('Temperature', widget.zone.latestTemp != null ? '${widget.zone.latestTemp}°C' : '--'),
+          _sensorValue(cs, 'Temperature', widget.zone.latestTemp != null ? '${widget.zone.latestTemp}°C' : '--'),
           const SizedBox(height: 10),
-          _sensorValue('Humidity', widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%' : '--'),
+          _sensorValue(cs, 'Humidity', widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%' : '--'),
           const SizedBox(height: 10),
-          _sensorValue('Light', widget.zone.latestLight != null ? '${widget.zone.latestLight} lx' : '--'),
+          _sensorValue(cs, 'Light', widget.zone.latestLight != null ? '${widget.zone.latestLight} lx' : '--'),
           const SizedBox(height: 10),
-          _sensorValue('Moisture', widget.zone.latestMoisture != null ? '${widget.zone.latestMoisture}%' : '--'),
+          _sensorValue(cs, 'Moisture', widget.zone.latestMoisture != null ? '${widget.zone.latestMoisture}%' : '--'),
         ],
       ),
     );
   }
 
   Widget _buildIdealConditions() {
+    final cs = Theme.of(context).colorScheme;
     return StreamBuilder<List<Plant>>(
       stream: _plantsStream,
       builder: (context, snapshot) {
         final plants = snapshot.data ?? [];
-        return Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 6))],
-          ),
+        return _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -165,13 +164,13 @@ class _MonitoringTabState extends State<MonitoringTab> {
                 plants.isEmpty
                     ? 'Add plants with preferred conditions to see computed ideals.'
                     : 'Averaged from ${plants.length} plant${plants.length == 1 ? '' : 's'} in this zone. Edit at the plant level.',
-                style: const TextStyle(fontSize: 12, color: Colors.black45),
+                style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.45)),
               ),
               const SizedBox(height: 14),
               if (plants.isEmpty)
-                const Text('No plants yet', style: TextStyle(color: Colors.black38))
+                Text('No plants yet', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.38)))
               else
-                ..._buildIdealRows(plants),
+                ..._buildIdealRows(cs, plants),
             ],
           ),
         );
@@ -179,7 +178,7 @@ class _MonitoringTabState extends State<MonitoringTab> {
     );
   }
 
-  List<Widget> _buildIdealRows(List<Plant> plants) {
+  List<Widget> _buildIdealRows(ColorScheme cs, List<Plant> plants) {
     final moistureMin = _avg(plants.map((p) => p.preferredMoistureMin));
     final moistureMax = _avg(plants.map((p) => p.preferredMoistureMax));
     final humidityMin = _avg(plants.map((p) => p.preferredHumidityMin));
@@ -189,13 +188,13 @@ class _MonitoringTabState extends State<MonitoringTab> {
     final dominantLight = _dominantLight(plants);
 
     return [
-      _idealRow('Moisture', _rangeStr(moistureMin, moistureMax, '%')),
+      _idealRow(cs, 'Moisture', _rangeStr(moistureMin, moistureMax, '%')),
       const SizedBox(height: 10),
-      _idealRow('Humidity', _rangeStr(humidityMin, humidityMax, '%')),
+      _idealRow(cs, 'Humidity', _rangeStr(humidityMin, humidityMax, '%')),
       const SizedBox(height: 10),
-      _idealRow('Temperature', _rangeStr(tempMin, tempMax, '°C')),
+      _idealRow(cs, 'Temperature', _rangeStr(tempMin, tempMax, '°C')),
       const SizedBox(height: 10),
-      _idealRow('Light', dominantLight != null ? _capitalize(dominantLight) : '--'),
+      _idealRow(cs, 'Light', dominantLight != null ? _capitalize(dominantLight) : '--'),
     ];
   }
 
@@ -207,9 +206,7 @@ class _MonitoringTabState extends State<MonitoringTab> {
 
   String _rangeStr(double? min, double? max, String unit) {
     if (min == null && max == null) return '--';
-    if (min != null && max != null) {
-      return '${min.toStringAsFixed(1)} – ${max.toStringAsFixed(1)}$unit';
-    }
+    if (min != null && max != null) return '${min.toStringAsFixed(1)} – ${max.toStringAsFixed(1)}$unit';
     if (min != null) return '≥ ${min.toStringAsFixed(1)}$unit';
     return '≤ ${max!.toStringAsFixed(1)}$unit';
   }
@@ -227,29 +224,30 @@ class _MonitoringTabState extends State<MonitoringTab> {
 
   String _capitalize(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
-  Widget _idealRow(String label, String value) {
+  Widget _idealRow(ColorScheme cs, String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.black54)),
+        Text(label, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
       ],
     );
   }
 
   Widget _buildImagePreview() {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       height: 200,
-      decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(18)),
-      child: const Center(child: Icon(Icons.camera_alt, size: 44, color: Colors.black38)),
+      decoration: BoxDecoration(color: cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(18)),
+      child: Center(child: Icon(Icons.camera_alt, size: 44, color: cs.onSurface.withValues(alpha: 0.38))),
     );
   }
 
-  Widget _sensorValue(String label, String value) {
+  Widget _sensorValue(ColorScheme cs, String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.black54)),
+        Text(label, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
       ],
     );

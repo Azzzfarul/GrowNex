@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/zone_model.dart';
 import '../../services/firestore/zone_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/zone_card_widget.dart';
 import '../plants/zone_detail/zone_detail_screen.dart';
 
@@ -16,20 +17,33 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   static const _contentPadding = EdgeInsets.all(20);
   late final Stream<List<Zone>> _zonesStream;
-  late final String _username;
+  String _username = 'gardener';
 
   @override
   void initState() {
     super.initState();
     final authUser = FirebaseAuth.instance.currentUser;
-    _username = authUser?.displayName ?? 'gardener';
     _zonesStream = authUser != null
         ? ZoneService().watchZones(authUser.uid)
         : const Stream.empty();
+    _loadUsername();
+  }
+
+  Future<void> _loadUsername() async {
+    final data = await AuthService().getCurrentUserData();
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (mounted) {
+      setState(() {
+        _username = data?['username'] as String? ??
+            authUser?.displayName ??
+            'gardener';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final authUser = FirebaseAuth.instance.currentUser;
     if (authUser == null) {
       return const Center(child: Text('Please sign in to see your dashboard.'));
@@ -56,18 +70,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Text('Good morning, $_username', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
-              const Text('Here is today\'s plant performance overview.', style: TextStyle(color: Colors.black54)),
+              Text('Here is today\'s plant performance overview.',
+                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
               const SizedBox(height: 24),
               Row(
                 children: [
-                  Expanded(child: _buildSummaryCard('Active zones', '$activeZones active zone${activeZones == 1 ? '' : 's'}', Colors.green)),
+                  Expanded(child: _buildSummaryCard(cs, 'Active zones', '$activeZones active zone${activeZones == 1 ? '' : 's'}', Colors.green)),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildSummaryCard('Attention', '$attentionZones zone${attentionZones == 1 ? '' : 's'} require attention', Colors.orange)),
+                  Expanded(child: _buildSummaryCard(cs, 'Attention', '$attentionZones zone${attentionZones == 1 ? '' : 's'} require attention', Colors.orange)),
                 ],
               ),
               const SizedBox(height: 24),
               if (zones.isEmpty)
-                _buildEmptyState()
+                _buildEmptyState(cs)
               else ...[
                 const Text('Zone overview', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
@@ -85,12 +100,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSummaryCard(String title, String value, Color color) {
+  Widget _buildSummaryCard(ColorScheme cs, String title, String value, Color color) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 14, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 14, offset: const Offset(0, 6))],
       ),
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -104,18 +119,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(ColorScheme cs) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 14, offset: const Offset(0, 6))],
+        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 14, offset: const Offset(0, 6))],
       ),
-      child: const Text(
+      child: Text(
         'No zones found yet. Add a zone first, then the dashboard will show the latest sensor summaries and alerts.',
-        style: TextStyle(color: Colors.black54),
+        style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55)),
       ),
     );
   }

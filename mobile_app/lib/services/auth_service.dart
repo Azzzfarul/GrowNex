@@ -63,4 +63,27 @@ class AuthService {
   }
 
   User? get currentUser => _auth.currentUser;
+
+  Future<Map<String, dynamic>?> getCurrentUserData() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return null;
+    final doc = await _firestore.collection('users').doc(uid).get();
+    return doc.data();
+  }
+
+  Future<void> reauthenticate(String password) async {
+    final user = _auth.currentUser!;
+    final cred = EmailAuthProvider.credential(email: user.email!, password: password);
+    await user.reauthenticateWithCredential(cred);
+  }
+
+  Future<void> updateUsername(String username) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    await _firestore.collection('users').doc(uid).update({'username': username});
+  }
+
+  Future<void> updatePassword(String newPassword) async {
+    await _auth.currentUser!.updatePassword(newPassword);
+  }
 }

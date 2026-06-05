@@ -83,7 +83,9 @@ async function handleSensors(deviceId, payload) {
       if (Date.now() - last > COOLDOWN_MS) {
         lastIrrTrigger.set(deviceId, Date.now())
         await triggerActuator(assignedZoneId, 'irrigation', true)
-        console.log(`[MQTT bridge] threshold trigger → ${deviceId} (moisture ${moisture}% < ${cfg.wateringThreshold}%)`)
+        const waterDuration = (cfg.wateringDuration ?? 300) * 1000
+        setTimeout(() => triggerActuator(assignedZoneId, 'irrigation', false), waterDuration)
+        console.log(`[MQTT bridge] threshold trigger → ${deviceId} (moisture ${moisture}% < ${cfg.wateringThreshold}%), auto-off in ${waterDuration / 1000}s`)
       }
     }
   }
@@ -257,8 +259,12 @@ function scheduleCronJobsForZone(zoneId, config) {
   try {
     if (config.autoWateringEnabled && config.wateringSchedule) {
       const expr = dailyCron(config.wateringSchedule)
+      const waterDuration = (config.wateringDuration ?? 300) * 1000
       if (cron.validate(expr))
-        jobs.push(cron.schedule(expr, () => triggerActuator(zoneId, 'irrigation', true)))
+        jobs.push(cron.schedule(expr, async () => {
+          await triggerActuator(zoneId, 'irrigation', true)
+          setTimeout(() => triggerActuator(zoneId, 'irrigation', false), waterDuration)
+        }))
     }
 
     if (config.autoLightingEnabled && config.lightingSchedule) {
@@ -271,8 +277,12 @@ function scheduleCronJobsForZone(zoneId, config) {
 
     if (config.autoFertilizingEnabled && config.fertilizingSchedule) {
       const expr = weeklyCron(config.fertilizingSchedule)
+      const fertDuration = (config.fertilizingDuration ?? 600) * 1000
       if (cron.validate(expr))
-        jobs.push(cron.schedule(expr, () => triggerActuator(zoneId, 'fertilizer', true)))
+        jobs.push(cron.schedule(expr, async () => {
+          await triggerActuator(zoneId, 'fertilizer', true)
+          setTimeout(() => triggerActuator(zoneId, 'fertilizer', false), fertDuration)
+        }))
     }
   } catch (e) {
     console.warn(`[MQTT bridge] invalid schedule for zone ${zoneId}:`, e.message)
