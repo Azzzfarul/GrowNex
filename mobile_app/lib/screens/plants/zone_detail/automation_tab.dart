@@ -26,8 +26,9 @@ class _AutomationTabState extends State<AutomationTab> {
   bool _autoWater = false;
   bool _autoLight = false;
   bool _autoFertilizer = false;
-  final _wateringThresholdCtrl = TextEditingController();
-  final _lightingScheduleCtrl = TextEditingController();
+  final _wateringThresholdCtrl  = TextEditingController();
+  final _wateringScheduleCtrl   = TextEditingController();
+  final _lightingScheduleCtrl   = TextEditingController();
   final _fertilizingScheduleCtrl = TextEditingController();
 
   @override
@@ -55,6 +56,7 @@ class _AutomationTabState extends State<AutomationTab> {
   void dispose() {
     _debounce?.cancel();
     _wateringThresholdCtrl.dispose();
+    _wateringScheduleCtrl.dispose();
     _lightingScheduleCtrl.dispose();
     _fertilizingScheduleCtrl.dispose();
     super.dispose();
@@ -68,6 +70,7 @@ class _AutomationTabState extends State<AutomationTab> {
         _autoLight = config.autoLightingEnabled;
         _autoFertilizer = config.autoFertilizingEnabled;
         _wateringThresholdCtrl.text = config.wateringThreshold?.toString() ?? '';
+        _wateringScheduleCtrl.text = config.wateringSchedule ?? '';
         _lightingScheduleCtrl.text = config.lightingSchedule ?? '';
         _fertilizingScheduleCtrl.text = config.fertilizingSchedule ?? '';
       });
@@ -80,6 +83,7 @@ class _AutomationTabState extends State<AutomationTab> {
       final config = AutomationConfig(
         autoWateringEnabled: _autoWater,
         wateringThreshold: num.tryParse(_wateringThresholdCtrl.text),
+        wateringSchedule: _wateringScheduleCtrl.text.trim().isEmpty ? null : _wateringScheduleCtrl.text.trim(),
         autoLightingEnabled: _autoLight,
         lightingSchedule: _lightingScheduleCtrl.text.trim().isEmpty ? null : _lightingScheduleCtrl.text.trim(),
         autoFertilizingEnabled: _autoFertilizer,
@@ -157,17 +161,27 @@ class _AutomationTabState extends State<AutomationTab> {
             const SizedBox(height: 12),
             _buildToggleSetting(
               title: 'Water automation',
-              subtitle: 'Trigger at moisture threshold',
+              subtitle: 'Trigger at moisture threshold or schedule',
               value: _autoWater,
               onChanged: (v) {
                 setState(() => _autoWater = v);
                 _scheduleSave();
               },
-              expandedContent: TextField(
-                controller: _wateringThresholdCtrl,
-                decoration: const InputDecoration(labelText: 'Moisture threshold (%)', border: OutlineInputBorder()),
-                keyboardType: TextInputType.number,
-                onChanged: (_) => _scheduleSave(),
+              expandedContent: Column(
+                children: [
+                  TextField(
+                    controller: _wateringThresholdCtrl,
+                    decoration: const InputDecoration(labelText: 'Moisture threshold (%)', border: OutlineInputBorder()),
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => _scheduleSave(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _wateringScheduleCtrl,
+                    decoration: const InputDecoration(labelText: 'Daily schedule (e.g. 07:00)', border: OutlineInputBorder()),
+                    onChanged: (_) => _scheduleSave(),
+                  ),
+                ],
               ),
             ),
             if (hasLight) ...[
@@ -199,7 +213,7 @@ class _AutomationTabState extends State<AutomationTab> {
                 },
                 expandedContent: TextField(
                   controller: _fertilizingScheduleCtrl,
-                  decoration: const InputDecoration(labelText: 'Schedule (e.g. weekly)', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'Weekly schedule (e.g. MON 06:00)', border: OutlineInputBorder()),
                   onChanged: (_) => _scheduleSave(),
                 ),
               ),

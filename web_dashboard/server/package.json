@@ -12,6 +12,7 @@
     "express": "^4.19.2",
     "firebase": "^12.14.0",
     "firebase-admin": "^12.2.0",
-    "mqtt": "^5.15.1"
+    "mqtt": "^5.15.1",
+    "node-cron": "^4.2.1"
   }
 }

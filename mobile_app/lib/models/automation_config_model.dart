@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class AutomationConfig {
   final bool autoWateringEnabled;
   final num? wateringThreshold;
+  final String? wateringSchedule;
   final bool autoLightingEnabled;
   final String? lightingSchedule;
   final bool autoFertilizingEnabled;
@@ -12,6 +13,7 @@ class AutomationConfig {
   AutomationConfig({
     this.autoWateringEnabled = false,
     this.wateringThreshold,
+    this.wateringSchedule,
     this.autoLightingEnabled = false,
     this.lightingSchedule,
     this.autoFertilizingEnabled = false,
@@ -28,6 +30,7 @@ class AutomationConfig {
     return AutomationConfig(
       autoWateringEnabled: map['autoWateringEnabled'] as bool? ?? false,
       wateringThreshold: map['wateringThreshold'] as num?,
+      wateringSchedule: map['wateringSchedule'] as String?,
       autoLightingEnabled: map['autoLightingEnabled'] as bool? ?? false,
       lightingSchedule: map['lightingSchedule'] as String?,
       autoFertilizingEnabled: map['autoFertilizingEnabled'] as bool? ?? false,
@@ -40,6 +43,7 @@ class AutomationConfig {
     return {
       'autoWateringEnabled': autoWateringEnabled,
       'wateringThreshold': wateringThreshold,
+      'wateringSchedule': wateringSchedule,
       'autoLightingEnabled': autoLightingEnabled,
       'lightingSchedule': lightingSchedule,
       'autoFertilizingEnabled': autoFertilizingEnabled,

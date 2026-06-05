@@ -40,6 +40,7 @@ export default function AutomationTab({ zone }) {
   const [autoLight,    setAutoLight]    = useState(false)
   const [autoFert,     setAutoFert]     = useState(false)
   const [waterThresh,  setWaterThresh]  = useState('')
+  const [waterSched,   setWaterSched]   = useState('')
   const [lightSched,   setLightSched]   = useState('')
   const [fertSched,    setFertSched]    = useState('')
   const [loading,  setLoading]  = useState(true)
@@ -79,7 +80,8 @@ export default function AutomationTab({ zone }) {
         setAutoLight(d.autoLightingEnabled   ?? false)
         setAutoFert(d.autoFertilizingEnabled ?? false)
         setWaterThresh(d.wateringThreshold?.toString() ?? '')
-        setLightSched(d.lightingSchedule  ?? '')
+        setWaterSched(d.wateringSchedule   ?? '')
+        setLightSched(d.lightingSchedule   ?? '')
         setFertSched(d.fertilizingSchedule ?? '')
       }
       setLoading(false)
@@ -138,7 +140,7 @@ export default function AutomationTab({ zone }) {
         <div className="space-y-3">
           <ToggleSetting
             title="Water automation"
-            subtitle="Trigger at moisture threshold"
+            subtitle="Trigger at moisture threshold or daily schedule"
             value={autoWater}
             onChange={(v) => { setAutoWater(v); save({ autoWateringEnabled: v }) }}
           >
@@ -149,6 +151,14 @@ export default function AutomationTab({ zone }) {
               onChange={(e) => { setWaterThresh(e.target.value); save({ wateringThreshold: e.target.value ? parseFloat(e.target.value) : null }) }}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               placeholder="e.g. 30"
+            />
+            <label className="block text-sm font-medium text-gray-700 mb-1 mt-3">Daily schedule (e.g. 07:00)</label>
+            <input
+              type="text"
+              value={waterSched}
+              onChange={(e) => { setWaterSched(e.target.value); save({ wateringSchedule: e.target.value || null }) }}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              placeholder="07:00"
             />
           </ToggleSetting>
 
@@ -177,13 +187,13 @@ export default function AutomationTab({ zone }) {
               value={autoFert}
               onChange={(v) => { setAutoFert(v); save({ autoFertilizingEnabled: v }) }}
             >
-              <label className="block text-sm font-medium text-gray-700 mb-1">Schedule (e.g. weekly)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Weekly schedule (e.g. MON 06:00)</label>
               <input
                 type="text"
                 value={fertSched}
                 onChange={(e) => { setFertSched(e.target.value); save({ fertilizingSchedule: e.target.value || null }) }}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                placeholder="weekly"
+                placeholder="MON 06:00"
               />
             </ToggleSetting>
           )}

@@ -1,17 +1,18 @@
 import mqtt from 'mqtt'
+import cron from 'node-cron'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 
-const BROKER   = process.env.MQTT_BROKER_HOST || 'broker.hivemq.com'
+const BROKER      = process.env.MQTT_BROKER_HOST || 'broker.hivemq.com'
 const BROKER_PORT = parseInt(process.env.MQTT_BROKER_PORT || '1883')
-const MQTT_USER = process.env.MQTT_USER || ''
-const MQTT_PASS = process.env.MQTT_PASS || ''
-const db = getFirestore()
+const MQTT_USER   = process.env.MQTT_USER || ''
+const MQTT_PASS   = process.env.MQTT_PASS || ''
+const db          = getFirestore()
 
 let client
 
 // ─── Helper: get or create a device document using hardwareId as doc ID ───────
 async function getOrCreateDevice(deviceId) {
-  const ref = db.collection('devices').doc(deviceId)
+  const ref  = db.collection('devices').doc(deviceId)
   const snap = await ref.get()
   if (!snap.exists) {
     await ref.set({
@@ -40,7 +41,6 @@ async function handleSensors(deviceId, payload) {
   const { assignedZoneId } = device
 
   if (!assignedZoneId) {
-    // Device exists but isn't assigned to a zone yet — still mark it online
     await db.collection('devices').doc(deviceId).update({
       status:   'online',
       lastSync: FieldValue.serverTimestamp(),
@@ -53,11 +53,9 @@ async function handleSensors(deviceId, payload) {
                     timestamp: FieldValue.serverTimestamp() }
 
   await Promise.all([
-    // New sensor reading document — matches SensorReading.fromMap() field names
     db.collection('zones').doc(assignedZoneId)
       .collection('sensorReadings').add(reading),
 
-    // Mirror latest values on zone document — matches ZoneModel latestXxx fields
     db.collection('zones').doc(assignedZoneId).update({
       latestMoisture:  moisture,
       latestTemp:      temperature,
@@ -66,7 +64,6 @@ async function handleSensors(deviceId, payload) {
       latestTimestamp: FieldValue.serverTimestamp(),
     }),
 
-    // Mark device online and record sync time
     db.collection('devices').doc(deviceId).update({
       status:   'online',
       lastSync: FieldValue.serverTimestamp(),
@@ -74,6 +71,22 @@ async function handleSensors(deviceId, payload) {
   ])
 
   console.log(`[MQTT bridge] sensor write → zone ${assignedZoneId}`)
+
+  // ── Moisture threshold check (30-minute cooldown per device) ──────────────
+  const configSnap = await db.collection('automationConfig').doc(assignedZoneId).get()
+  if (configSnap.exists) {
+    const cfg = configSnap.data()
+    if (cfg.autoWateringEnabled &&
+        cfg.wateringThreshold != null &&
+        moisture < cfg.wateringThreshold) {
+      const last = lastIrrTrigger.get(deviceId) ?? 0
+      if (Date.now() - last > COOLDOWN_MS) {
+        lastIrrTrigger.set(deviceId, Date.now())
+        await triggerActuator(assignedZoneId, 'irrigation', true)
+        console.log(`[MQTT bridge] threshold trigger → ${deviceId} (moisture ${moisture}% < ${cfg.wateringThreshold}%)`)
+      }
+    }
+  }
 }
 
 // ─── Status handler ───────────────────────────────────────────────────────────
@@ -98,25 +111,35 @@ async function handleActuatorState(deviceId, payload) {
   console.log(`[MQTT bridge] actuator state saved for ${deviceId}`)
 }
 
-// ─── Firestore → MQTT: push manual actuator control changes to device ────────
-// Uses a cache to detect real value changes and avoid looping with handleActuatorState.
-// The first onSnapshot callback delivers all existing docs as 'added' — used to
-// populate the cache without sending any MQTT commands (prevents startup spam).
-const actuatorCache  = new Map()  // Map<deviceId, { irrigationActive, fertilizerActive, lightActive }>
-const debounceTimers = new Map()  // Map<deviceId, TimeoutId>
-const DEBOUNCE_MS    = 600        // wait 600ms after last click before sending command
-let devicesListenerInitialized = false
-
+// ─── Publish helper ───────────────────────────────────────────────────────────
+// Centralises all MQTT command publishes AND keeps actuatorCache in sync so
+// watchDeviceActuators does not re-publish the same command (loop prevention).
+// data: { irrigationActive, fertilizerActive, lightActive }
 function publishCommand(deviceId, data) {
   const command = JSON.stringify({
     irrigationState: !!data.irrigationActive,
     fertilizerState: !!data.fertilizerActive,
     lightState:      !!data.lightActive,
   })
+  // Sync cache before publishing so any Firestore echo from handleActuatorState
+  // finds matching values and does not trigger a second publish.
+  actuatorCache.set(deviceId, {
+    irrigationActive: !!data.irrigationActive,
+    fertilizerActive: !!data.fertilizerActive,
+    lightActive:      !!data.lightActive,
+  })
   const topic = `grownex/${deviceId}/actuators/command`
   client.publish(topic, command, { retain: true })
-  console.log(`[MQTT bridge] manual command → ${topic}: ${command}`)
+  console.log(`[MQTT bridge] command → ${topic}: ${command}`)
 }
+
+// ─── Firestore → MQTT: manual actuator control ───────────────────────────────
+// Cache-based diff prevents re-publishing when handleActuatorState echoes back.
+// Debounce prevents burst-publishing when the user rapidly taps the UI.
+const actuatorCache          = new Map()  // Map<deviceId, { irrigationActive, fertilizerActive, lightActive }>
+const debounceTimers         = new Map()  // Map<deviceId, TimeoutId>
+const DEBOUNCE_MS            = 600
+let   devicesListenerInitialized = false
 
 function watchDeviceActuators() {
   db.collection('devices').onSnapshot(snapshot => {
@@ -154,12 +177,112 @@ function watchDeviceActuators() {
       if (!irrigationChanged && !fertilizerChanged && !lightChanged) return
       if (!data.assignedZoneId) return
 
-      // Debounce — cancel any pending publish for this device and restart the timer
       if (debounceTimers.has(deviceId)) clearTimeout(debounceTimers.get(deviceId))
       debounceTimers.set(deviceId, setTimeout(() => {
         debounceTimers.delete(deviceId)
         publishCommand(deviceId, actuatorCache.get(deviceId))
       }, DEBOUNCE_MS))
+    })
+  })
+}
+
+// ─── Schedule-based automation ────────────────────────────────────────────────
+
+const cronJobs       = new Map()   // Map<zoneId, CronTask[]>
+const lastIrrTrigger = new Map()   // Map<deviceId, timestamp>
+const COOLDOWN_MS    = 30 * 60 * 1000  // 30 minutes
+
+// triggerActuator: reads current device state, merges one field, publishes.
+// Calls publishCommand directly (no debounce) — schedule/threshold should fire immediately.
+async function triggerActuator(zoneId, actuator, state) {
+  const snap = await db.collection('devices')
+    .where('assignedZoneId', '==', zoneId).limit(1).get()
+  if (snap.empty) return
+
+  const deviceId   = snap.docs[0].id
+  const deviceData = snap.docs[0].data()
+
+  const merged = {
+    irrigationActive: actuator === 'irrigation' ? state : !!deviceData.irrigationActive,
+    fertilizerActive: actuator === 'fertilizer' ? state : !!deviceData.fertilizerActive,
+    lightActive:      actuator === 'light'      ? state : !!deviceData.lightActive,
+  }
+
+  publishCommand(deviceId, merged)
+}
+
+// Schedule string parsers
+// "07:00"        → "0 7 * * *"    (daily)
+function dailyCron(timeStr) {
+  const [h, m] = timeStr.trim().split(':').map(Number)
+  return `${m} ${h} * * *`
+}
+
+// "08:00–18:00"  → { onCron, offCron }  (daily on/off)
+function lightCron(schedStr) {
+  const [on, off] = schedStr.split(/[–-]/).map(s => s.trim())
+  const [oh, om]  = on.split(':').map(Number)
+  const [fh, fm]  = off.split(':').map(Number)
+  return { onCron: `${om} ${oh} * * *`, offCron: `${fm} ${fh} * * *` }
+}
+
+// "MON 06:00"    → "0 6 * * 1"    (weekly, specific day)
+const DAY_MAP = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 }
+function weeklyCron(schedStr) {
+  const [day, time] = schedStr.trim().split(' ')
+  const [h, m]      = time.split(':').map(Number)
+  return `${m} ${h} * * ${DAY_MAP[day.toUpperCase()] ?? 1}`
+}
+
+function cancelCronJobs(zoneId) {
+  cronJobs.get(zoneId)?.forEach(t => t.stop())
+  cronJobs.set(zoneId, [])
+}
+
+function scheduleCronJobsForZone(zoneId, config) {
+  cancelCronJobs(zoneId)
+  const jobs = []
+
+  try {
+    if (config.autoWateringEnabled && config.wateringSchedule) {
+      const expr = dailyCron(config.wateringSchedule)
+      if (cron.validate(expr))
+        jobs.push(cron.schedule(expr, () => triggerActuator(zoneId, 'irrigation', true)))
+    }
+
+    if (config.autoLightingEnabled && config.lightingSchedule) {
+      const { onCron, offCron } = lightCron(config.lightingSchedule)
+      if (cron.validate(onCron))
+        jobs.push(cron.schedule(onCron,  () => triggerActuator(zoneId, 'light', true)))
+      if (cron.validate(offCron))
+        jobs.push(cron.schedule(offCron, () => triggerActuator(zoneId, 'light', false)))
+    }
+
+    if (config.autoFertilizingEnabled && config.fertilizingSchedule) {
+      const expr = weeklyCron(config.fertilizingSchedule)
+      if (cron.validate(expr))
+        jobs.push(cron.schedule(expr, () => triggerActuator(zoneId, 'fertilizer', true)))
+    }
+  } catch (e) {
+    console.warn(`[MQTT bridge] invalid schedule for zone ${zoneId}:`, e.message)
+  }
+
+  cronJobs.set(zoneId, jobs)
+  if (jobs.length > 0)
+    console.log(`[MQTT bridge] ${jobs.length} cron job(s) scheduled for zone ${zoneId}`)
+}
+
+// ─── Firestore → cron: watch automationConfig for schedule changes ────────────
+// First snapshot fires with all existing docs as 'added' — sets up jobs on startup.
+// No MQTT commands are sent during initial load.
+function watchAutomationConfig() {
+  db.collection('automationConfig').onSnapshot(snapshot => {
+    snapshot.docChanges().forEach(change => {
+      if (change.type === 'removed') {
+        cancelCronJobs(change.doc.id)
+        return
+      }
+      scheduleCronJobsForZone(change.doc.id, change.doc.data())
     })
   })
 }
@@ -182,13 +305,14 @@ export function init() {
     client.subscribe('grownex/+/status')
   })
 
-  watchDeviceActuators()  // register once — outside connect to prevent stacking on reconnect
-
+  // Register Firestore listeners once — outside connect to prevent stacking on reconnect
+  watchDeviceActuators()
+  watchAutomationConfig()
 
   client.on('message', (topic, buf) => {
-    const parts = topic.split('/')     // ['grownex', deviceId, ...]
+    const parts    = topic.split('/')   // ['grownex', deviceId, ...]
     const deviceId = parts[1]
-    const raw = buf.toString()
+    const raw      = buf.toString()
 
     if (parts[2] === 'status') {
       handleStatus(deviceId, raw)
@@ -203,6 +327,6 @@ export function init() {
     else if (parts[2] === 'actuators' && parts[3] === 'state') handleActuatorState(deviceId, payload)
   })
 
-  client.on('error', err => console.error('[MQTT bridge] error:', err.message))
+  client.on('error',     err => console.error('[MQTT bridge] error:', err.message))
   client.on('reconnect', ()  => console.log('[MQTT bridge] reconnecting...'))
 }
