@@ -1,7 +1,10 @@
 import mqtt from 'mqtt'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 
-const BROKER = process.env.MQTT_BROKER_URL || 'mqtt://broker.hivemq.com:1883'
+const BROKER   = process.env.MQTT_BROKER_HOST || 'broker.hivemq.com'
+const BROKER_PORT = parseInt(process.env.MQTT_BROKER_PORT || '1883')
+const MQTT_USER = process.env.MQTT_USER || ''
+const MQTT_PASS = process.env.MQTT_PASS || ''
 const db = getFirestore()
 
 let client
@@ -163,7 +166,14 @@ function watchDeviceActuators() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 export function init() {
-  client = mqtt.connect(BROKER, { clientId: 'grownex-bridge' })
+  client = mqtt.connect({
+    host:     BROKER,
+    port:     BROKER_PORT,
+    protocol: BROKER_PORT === 8883 ? 'mqtts' : 'mqtt',
+    clientId: 'grownex-bridge',
+    username: MQTT_USER,
+    password: MQTT_PASS,
+  })
 
   client.on('connect', () => {
     console.log(`[MQTT bridge] connected to ${BROKER}`)
