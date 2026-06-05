@@ -73,6 +73,14 @@ async function handleSensors(deviceId, payload) {
   console.log(`[MQTT bridge] sensor write → zone ${assignedZoneId}`)
 }
 
+// ─── Status handler ───────────────────────────────────────────────────────────
+// Topic: grownex/{deviceId}/status  — payload: "online" or "offline" (LWT)
+async function handleStatus(deviceId, payload) {
+  const status = payload === 'online' ? 'online' : 'offline'
+  await db.collection('devices').doc(deviceId).update({ status })
+  console.log(`[MQTT bridge] ${deviceId} → ${status}`)
+}
+
 // ─── Actuator state handler ───────────────────────────────────────────────────
 // Topic: grownex/{deviceId}/actuators/state
 // Payload: { deviceId, lightState, fertilizerState, irrigationState }
@@ -85,37 +93,6 @@ async function handleActuatorState(deviceId, payload) {
     irrigationActive: irrigationState,
   })
   console.log(`[MQTT bridge] actuator state saved for ${deviceId}`)
-}
-
-// ─── Firestore → MQTT: push automationConfig changes to device ────────────────
-// Watches automationConfig/{zoneId} — when automation toggles change, send command
-function watchAutomationConfig() {
-  db.collection('automationConfig').onSnapshot(snapshot => {
-    snapshot.docChanges().forEach(async change => {
-      if (change.type === 'removed') return
-
-      const zoneId = change.doc.id
-      const { autoLightingEnabled, autoFertilizingEnabled, autoWateringEnabled }
-        = change.doc.data()
-
-      // Find device assigned to this zone — doc ID is the hardware ID (ESP32-XXXX)
-      const deviceSnap = await db.collection('devices')
-        .where('assignedZoneId', '==', zoneId).limit(1).get()
-      if (deviceSnap.empty) return
-
-      const hardwareId = deviceSnap.docs[0].id  // doc ID = ESP32-XXXX
-
-      const command = JSON.stringify({
-        lightState:      !!autoLightingEnabled,
-        fertilizerState: !!autoFertilizingEnabled,
-        irrigationState: !!autoWateringEnabled,
-      })
-
-      const topic = `grownex/${hardwareId}/actuators/command`
-      client.publish(topic, command, { retain: true })
-      console.log(`[MQTT bridge] command → ${topic}: ${command}`)
-    })
-  })
 }
 
 // ─── Firestore → MQTT: push manual actuator control changes to device ────────
@@ -187,19 +164,26 @@ export function init() {
     console.log(`[MQTT bridge] connected to ${BROKER}`)
     client.subscribe('grownex/+/sensors')
     client.subscribe('grownex/+/actuators/state')
-    watchAutomationConfig()
+    client.subscribe('grownex/+/status')
     watchDeviceActuators()
   })
 
-  client.on('message', (topic, buf) => {
-    let payload
-    try { payload = JSON.parse(buf.toString()) }
-    catch { return }
 
+  client.on('message', (topic, buf) => {
     const parts = topic.split('/')     // ['grownex', deviceId, ...]
     const deviceId = parts[1]
+    const raw = buf.toString()
 
-    if (parts[2] === 'sensors')                        handleSensors(deviceId, payload)
+    if (parts[2] === 'status') {
+      handleStatus(deviceId, raw)
+      return
+    }
+
+    let payload
+    try { payload = JSON.parse(raw) }
+    catch { return }
+
+    if (parts[2] === 'sensors')                                handleSensors(deviceId, payload)
     else if (parts[2] === 'actuators' && parts[3] === 'state') handleActuatorState(deviceId, payload)
   })
 

@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <DHT.h>
 
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
 const char* SSID     = "Kanon";
@@ -11,7 +12,16 @@ const char* PASSWORD = "1sampai9";
 const char* MQTT_BROKER = "broker.hivemq.com";
 const int   MQTT_PORT   = 1883;
 
-const unsigned long PUBLISH_INTERVAL_MS = 5000;
+const unsigned long PUBLISH_INTERVAL_MS = 30000; // 30 seconds
+
+// ─── Sensors ──────────────────────────────────────────────────────────────────
+#define DHT_PIN      4    // DHT11 data pin
+#define DHT_TYPE     DHT11
+#define MOISTURE_PIN 34   // Soil moisture AO pin
+
+// Calibrate these to your sensor (check raw values in Serial Monitor)
+#define MOISTURE_DRY 4095
+#define MOISTURE_WET 1500
 
 // ─── Actuator Pins (relay: HIGH = ON) ─────────────────────────────────────────
 #define PIN_LIGHT       25
@@ -33,12 +43,7 @@ unsigned long lastPublish = 0;
 
 WiFiClient   wifiClient;
 PubSubClient mqtt(wifiClient);
-
-// ─── Dummy sensor data ────────────────────────────────────────────────────────
-float dummyTemp      = 24.0;
-float dummyHumidity  = 55.0;
-float dummyLight     = 300.0;
-float dummyMoisture  = 40.0;
+DHT          dht(DHT_PIN, DHT_TYPE);
 
 // ─── Actuator helpers ─────────────────────────────────────────────────────────
 void applyActuators() {
@@ -59,7 +64,6 @@ void publishActuatorState() {
 }
 
 // ─── MQTT incoming command ────────────────────────────────────────────────────
-// Expected: { "lightState": bool, "fertilizerState": bool, "irrigationState": bool }
 void onMessage(char* topic, byte* payload, unsigned int len) {
   StaticJsonDocument<128> doc;
   if (deserializeJson(doc, payload, len)) return;
@@ -74,24 +78,33 @@ void onMessage(char* topic, byte* payload, unsigned int len) {
                 lightState, fertilizerState, irrigationState);
 }
 
-// ─── Publish sensors ──────────────────────────────────────────────────────────
+// ─── Read & publish sensors ───────────────────────────────────────────────────
 void publishSensors() {
+  float temperature = dht.readTemperature();
+  float humidity    = dht.readHumidity();
+
+  if (isnan(temperature) || isnan(humidity)) {
+    Serial.println("[DHT11] read failed — skipping publish");
+    return;
+  }
+
+  int rawMoisture = analogRead(MOISTURE_PIN);
+  float moisture  = constrain(map(rawMoisture, MOISTURE_DRY, MOISTURE_WET, 0, 100), 0, 100);
+
+  float lightLevel = 300.0;  // TODO: replace with real LDR read
+
   StaticJsonDocument<256> doc;
   doc["deviceId"]    = DEVICE_ID;
-  doc["temperature"] = dummyTemp;
-  doc["humidity"]    = dummyHumidity;
-  doc["lightLevel"]  = dummyLight;
-  doc["moisture"]    = dummyMoisture;
+  doc["temperature"] = temperature;
+  doc["humidity"]    = humidity;
+  doc["lightLevel"]  = lightLevel;
+  doc["moisture"]    = moisture;
 
   char buf[256];
   serializeJson(doc, buf);
   mqtt.publish(TOPIC_SENSORS.c_str(), buf);
-  Serial.printf("[MQTT] sensors → %s\n", buf);
-
-  dummyTemp     += 0.1;
-  dummyHumidity += 0.2;
-  dummyLight    += 5.0;
-  dummyMoisture -= 0.3;
+  Serial.printf("[MQTT] sensors → temp=%.1f°C  humid=%.1f%%  moisture=%.1f%%  light=%.1f\n",
+                temperature, humidity, moisture, lightLevel);
 }
 
 // ─── Connection ───────────────────────────────────────────────────────────────
@@ -113,7 +126,6 @@ void connectMQTT() {
       mqtt.publish(TOPIC_STATUS.c_str(), "online", true);
       mqtt.subscribe(TOPIC_ACTUATOR_CMD.c_str());
       Serial.printf("MQTT OK — device: %s\n", DEVICE_ID.c_str());
-      Serial.printf("  sub command: %s\n", TOPIC_ACTUATOR_CMD.c_str());
     } else {
       Serial.printf("MQTT failed (rc=%d), retry in 3s\n", mqtt.state());
       delay(3000);
@@ -125,6 +137,8 @@ void connectMQTT() {
 void setup() {
   Serial.begin(115200);
   delay(500);
+
+  dht.begin();
 
   uint8_t mac[6];
   WiFi.macAddress(mac);
