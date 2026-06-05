@@ -95,37 +95,6 @@ async function handleActuatorState(deviceId, payload) {
   console.log(`[MQTT bridge] actuator state saved for ${deviceId}`)
 }
 
-// ─── Firestore → MQTT: push automationConfig changes to device ────────────────
-// Watches automationConfig/{zoneId} — when automation toggles change, send command
-function watchAutomationConfig() {
-  db.collection('automationConfig').onSnapshot(snapshot => {
-    snapshot.docChanges().forEach(async change => {
-      if (change.type === 'removed') return
-
-      const zoneId = change.doc.id
-      const { autoLightingEnabled, autoFertilizingEnabled, autoWateringEnabled }
-        = change.doc.data()
-
-      // Find device assigned to this zone — doc ID is the hardware ID (ESP32-XXXX)
-      const deviceSnap = await db.collection('devices')
-        .where('assignedZoneId', '==', zoneId).limit(1).get()
-      if (deviceSnap.empty) return
-
-      const hardwareId = deviceSnap.docs[0].id  // doc ID = ESP32-XXXX
-
-      const command = JSON.stringify({
-        lightState:      !!autoLightingEnabled,
-        fertilizerState: !!autoFertilizingEnabled,
-        irrigationState: !!autoWateringEnabled,
-      })
-
-      const topic = `grownex/${hardwareId}/actuators/command`
-      client.publish(topic, command, { retain: true })
-      console.log(`[MQTT bridge] command → ${topic}: ${command}`)
-    })
-  })
-}
-
 // ─── Init ─────────────────────────────────────────────────────────────────────
 export function init() {
   client = mqtt.connect(BROKER, { clientId: 'grownex-bridge' })
@@ -135,8 +104,8 @@ export function init() {
     client.subscribe('grownex/+/sensors')
     client.subscribe('grownex/+/actuators/state')
     client.subscribe('grownex/+/status')
-    watchAutomationConfig()
   })
+
 
   client.on('message', (topic, buf) => {
     const parts = topic.split('/')     // ['grownex', deviceId, ...]
