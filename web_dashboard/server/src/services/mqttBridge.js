@@ -73,6 +73,14 @@ async function handleSensors(deviceId, payload) {
   console.log(`[MQTT bridge] sensor write → zone ${assignedZoneId}`)
 }
 
+// ─── Status handler ───────────────────────────────────────────────────────────
+// Topic: grownex/{deviceId}/status  — payload: "online" or "offline" (LWT)
+async function handleStatus(deviceId, payload) {
+  const status = payload === 'online' ? 'online' : 'offline'
+  await db.collection('devices').doc(deviceId).update({ status })
+  console.log(`[MQTT bridge] ${deviceId} → ${status}`)
+}
+
 // ─── Actuator state handler ───────────────────────────────────────────────────
 // Topic: grownex/{deviceId}/actuators/state
 // Payload: { deviceId, lightState, fertilizerState, irrigationState }
@@ -126,18 +134,25 @@ export function init() {
     console.log(`[MQTT bridge] connected to ${BROKER}`)
     client.subscribe('grownex/+/sensors')
     client.subscribe('grownex/+/actuators/state')
+    client.subscribe('grownex/+/status')
     watchAutomationConfig()
   })
 
   client.on('message', (topic, buf) => {
-    let payload
-    try { payload = JSON.parse(buf.toString()) }
-    catch { return }
-
     const parts = topic.split('/')     // ['grownex', deviceId, ...]
     const deviceId = parts[1]
+    const raw = buf.toString()
 
-    if (parts[2] === 'sensors')                        handleSensors(deviceId, payload)
+    if (parts[2] === 'status') {
+      handleStatus(deviceId, raw)
+      return
+    }
+
+    let payload
+    try { payload = JSON.parse(raw) }
+    catch { return }
+
+    if (parts[2] === 'sensors')                                handleSensors(deviceId, payload)
     else if (parts[2] === 'actuators' && parts[3] === 'state') handleActuatorState(deviceId, payload)
   })
 
