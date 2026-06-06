@@ -3,15 +3,6 @@ import { doc, onSnapshot, setDoc, updateDoc, collection, query, where, getDocs }
 import { useAuth } from '../../context/AuthContext'
 import { db } from '../../firebase'
 
-function SensorRow({ label, value }) {
-  return (
-    <div className="flex items-center justify-between py-2.5 border-b last:border-0 border-gray-50">
-      <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-sm font-semibold text-gray-800">{value ?? '—'}</span>
-    </div>
-  )
-}
-
 function ModuleChip({ label }) {
   return (
     <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
@@ -32,6 +23,19 @@ export default function OverviewTab({ zone }) {
   const [assigning, setAssigning] = useState(false)
   const [removing,  setRemoving]  = useState(false)
   const [devError,  setDevError]  = useState(null)
+
+  const [zoneName,      setZoneName]      = useState(zone.zoneName ?? '')
+  const [renameLoading, setRenameLoading] = useState(false)
+  const [plantCount,    setPlantCount]    = useState(null)
+
+  useEffect(() => { setZoneName(zone.zoneName ?? '') }, [zone.zoneName])
+
+  useEffect(() => {
+    return onSnapshot(
+      query(collection(db, 'plants'), where('zoneId', '==', zone.id)),
+      (snap) => setPlantCount(snap.size)
+    )
+  }, [zone.id])
 
   // Subscribe to assigned device for live status
   useEffect(() => {
@@ -66,6 +70,7 @@ export default function OverviewTab({ zone }) {
         deviceId: dev.id,
         hasFertilizer: dev.hasFertilizerModule ?? false,
         hasLight: dev.hasLightingModule ?? false,
+        totalPlantSlots: dev.totalSlots ?? 4,
       })
       await setDoc(doc(db, 'devices', dev.id), {
         assignedZoneId: zone.id,
@@ -85,11 +90,22 @@ export default function OverviewTab({ zone }) {
     setDevError(null)
     try {
       await updateDoc(doc(db, 'devices', zone.deviceId), { assignedZoneId: null })
-      await updateDoc(doc(db, 'zones', zone.id), { deviceId: null, hasFertilizer: false, hasLight: false })
+      await updateDoc(doc(db, 'zones', zone.id), { deviceId: null, hasFertilizer: false, hasLight: false, totalPlantSlots: 0 })
     } catch {
       setDevError('Failed to remove device. Please try again.')
     } finally {
       setRemoving(false)
+    }
+  }
+
+  async function renameZone() {
+    const name = zoneName.trim()
+    if (!name || name === zone.zoneName) return
+    setRenameLoading(true)
+    try {
+      await updateDoc(doc(db, 'zones', zone.id), { zoneName: name })
+    } catch { /* ignore */ } finally {
+      setRenameLoading(false)
     }
   }
 
@@ -109,12 +125,30 @@ export default function OverviewTab({ zone }) {
       {/* Info card */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <p className="text-xs font-bold text-brand-600 uppercase tracking-wide mb-3">{zone.zoneType}</p>
-        <div className="space-y-2">
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Zone name</label>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                value={zoneName}
+                onChange={(e) => setZoneName(e.target.value)}
+              />
+              <button
+                onClick={renameZone}
+                disabled={renameLoading || zoneName.trim() === zone.zoneName || !zoneName.trim()}
+                className="px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-40"
+              >
+                {renameLoading ? '…' : 'Save'}
+              </button>
+            </div>
+          </div>
           <p className="text-sm text-gray-700">
-            Total plant slots: <span className="font-semibold">{zone.totalPlantSlots ?? 4}</span>
+            Plants: <span className="font-semibold">{plantCount === null ? '…' : plantCount}</span>
+            {' '}of <span className="font-semibold">{zone.totalPlantSlots ?? 4}</span>
           </p>
           {zone.alertSummary && (
-            <p className="text-sm text-orange-500 mt-2">{zone.alertSummary}</p>
+            <p className="text-sm text-orange-500">{zone.alertSummary}</p>
           )}
         </div>
       </div>
@@ -193,22 +227,6 @@ export default function OverviewTab({ zone }) {
         )}
       </div>
 
-      {/* Sensor card */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h3 className="font-semibold text-gray-900 mb-2">Latest sensor readings</h3>
-        <SensorRow label="Temperature" value={zone.latestTemp     != null ? `${zone.latestTemp}°C`     : null} />
-        <SensorRow label="Humidity"    value={zone.latestHumid    != null ? `${zone.latestHumid}%`    : null} />
-        <SensorRow label="Light"       value={zone.latestLight    != null ? `${zone.latestLight} lx`  : null} />
-        <SensorRow label="Moisture"    value={zone.latestMoisture != null ? `${zone.latestMoisture}%` : null} />
-        {zone.latestTimestamp && (
-          <p className="text-xs text-gray-400 mt-3">
-            Last updated{' '}
-            {zone.latestTimestamp?.toDate
-              ? zone.latestTimestamp.toDate().toLocaleString()
-              : new Date(zone.latestTimestamp).toLocaleString()}
-          </p>
-        )}
-      </div>
     </div>
   )
 }

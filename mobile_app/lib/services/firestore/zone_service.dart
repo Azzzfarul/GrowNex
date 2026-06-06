@@ -34,11 +34,12 @@ class ZoneService {
     return Zone.fromDocument(doc);
   }
 
-  Future<void> updateZoneDevice(String zoneId, String? deviceId, {bool hasFertilizer = false, bool hasLight = false}) async {
+  Future<void> updateZoneDevice(String zoneId, String? deviceId, {bool hasFertilizer = false, bool hasLight = false, int totalPlantSlots = 0}) async {
     await _firestore.collection('zones').doc(zoneId).update({
       'deviceId': deviceId,
       'hasFertilizer': deviceId != null ? hasFertilizer : false,
       'hasLight': deviceId != null ? hasLight : false,
+      'totalPlantSlots': deviceId != null ? totalPlantSlots : 0,
     });
   }
 

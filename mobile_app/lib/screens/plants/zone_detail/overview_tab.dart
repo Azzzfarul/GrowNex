@@ -1,9 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/device_model.dart';
+import '../../../models/plant_model.dart';
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/device_service.dart';
+import '../../../services/firestore/plant_service.dart';
 import '../../../services/firestore/zone_service.dart';
 
 class OverviewTab extends StatefulWidget {
@@ -16,6 +19,10 @@ class OverviewTab extends StatefulWidget {
 }
 
 class _OverviewTabState extends State<OverviewTab> {
+  late final TextEditingController _zoneNameCtrl;
+  bool _renameLoading = false;
+  late final Stream<List<Plant>> _plantsStream;
+
   Future<Device?>? _assignedDeviceFuture;
   bool _removeLoading = false;
 
@@ -27,12 +34,23 @@ class _OverviewTabState extends State<OverviewTab> {
   @override
   void initState() {
     super.initState();
+    _zoneNameCtrl = TextEditingController(text: widget.zone.zoneName);
+    _plantsStream = PlantService().watchPlantsByZone(widget.zone.id);
     _syncDeviceState(widget.zone);
+  }
+
+  @override
+  void dispose() {
+    _zoneNameCtrl.dispose();
+    super.dispose();
   }
 
   @override
   void didUpdateWidget(OverviewTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.zone.zoneName != widget.zone.zoneName) {
+      _zoneNameCtrl.text = widget.zone.zoneName;
+    }
     if (oldWidget.zone.deviceId != widget.zone.deviceId) {
       setState(() {
         _selectedDevice = null;
@@ -63,6 +81,7 @@ class _OverviewTabState extends State<OverviewTab> {
         _selectedDevice!.id,
         hasFertilizer: _selectedDevice!.hasFertilizerModule,
         hasLight: _selectedDevice!.hasLightingModule,
+        totalPlantSlots: _selectedDevice!.totalSlots,
       );
       await DeviceService().assignDeviceToZone(_selectedDevice!.id, widget.zone.id, userId);
     } catch (e) {
@@ -100,8 +119,6 @@ class _OverviewTabState extends State<OverviewTab> {
         _buildInfoCard(),
         const SizedBox(height: 20),
         _buildDeviceCard(),
-        const SizedBox(height: 20),
-        _buildSensorCard(),
       ],
     );
   }
@@ -123,6 +140,19 @@ class _OverviewTabState extends State<OverviewTab> {
     );
   }
 
+  Future<void> _renameZone() async {
+    final name = _zoneNameCtrl.text.trim();
+    if (name.isEmpty || name == widget.zone.zoneName) return;
+    setState(() => _renameLoading = true);
+    try {
+      await FirebaseFirestore.instance.collection('zones').doc(widget.zone.id).update({'zoneName': name});
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to rename: $e')));
+    } finally {
+      if (mounted) setState(() => _renameLoading = false);
+    }
+  }
+
   Widget _buildInfoCard() {
     return _SectionCard(
       child: Column(
@@ -131,7 +161,40 @@ class _OverviewTabState extends State<OverviewTab> {
           Text(widget.zone.zoneType.toUpperCase(),
               style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          Text('Total plants: ${widget.zone.totalPlantSlots}', style: const TextStyle(fontSize: 16)),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _zoneNameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Zone name',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _renameLoading
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : IconButton(
+                      icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+                      tooltip: 'Save name',
+                      onPressed: _zoneNameCtrl.text.trim() == widget.zone.zoneName ? null : _renameZone,
+                    ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          StreamBuilder<List<Plant>>(
+            stream: _plantsStream,
+            builder: (context, snapshot) {
+              final count = snapshot.data?.length ?? 0;
+              return Text(
+                'Plants: $count of ${widget.zone.totalPlantSlots}',
+                style: const TextStyle(fontSize: 16),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -263,35 +326,6 @@ class _OverviewTabState extends State<OverviewTab> {
     );
   }
 
-  Widget _buildSensorCard() {
-    final cs = Theme.of(context).colorScheme;
-    return _SectionCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Latest sensor readings', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 14),
-          _sensorRow(cs, 'Temperature', widget.zone.latestTemp != null ? '${widget.zone.latestTemp}°C' : '--'),
-          const SizedBox(height: 12),
-          _sensorRow(cs, 'Humidity', widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%' : '--'),
-          const SizedBox(height: 12),
-          _sensorRow(cs, 'Light', widget.zone.latestLight != null ? '${widget.zone.latestLight} lx' : '--'),
-          const SizedBox(height: 12),
-          _sensorRow(cs, 'Moisture', widget.zone.latestMoisture != null ? '${widget.zone.latestMoisture}%' : '--'),
-        ],
-      ),
-    );
-  }
-
-  Widget _sensorRow(ColorScheme cs, String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
 }
 
 class _ModuleChip extends StatelessWidget {
