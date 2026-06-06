@@ -13,6 +13,10 @@ class Zone {
   final num? latestHumid;
   final num? latestLight;
   final num? latestMoisture;
+  final num? latestMoisture1;
+  final num? latestMoisture2;
+  final num? latestMoisture3;
+  final num? latestMoisture4;
   final DateTime? latestTimestamp;
   final String? alertSummary;
   final DateTime? createdAt;
@@ -32,6 +36,10 @@ class Zone {
     this.latestHumid,
     this.latestLight,
     this.latestMoisture,
+    this.latestMoisture1,
+    this.latestMoisture2,
+    this.latestMoisture3,
+    this.latestMoisture4,
     this.latestTimestamp,
     this.alertSummary,
     this.createdAt,
@@ -75,7 +83,11 @@ class Zone {
       latestTemp: map['latestTemp'] as num?,
       latestHumid: map['latestHumid'] as num?,
       latestLight: map['latestLight'] as num?,
-      latestMoisture: map['latestMoisture'] as num?,
+      latestMoisture:  map['latestMoisture']  as num?,
+      latestMoisture1: map['latestMoisture1'] as num?,
+      latestMoisture2: map['latestMoisture2'] as num?,
+      latestMoisture3: map['latestMoisture3'] as num?,
+      latestMoisture4: map['latestMoisture4'] as num?,
       latestTimestamp: latestTimestamp,
       alertSummary: map['alertSummary'] as String?,
       createdAt: createdAt,
@@ -96,7 +108,11 @@ class Zone {
       'latestTemp': latestTemp,
       'latestHumid': latestHumid,
       'latestLight': latestLight,
-      'latestMoisture': latestMoisture,
+      'latestMoisture':  latestMoisture,
+      'latestMoisture1': latestMoisture1,
+      'latestMoisture2': latestMoisture2,
+      'latestMoisture3': latestMoisture3,
+      'latestMoisture4': latestMoisture4,
       'latestTimestamp': latestTimestamp != null ? Timestamp.fromDate(latestTimestamp!) : null,
       'alertSummary': alertSummary,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,

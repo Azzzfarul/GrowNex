@@ -1,8 +1,9 @@
 import mqtt from 'mqtt'
 import cron from 'node-cron'
-import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 
 const BROKER      = process.env.MQTT_BROKER_HOST || 'broker.hivemq.com'
+const READING_TTL_MS = 30 * 24 * 60 * 60 * 1000  // raw sensorReadings kept for 30 days
 const BROKER_PORT = parseInt(process.env.MQTT_BROKER_PORT || '1883')
 const MQTT_USER   = process.env.MQTT_USER || ''
 const MQTT_PASS   = process.env.MQTT_PASS || ''
@@ -33,9 +34,14 @@ async function getOrCreateDevice(deviceId) {
 
 // ─── Sensor message handler ───────────────────────────────────────────────────
 // Topic: grownex/{deviceId}/sensors
-// Payload: { deviceId, temperature, humidity, lightLevel, moisture }
+// Payload: { deviceId, temperature, humidity, lightLevel, soilMoisture1–4 }
 async function handleSensors(deviceId, payload) {
-  const { temperature, humidity, lightLevel, moisture } = payload
+  const { temperature, humidity, lightLevel,
+          soilMoisture1, soilMoisture2, soilMoisture3, soilMoisture4 } = payload
+
+  // Average of non-null slot readings — used for threshold checks and backward compat
+  const slotValues = [soilMoisture1, soilMoisture2, soilMoisture3, soilMoisture4].filter(v => v != null)
+  const moisture = slotValues.length ? slotValues.reduce((a, b) => a + b) / slotValues.length : null
 
   const device = await getOrCreateDevice(deviceId)
   const { assignedZoneId } = device
@@ -49,15 +55,45 @@ async function handleSensors(deviceId, payload) {
     return
   }
 
-  const reading = { moisture, temperature, humidity, lightLevel,
-                    timestamp: FieldValue.serverTimestamp() }
+  // Hourly stats doc ID — UTC hour bucket, e.g. "2024-01-15T14"
+  const statsDocId = new Date().toISOString().slice(0, 13)
+
+  const sensorFields = {
+    temperature, humidity, lightLevel,
+    soilMoisture1: soilMoisture1 ?? null,
+    soilMoisture2: soilMoisture2 ?? null,
+    soilMoisture3: soilMoisture3 ?? null,
+    soilMoisture4: soilMoisture4 ?? null,
+    moisture,
+  }
+
+  // Raw reading keeps a TTL field so Firestore auto-deletes it after 30 days.
+  // Configure the TTL policy once in Firebase Console → Firestore → TTL
+  // (collection group: sensorReadings, field: expiresAt).
+  const reading = {
+    ...sensorFields,
+    timestamp: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromDate(new Date(Date.now() + READING_TTL_MS)),
+  }
 
   await Promise.all([
     db.collection('zones').doc(assignedZoneId)
       .collection('sensorReadings').add(reading),
 
+    // Hourly stats: overwrite the current-hour bucket with the latest reading.
+    // Analytics queries this instead of sensorReadings (168 docs/zone/7d vs 10,080).
+    db.collection('zones').doc(assignedZoneId)
+      .collection('stats').doc(statsDocId).set({
+        ...sensorFields,
+        timestamp: FieldValue.serverTimestamp(),
+      }),
+
     db.collection('zones').doc(assignedZoneId).update({
       latestMoisture:  moisture,
+      latestMoisture1: soilMoisture1 ?? null,
+      latestMoisture2: soilMoisture2 ?? null,
+      latestMoisture3: soilMoisture3 ?? null,
+      latestMoisture4: soilMoisture4 ?? null,
       latestTemp:      temperature,
       latestHumid:     humidity,
       latestLight:     lightLevel,
@@ -78,6 +114,7 @@ async function handleSensors(deviceId, payload) {
     const cfg = configSnap.data()
     if (cfg.autoWateringEnabled &&
         cfg.wateringThreshold != null &&
+        moisture != null &&
         moisture < cfg.wateringThreshold) {
       const last = lastIrrTrigger.get(deviceId) ?? 0
       if (Date.now() - last > COOLDOWN_MS) {
