@@ -42,6 +42,13 @@ class SensorReading {
     return SensorReading.fromMap(doc.id, data);
   }
 
+  static num? _n(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v;
+    if (v is String) return num.tryParse(v);
+    return null;
+  }
+
   factory SensorReading.fromMap(String id, Map<String, dynamic> map) {
     final tsValue = map['timestamp'];
     DateTime? timestamp;
@@ -54,14 +61,14 @@ class SensorReading {
     return SensorReading(
       id:            id,
       plantId:       map['plantId']       as String?,
-      moisture:      map['moisture']      as num?,
-      soilMoisture1: map['soilMoisture1'] as num?,
-      soilMoisture2: map['soilMoisture2'] as num?,
-      soilMoisture3: map['soilMoisture3'] as num?,
-      soilMoisture4: map['soilMoisture4'] as num?,
-      temperature:   map['temperature']   as num?,
-      humidity:      map['humidity']      as num?,
-      lightLevel:    map['lightLevel']    as num?,
+      moisture:      _n(map['moisture']),
+      soilMoisture1: _n(map['soilMoisture1']),
+      soilMoisture2: _n(map['soilMoisture2']),
+      soilMoisture3: _n(map['soilMoisture3']),
+      soilMoisture4: _n(map['soilMoisture4']),
+      temperature:   _n(map['temperature']),
+      humidity:      _n(map['humidity']),
+      lightLevel:    _n(map['lightLevel']),
       timestamp:     timestamp,
     );
   }

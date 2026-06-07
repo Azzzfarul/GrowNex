@@ -40,6 +40,13 @@ class Plant {
     return Plant.fromMap(doc.id, data);
   }
 
+  static num? _n(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v;
+    if (v is String) return num.tryParse(v);
+    return null;
+  }
+
   factory Plant.fromMap(String id, Map<String, dynamic> map) {
     final createdAtValue = map['createdAt'];
     DateTime? createdAt;
@@ -56,13 +63,13 @@ class Plant {
       plantName: map['plantName'] as String? ?? 'Unknown',
       species: map['species'] as String? ?? '',
       status: map['status'] as String? ?? 'unknown',
-      slotNumber: (map['slotNumber'] as num?)?.toInt() ?? 0,
-      preferredMoistureMin: map['preferredMoistureMin'] as num?,
-      preferredMoistureMax: map['preferredMoistureMax'] as num?,
-      preferredHumidityMin: map['preferredHumidityMin'] as num?,
-      preferredHumidityMax: map['preferredHumidityMax'] as num?,
-      preferredTemperatureMin: map['preferredTemperatureMin'] as num?,
-      preferredTemperatureMax: map['preferredTemperatureMax'] as num?,
+      slotNumber: _n(map['slotNumber'])?.toInt() ?? 0,
+      preferredMoistureMin: _n(map['preferredMoistureMin']),
+      preferredMoistureMax: _n(map['preferredMoistureMax']),
+      preferredHumidityMin: _n(map['preferredHumidityMin']),
+      preferredHumidityMax: _n(map['preferredHumidityMax']),
+      preferredTemperatureMin: _n(map['preferredTemperatureMin']),
+      preferredTemperatureMax: _n(map['preferredTemperatureMax']),
       preferredLightCondition: map['preferredLightCondition'] as String?,
       notes: map['notes'] as String?,
       createdAt: createdAt,

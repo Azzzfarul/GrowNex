@@ -2,11 +2,30 @@ import { useState, useEffect } from 'react'
 import { doc, onSnapshot, collection, query, where } from 'firebase/firestore'
 import { db } from '../../firebase'
 
-function SensorRow({ label, value }) {
+function SensorRow({ label, value, min, max }) {
+  const numVal   = parseFloat(value)
+  const hasRange = min != null && max != null
+  const inRange  = hasRange && !isNaN(numVal) && numVal >= min && numVal <= max
+  const tooLow   = hasRange && !isNaN(numVal) && numVal < min
+  const tooHigh  = hasRange && !isNaN(numVal) && numVal > max
+
+  const valueColor = !hasRange || isNaN(numVal) ? 'text-gray-800'
+    : inRange ? 'text-green-600'
+    : tooLow  ? 'text-orange-500'
+    : 'text-red-500'
+
+  const icon = !hasRange || isNaN(numVal) ? null
+    : inRange ? '✓'
+    : tooLow  ? '↓'
+    : '↑'
+
   return (
     <div className="flex items-center justify-between py-2.5 border-b last:border-0 border-gray-50">
       <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-sm font-semibold text-gray-800">{value ?? '—'}</span>
+      <span className={`text-sm font-semibold flex items-center gap-1 ${valueColor}`}>
+        {icon && <span>{icon}</span>}
+        {value ?? '—'}
+      </span>
     </div>
   )
 }
@@ -94,10 +113,10 @@ export default function MonitoringTab({ zone }) {
       {/* Latest readings */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <h3 className="font-semibold text-gray-900 mb-2">Latest readings</h3>
-        <SensorRow label="Temperature" value={zone.latestTemp     != null ? `${zone.latestTemp}°C`     : null} />
-        <SensorRow label="Humidity"    value={zone.latestHumid    != null ? `${zone.latestHumid}%`    : null} />
+        <SensorRow label="Temperature" value={zone.latestTemp     != null ? `${zone.latestTemp}°C`     : null} min={idealTemp[0]}     max={idealTemp[1]} />
+        <SensorRow label="Humidity"    value={zone.latestHumid    != null ? `${zone.latestHumid}%`    : null} min={idealHumidity[0]} max={idealHumidity[1]} />
         <SensorRow label="Light"       value={zone.latestLight    != null ? `${zone.latestLight} lx`  : null} />
-        <SensorRow label="Moisture"    value={zone.latestMoisture != null ? `${zone.latestMoisture}%` : null} />
+        <SensorRow label="Moisture"    value={zone.latestMoisture != null ? `${zone.latestMoisture}%` : null} min={idealMoisture[0]} max={idealMoisture[1]} />
         {lastUpdated && <p className="text-xs text-gray-400 mt-3">Last updated {lastUpdated}</p>}
       </div>
 

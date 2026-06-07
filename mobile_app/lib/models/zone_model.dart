@@ -52,6 +52,13 @@ class Zone {
     return Zone.fromMap(doc.id, data);
   }
 
+  static num? _n(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v;
+    if (v is String) return num.tryParse(v);
+    return null;
+  }
+
   factory Zone.fromMap(String id, Map<String, dynamic> map) {
     final createdAtValue = map['createdAt'];
     DateTime? createdAt;
@@ -80,14 +87,14 @@ class Zone {
       totalPlantSlots: (map['totalPlantSlots'] as num?)?.toInt() ?? 0,
       zonePhotoUrl: map['zonePhotoUrl'] as String?,
       deviceId: map['deviceId'] as String?,
-      latestTemp: map['latestTemp'] as num?,
-      latestHumid: map['latestHumid'] as num?,
-      latestLight: map['latestLight'] as num?,
-      latestMoisture:  map['latestMoisture']  as num?,
-      latestMoisture1: map['latestMoisture1'] as num?,
-      latestMoisture2: map['latestMoisture2'] as num?,
-      latestMoisture3: map['latestMoisture3'] as num?,
-      latestMoisture4: map['latestMoisture4'] as num?,
+      latestTemp: _n(map['latestTemp']),
+      latestHumid: _n(map['latestHumid']),
+      latestLight: _n(map['latestLight']),
+      latestMoisture:  _n(map['latestMoisture']),
+      latestMoisture1: _n(map['latestMoisture1']),
+      latestMoisture2: _n(map['latestMoisture2']),
+      latestMoisture3: _n(map['latestMoisture3']),
+      latestMoisture4: _n(map['latestMoisture4']),
       latestTimestamp: latestTimestamp,
       alertSummary: map['alertSummary'] as String?,
       createdAt: createdAt,

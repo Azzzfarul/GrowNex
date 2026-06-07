@@ -6,8 +6,9 @@ import '../../../services/firestore/plant_service.dart';
 
 class PlantDetailScreen extends StatefulWidget {
   final Plant plant;
+  final num? currentMoisture;
 
-  const PlantDetailScreen({super.key, required this.plant});
+  const PlantDetailScreen({super.key, required this.plant, this.currentMoisture});
 
   @override
   State<PlantDetailScreen> createState() => _PlantDetailScreenState();
@@ -204,6 +205,28 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   }
 
   Widget _buildSensorOverview(ColorScheme cs) {
+    final moisture = widget.currentMoisture;
+    final min = widget.plant.preferredMoistureMin;
+    final max = widget.plant.preferredMoistureMax;
+
+    final hasRange = min != null && max != null;
+    final hasData  = moisture != null;
+
+    final inRange = hasRange && hasData && moisture >= min && moisture <= max;
+    final tooLow  = hasRange && hasData && moisture < min;
+
+    final color = !hasData ? cs.onSurface
+        : !hasRange        ? Colors.blue.shade400
+        : inRange          ? Colors.green.shade600
+        : tooLow           ? Colors.orange.shade600
+        : Colors.red.shade500;
+
+    final conditionText = !hasData ? 'No data'
+        : !hasRange        ? '${moisture.toStringAsFixed(1)}%'
+        : inRange          ? 'Within preferred range'
+        : tooLow           ? 'Too dry (${moisture.toStringAsFixed(1)}%)'
+        : 'Too wet (${moisture.toStringAsFixed(1)}%)';
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -211,14 +234,47 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Plant overview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          SizedBox(height: 14),
-          Text('Latest moisture: --'),
-          SizedBox(height: 8),
-          Text('Condition: Good', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text('Soil moisture', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Slot ${widget.plant.slotNumber} reading',
+                  style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.55))),
+              Text(
+                hasData ? '${moisture.toStringAsFixed(1)}%' : '--',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
+              ),
+            ],
+          ),
+          if (hasData) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: (moisture / 100).clamp(0.0, 1.0),
+                backgroundColor: cs.surfaceContainerHigh,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+                minHeight: 10,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(conditionText,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
+                if (hasRange)
+                  Text('Ideal: ${min.toStringAsFixed(0)}–${max.toStringAsFixed(0)}%',
+                      style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.45))),
+              ],
+            ),
+          ] else
+            Text('No sensor data yet',
+                style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.45))),
         ],
       ),
     );

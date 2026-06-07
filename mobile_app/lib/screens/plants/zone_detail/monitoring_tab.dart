@@ -121,22 +121,35 @@ class _MonitoringTabState extends State<MonitoringTab> {
   }
 
   Widget _buildSensorOverview() {
-    final cs = Theme.of(context).colorScheme;
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Latest readings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 14),
-          _sensorValue(cs, 'Temperature', widget.zone.latestTemp != null ? '${widget.zone.latestTemp}°C' : '--'),
-          const SizedBox(height: 10),
-          _sensorValue(cs, 'Humidity', widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%' : '--'),
-          const SizedBox(height: 10),
-          _sensorValue(cs, 'Light', widget.zone.latestLight != null ? '${widget.zone.latestLight} lx' : '--'),
-          const SizedBox(height: 10),
-          _sensorValue(cs, 'Moisture', widget.zone.latestMoisture != null ? '${widget.zone.latestMoisture}%' : '--'),
-        ],
-      ),
+    return StreamBuilder<List<Plant>>(
+      stream: _plantsStream,
+      builder: (context, snapshot) {
+        final plants  = snapshot.data ?? [];
+        final tempMin  = _avg(plants.map((p) => p.preferredTemperatureMin));
+        final tempMax  = _avg(plants.map((p) => p.preferredTemperatureMax));
+        final humidMin = _avg(plants.map((p) => p.preferredHumidityMin));
+        final humidMax = _avg(plants.map((p) => p.preferredHumidityMax));
+        final moistMin = _avg(plants.map((p) => p.preferredMoistureMin));
+        final moistMax = _avg(plants.map((p) => p.preferredMoistureMax));
+        final cs = Theme.of(context).colorScheme;
+
+        return _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Latest readings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 14),
+              _sensorValue(cs, 'Temperature', widget.zone.latestTemp    != null ? '${widget.zone.latestTemp}°C'    : '--', min: tempMin,  max: tempMax),
+              const SizedBox(height: 10),
+              _sensorValue(cs, 'Humidity',    widget.zone.latestHumid   != null ? '${widget.zone.latestHumid}%'   : '--', min: humidMin, max: humidMax),
+              const SizedBox(height: 10),
+              _sensorValue(cs, 'Light',       widget.zone.latestLight   != null ? '${widget.zone.latestLight} lx' : '--'),
+              const SizedBox(height: 10),
+              _sensorValue(cs, 'Moisture',    widget.zone.latestMoisture != null ? '${widget.zone.latestMoisture}%' : '--', min: moistMin, max: moistMax),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -243,12 +256,36 @@ class _MonitoringTabState extends State<MonitoringTab> {
     );
   }
 
-  Widget _sensorValue(ColorScheme cs, String label, String value) {
+  Widget _sensorValue(ColorScheme cs, String label, String value, {double? min, double? max}) {
+    final numVal  = double.tryParse(value.replaceAll(RegExp(r'[^0-9.]'), ''));
+    final hasRange = min != null && max != null;
+    final inRange  = hasRange && numVal != null && numVal >= min && numVal <= max;
+    final tooLow   = hasRange && numVal != null && numVal < min;
+
+    final Color valueColor = !hasRange || numVal == null
+        ? cs.onSurface
+        : inRange  ? Colors.green.shade700
+        : tooLow   ? Colors.orange.shade700
+        : Colors.red.shade600;
+
+    final IconData? icon = !hasRange || numVal == null
+        ? null
+        : inRange ? Icons.check_circle_outline
+        : tooLow  ? Icons.arrow_downward
+        : Icons.arrow_upward;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) Icon(icon, size: 16, color: valueColor),
+            if (icon != null) const SizedBox(width: 4),
+            Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: valueColor)),
+          ],
+        ),
       ],
     );
   }

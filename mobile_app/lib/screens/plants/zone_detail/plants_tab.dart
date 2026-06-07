@@ -78,10 +78,27 @@ class _PlantsTabState extends State<PlantsTab> {
     );
   }
 
+  num? _slotMoisture(int slot) {
+    switch (slot) {
+      case 1: return widget.zone.latestMoisture1;
+      case 2: return widget.zone.latestMoisture2;
+      case 3: return widget.zone.latestMoisture3;
+      case 4: return widget.zone.latestMoisture4;
+      default: return null;
+    }
+  }
+
   Widget _buildPlantCard(BuildContext context, Plant plant) {
-    final cs = Theme.of(context).colorScheme;
+    final cs       = Theme.of(context).colorScheme;
+    final moisture = _slotMoisture(plant.slotNumber);
+
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PlantDetailScreen(plant: plant))),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PlantDetailScreen(plant: plant, currentMoisture: moisture),
+        ),
+      ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(18),
@@ -114,9 +131,73 @@ class _PlantsTabState extends State<PlantsTab> {
                   _InfoChip(label: 'Light', value: plant.preferredLightCondition!),
               ],
             ),
+            if (moisture != null) ...[
+              const SizedBox(height: 14),
+              _MoistureBar(
+                cs: cs,
+                moisture: moisture,
+                min: plant.preferredMoistureMin,
+                max: plant.preferredMoistureMax,
+              ),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MoistureBar extends StatelessWidget {
+  final ColorScheme cs;
+  final num moisture;
+  final num? min;
+  final num? max;
+
+  const _MoistureBar({required this.cs, required this.moisture, this.min, this.max});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasRange = min != null && max != null;
+    final inRange  = hasRange && moisture >= min! && moisture <= max!;
+    final tooLow   = hasRange && moisture < min!;
+
+    final color = !hasRange
+        ? Colors.blue.shade400
+        : inRange  ? Colors.green.shade600
+        : tooLow   ? Colors.orange.shade600
+        : Colors.red.shade500;
+
+    final label = !hasRange ? null
+        : inRange  ? 'Within preferred range'
+        : tooLow   ? 'Too dry'
+        : 'Too wet';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Soil moisture', style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
+            Text('${moisture.toStringAsFixed(1)}%',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: (moisture / 100).clamp(0.0, 1.0),
+            backgroundColor: cs.surfaceContainerHigh,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+            minHeight: 7,
+          ),
+        ),
+        if (label != null) ...[
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(fontSize: 11, color: color)),
+        ],
+      ],
     );
   }
 }

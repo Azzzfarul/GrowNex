@@ -18,6 +18,47 @@ function statusColor(status) {
   }
 }
 
+function MoistureBar({ moisture, min, max }) {
+  if (moisture == null) return null
+  const hasRange = min != null && max != null
+  const inRange  = hasRange && moisture >= min && moisture <= max
+  const tooLow   = hasRange && moisture < min
+
+  const color = !hasRange ? 'text-blue-500'
+    : inRange ? 'text-green-600'
+    : tooLow  ? 'text-orange-500'
+    : 'text-red-500'
+
+  const barColor = !hasRange ? 'bg-blue-400'
+    : inRange ? 'bg-green-500'
+    : tooLow  ? 'bg-orange-400'
+    : 'bg-red-500'
+
+  const label = !hasRange ? null
+    : inRange ? 'Within preferred range'
+    : tooLow  ? 'Too dry'
+    : 'Too wet'
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-50">
+      <div className="flex justify-between text-xs mb-1.5">
+        <span className="text-gray-400">Soil moisture</span>
+        <span className={`font-semibold ${color}`}>{Number(moisture).toFixed(1)}%</span>
+      </div>
+      <div className="w-full bg-gray-100 rounded-full h-2">
+        <div
+          className={`h-2 rounded-full transition-all ${barColor}`}
+          style={{ width: `${Math.min(Math.max(moisture, 0), 100)}%` }}
+        />
+      </div>
+      {label && <p className={`text-xs mt-1 ${color}`}>{label}</p>}
+      {hasRange && (
+        <p className="text-xs text-gray-300 mt-0.5">Ideal: {Number(min).toFixed(0)}–{Number(max).toFixed(0)}%</p>
+      )}
+    </div>
+  )
+}
+
 /* ── Slot Picker ─────────────────────────────────────────────────────── */
 function SlotPicker({ takenSlots, selected, onChange }) {
   return (
@@ -454,33 +495,43 @@ export default function PlantsTab({ zone }) {
           <p className="text-sm text-gray-400 text-center py-10">No plants in this zone yet.</p>
         ) : (
           <div className="space-y-3">
-            {plants.map((plant) => (
-              <button
-                key={plant.id}
-                onClick={() => setSelected(plant)}
-                className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-brand-200 hover:shadow-md transition-all"
-              >
-                <div className="flex items-start justify-between mb-1.5">
-                  <p className="font-bold text-gray-900 text-base">{plant.plantName}</p>
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize flex-shrink-0 ml-2 ${statusColor(plant.status)}`}>
-                    {plant.status}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-500 mb-3">{plant.species}</p>
-                <div className="flex gap-2 flex-wrap">
-                  {plant.slotNumber > 0 && (
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
-                      Slot {plant.slotNumber}
+            {plants.map((plant) => {
+              const slotMoisture = plant.slotNumber > 0
+                ? zone[`latestMoisture${plant.slotNumber}`] ?? null
+                : null
+              return (
+                <button
+                  key={plant.id}
+                  onClick={() => setSelected(plant)}
+                  className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-brand-200 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-start justify-between mb-1.5">
+                    <p className="font-bold text-gray-900 text-base">{plant.plantName}</p>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize flex-shrink-0 ml-2 ${statusColor(plant.status)}`}>
+                      {plant.status}
                     </span>
-                  )}
-                  {plant.preferredLightCondition && (
-                    <span className="text-xs bg-amber-50 text-amber-600 px-2.5 py-1 rounded-full capitalize">
-                      Light: {plant.preferredLightCondition}
-                    </span>
-                  )}
-                </div>
-              </button>
-            ))}
+                  </div>
+                  <p className="text-sm text-gray-500 mb-3">{plant.species}</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {plant.slotNumber > 0 && (
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
+                        Slot {plant.slotNumber}
+                      </span>
+                    )}
+                    {plant.preferredLightCondition && (
+                      <span className="text-xs bg-amber-50 text-amber-600 px-2.5 py-1 rounded-full capitalize">
+                        Light: {plant.preferredLightCondition}
+                      </span>
+                    )}
+                  </div>
+                  <MoistureBar
+                    moisture={slotMoisture}
+                    min={plant.preferredMoistureMin ?? null}
+                    max={plant.preferredMoistureMax ?? null}
+                  />
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

@@ -98,6 +98,10 @@ async function handleSensors(deviceId, payload) {
       latestHumid:     humidity,
       latestLight:     lightLevel,
       latestTimestamp: FieldValue.serverTimestamp(),
+      ...(() => {
+        const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(assignedZoneId))
+        return alertSummary != null ? { status, alertSummary } : { status }
+      })(),
     }),
 
     db.collection('devices').doc(deviceId).update({
@@ -182,6 +186,50 @@ const actuatorCache          = new Map()  // Map<deviceId, { irrigationActive, f
 const debounceTimers         = new Map()  // Map<deviceId, TimeoutId>
 const DEBOUNCE_MS            = 600
 let   devicesListenerInitialized = false
+
+// ─── Plant cache ──────────────────────────────────────────────────────────────
+const plantCache = new Map()  // Map<zoneId, Plant[]>
+
+function watchPlants() {
+  db.collection('plants').onSnapshot(snapshot => {
+    const byZone = new Map()
+    snapshot.docs.forEach(d => {
+      const { zoneId } = d.data()
+      if (!zoneId) return
+      if (!byZone.has(zoneId)) byZone.set(zoneId, [])
+      byZone.get(zoneId).push(d.data())
+    })
+    // replace each zone's list; clear zones that no longer have plants
+    plantCache.clear()
+    byZone.forEach((plants, zoneId) => plantCache.set(zoneId, plants))
+  })
+}
+
+function computeZoneStatus(sensorFields, plants) {
+  if (!plants || plants.length === 0) return { status: 'unknown', alertSummary: null }
+
+  const avg = field => {
+    const vals = plants.map(p => p[field]).filter(v => v != null)
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+  }
+
+  const { temperature, humidity, moisture } = sensorFields
+  const issues = []
+
+  const check = (val, min, max, label, unit) => {
+    if (val == null || min == null || max == null) return
+    if (val < min) issues.push(`${label} too low (${val}${unit}, ideal ≥ ${min.toFixed(1)}${unit})`)
+    else if (val > max) issues.push(`${label} too high (${val}${unit}, ideal ≤ ${max.toFixed(1)}${unit})`)
+  }
+
+  check(temperature, avg('preferredTemperatureMin'), avg('preferredTemperatureMax'), 'Temperature', '°C')
+  check(humidity,    avg('preferredHumidityMin'),    avg('preferredHumidityMax'),    'Humidity',    '%')
+  check(moisture,    avg('preferredMoistureMin'),    avg('preferredMoistureMax'),    'Moisture',    '%')
+
+  if (issues.length === 0) return { status: 'healthy',   alertSummary: 'All conditions are within preferred range.' }
+  if (issues.length === 1) return { status: 'attention', alertSummary: issues[0] }
+  return { status: 'critical', alertSummary: `${issues.length} conditions out of range: ${issues.join('; ')}` }
+}
 
 function watchDeviceActuators() {
   db.collection('devices').onSnapshot(snapshot => {
@@ -364,6 +412,7 @@ export function init() {
   })
 
   // Register Firestore listeners once — outside connect to prevent stacking on reconnect
+  watchPlants()
   watchDeviceActuators()
   watchAutomationConfig()
 
