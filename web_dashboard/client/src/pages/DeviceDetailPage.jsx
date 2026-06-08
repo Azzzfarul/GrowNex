@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { doc, onSnapshot, updateDoc, deleteDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
+import { doc, onSnapshot, updateDoc, deleteDoc, collection, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 
 function formatLastSync(ts) {
@@ -59,15 +59,33 @@ export default function DeviceDetailPage() {
       setZoneInfo({ zone: null, plantsUsed: 0, loaded: true })
       return
     }
-    async function loadZone() {
-      const zoneSnap = await getDoc(doc(db, 'zones', device.assignedZoneId))
-      const zone = zoneSnap.exists() ? { id: zoneSnap.id, ...zoneSnap.data() } : null
-      const plantsSnap = await getDocs(
-        query(collection(db, 'plants'), where('zoneId', '==', device.assignedZoneId))
-      )
-      setZoneInfo({ zone, plantsUsed: plantsSnap.size, loaded: true })
+    const zoneId = device.assignedZoneId
+    let zoneData = null
+    let plantsCount = 0
+    let zoneLoaded = false
+    let plantsLoaded = false
+
+    function maybeSettle() {
+      if (zoneLoaded && plantsLoaded)
+        setZoneInfo({ zone: zoneData, plantsUsed: plantsCount, loaded: true })
     }
-    loadZone()
+
+    const unsubZone = onSnapshot(doc(db, 'zones', zoneId), (snap) => {
+      zoneData = snap.exists() ? { id: snap.id, ...snap.data() } : null
+      zoneLoaded = true
+      maybeSettle()
+    })
+
+    const unsubPlants = onSnapshot(
+      query(collection(db, 'plants'), where('zoneId', '==', zoneId)),
+      (snap) => {
+        plantsCount = snap.size
+        plantsLoaded = true
+        maybeSettle()
+      }
+    )
+
+    return () => { unsubZone(); unsubPlants() }
   }, [device?.assignedZoneId])
 
   async function handleDelete() {

@@ -136,7 +136,7 @@ async function handleSensors(deviceId, payload) {
 // Topic: grownex/{deviceId}/status  — payload: "online" or "offline" (LWT)
 async function handleStatus(deviceId, payload) {
   const status = payload === 'online' ? 'online' : 'offline'
-  await db.collection('devices').doc(deviceId).update({ status })
+  await db.collection('devices').doc(deviceId).set({ status }, { merge: true })
   console.log(`[MQTT bridge] ${deviceId} → ${status}`)
 }
 
