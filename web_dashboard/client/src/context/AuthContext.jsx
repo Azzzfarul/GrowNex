@@ -5,6 +5,9 @@ import {
   updateProfile,
   signOut,
   onAuthStateChanged,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  sendPasswordResetEmail,
 } from 'firebase/auth'
 import { auth } from '../firebase'
 
@@ -39,8 +42,21 @@ export function AuthProvider({ children }) {
 
   const logout = () => signOut(auth)
 
+  const resetPassword = (email) => sendPasswordResetEmail(auth, email)
+
+  const deleteAccount = async (password) => {
+    const cred = EmailAuthProvider.credential(user.email, password)
+    await reauthenticateWithCredential(user, cred)
+    const token = await user.getIdToken(true)
+    await fetch(`${import.meta.env.VITE_API_URL}/api/auth/me`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    await signOut(auth)
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, resetPassword, deleteAccount }}>
       {!loading && children}
     </AuthContext.Provider>
   )

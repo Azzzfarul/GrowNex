@@ -86,4 +86,53 @@ class AuthService {
   Future<void> updatePassword(String newPassword) async {
     await _auth.currentUser!.updatePassword(newPassword);
   }
+
+  Future<void> resetPassword(String email) async {
+    await _auth.sendPasswordResetEmail(email: email);
+  }
+
+  Future<void> deleteAccount(String password) async {
+    await reauthenticate(password);
+    final uid = _auth.currentUser!.uid;
+
+    final zonesSnap = await _firestore
+        .collection('zones')
+        .where('userId', isEqualTo: uid)
+        .get();
+
+    for (final zoneDoc in zonesSnap.docs) {
+      final zoneId = zoneDoc.id;
+
+      final readingsSnap = await _firestore
+          .collection('zones')
+          .doc(zoneId)
+          .collection('sensorReadings')
+          .get();
+      for (final r in readingsSnap.docs) {
+        await r.reference.delete();
+      }
+
+      final plantsSnap = await _firestore
+          .collection('plants')
+          .where('zoneId', isEqualTo: zoneId)
+          .get();
+      for (final p in plantsSnap.docs) {
+        await p.reference.delete();
+      }
+
+      await _firestore.collection('automationConfig').doc(zoneId).delete();
+      await zoneDoc.reference.delete();
+    }
+
+    final devicesSnap = await _firestore
+        .collection('devices')
+        .where('userId', isEqualTo: uid)
+        .get();
+    for (final d in devicesSnap.docs) {
+      await d.reference.delete();
+    }
+
+    await _firestore.collection('users').doc(uid).delete();
+    await _auth.currentUser!.delete();
+  }
 }

@@ -198,7 +198,118 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           child: const Text('Logout', style: TextStyle(fontSize: 16)),
         ),
+
+        const SizedBox(height: 32),
+
+        Text(
+          'DANGER ZONE',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Colors.red[700],
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        OutlinedButton(
+          onPressed: _showDeleteAccountDialog,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.red[700],
+            side: BorderSide(color: Colors.red[300]!),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text('Delete account', style: TextStyle(fontSize: 16)),
+        ),
       ],
+    );
+  }
+
+  void _showDeleteAccountDialog() {
+    final pwCtrl = TextEditingController();
+    String? error;
+    bool deleting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (_, setState) => AlertDialog(
+          title: const Text('Delete account'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This action is permanent and cannot be undone. All your data will be deleted.',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: pwCtrl,
+                obscureText: true,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Your password',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 10),
+                Text(error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: deleting ? null : () => Navigator.pop(dlgCtx),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: deleting
+                  ? null
+                  : () async {
+                      final password = pwCtrl.text;
+                      if (password.isEmpty) {
+                        setState(() => error = 'Enter your password to confirm');
+                        return;
+                      }
+                      setState(() { deleting = true; error = null; });
+                      try {
+                        await AuthService().deleteAccount(password);
+                        if (dlgCtx.mounted) Navigator.pop(dlgCtx);
+                        if (mounted) {
+                          Navigator.of(context).pushNamedAndRemoveUntil(
+                            LoginScreen.routeName, (route) => false);
+                        }
+                      } on FirebaseAuthException catch (e) {
+                        setState(() {
+                          deleting = false;
+                          error = switch (e.code) {
+                            'wrong-password'     => 'Incorrect password',
+                            'invalid-credential' => 'Incorrect password',
+                            _                    => e.message ?? 'An error occurred',
+                          };
+                        });
+                      } catch (_) {
+                        setState(() {
+                          deleting = false;
+                          error = 'An error occurred. Please try again.';
+                        });
+                      }
+                    },
+              style: TextButton.styleFrom(foregroundColor: Colors.red[700]),
+              child: deleting
+                  ? const SizedBox(
+                      height: 16, width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Delete account'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

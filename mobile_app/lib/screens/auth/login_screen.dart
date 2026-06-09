@@ -28,6 +28,85 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
   
+  void _showForgotPasswordDialog() {
+    final emailCtrl = TextEditingController(text: _emailController.text.trim());
+    bool sending = false;
+    String? error;
+    bool sent = false;
+
+    showDialog(
+      context: context,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (_, setState) => AlertDialog(
+          title: const Text('Reset password'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter your email and we\'ll send you a link to reset your password.',
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              if (!sent)
+                TextField(
+                  controller: emailCtrl,
+                  autofocus: true,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                ),
+              if (sent)
+                const Text(
+                  'Check your inbox — a reset link has been sent.',
+                  style: TextStyle(color: Colors.green),
+                ),
+              if (error != null) ...[
+                const SizedBox(height: 10),
+                Text(error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dlgCtx),
+              child: const Text('Close'),
+            ),
+            if (!sent)
+              TextButton(
+                onPressed: sending
+                    ? null
+                    : () async {
+                        final email = emailCtrl.text.trim();
+                        if (email.isEmpty || !email.contains('@')) {
+                          setState(() => error = 'Enter a valid email address');
+                          return;
+                        }
+                        setState(() { sending = true; error = null; });
+                        try {
+                          await _authService.resetPassword(email);
+                          setState(() { sending = false; sent = true; });
+                        } catch (_) {
+                          setState(() {
+                            sending = false;
+                            error = 'Could not send reset email. Check the address and try again.';
+                          });
+                        }
+                      },
+                child: sending
+                    ? const SizedBox(
+                        height: 16, width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Send link'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _login() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
@@ -120,7 +199,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _showForgotPasswordDialog,
+                        child: const Text('Forgot password?'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(

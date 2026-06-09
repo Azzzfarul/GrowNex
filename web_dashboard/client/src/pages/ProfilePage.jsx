@@ -203,6 +203,78 @@ function EditProfileModal({ user, initialUsername, onClose, onSaved }) {
   )
 }
 
+function DeleteAccountModal({ onClose }) {
+  const { deleteAccount } = useAuth()
+  const navigate = useNavigate()
+  const [password, setPassword] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError]     = useState('')
+
+  async function handleDelete(e) {
+    e.preventDefault()
+    if (!password) { setError('Enter your password to confirm.'); return }
+    setDeleting(true)
+    setError('')
+    try {
+      await deleteAccount(password)
+      navigate('/login', { replace: true })
+    } catch (err) {
+      const code = err?.code
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        setError('Incorrect password.')
+      } else if (code === 'auth/requires-recent-login') {
+        setError('Please log out and log back in, then try again.')
+      } else {
+        setError('An error occurred. Please try again.')
+      }
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Delete account</h2>
+        <p className="text-sm text-gray-500 mb-5">
+          This action is permanent and cannot be undone. All your data will be deleted.
+        </p>
+        <form onSubmit={handleDelete} className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-500 mb-1">Your password</label>
+            <input
+              type="password"
+              autoFocus
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          {error && (
+            <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+          )}
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={deleting}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={deleting}
+              className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
+            >
+              {deleting ? 'Deleting…' : 'Delete account'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 const MENU_ITEMS = [
   {
     id: 'account',
@@ -231,9 +303,10 @@ export default function ProfilePage() {
   const { user, logout } = useAuth()
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
-  const [username,    setUsername]    = useState(null)
-  const [showEdit,    setShowEdit]    = useState(false)
-  const [showTheme,   setShowTheme]   = useState(false)
+  const [username,       setUsername]       = useState(null)
+  const [showEdit,       setShowEdit]       = useState(false)
+  const [showTheme,      setShowTheme]      = useState(false)
+  const [showDeleteAcct, setShowDeleteAcct] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -305,6 +378,16 @@ export default function ProfilePage() {
         Logout
       </button>
 
+      <div className="mt-8">
+        <p className="text-xs font-bold text-red-600 uppercase tracking-widest mb-3">Danger zone</p>
+        <button
+          onClick={() => setShowDeleteAcct(true)}
+          className="w-full border border-red-300 text-red-600 hover:bg-red-50 font-medium py-3 rounded-xl text-sm transition-colors"
+        >
+          Delete account
+        </button>
+      </div>
+
       {showEdit && (
         <EditProfileModal
           user={user}
@@ -320,6 +403,10 @@ export default function ProfilePage() {
           onSelect={setTheme}
           onClose={() => setShowTheme(false)}
         />
+      )}
+
+      {showDeleteAcct && (
+        <DeleteAccountModal onClose={() => setShowDeleteAcct(false)} />
       )}
     </div>
   )
