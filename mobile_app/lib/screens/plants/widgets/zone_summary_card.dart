@@ -34,6 +34,7 @@ class _ZoneSummaryCardState extends State<ZoneSummaryCard> {
         final plantCount = snapshot.data?.length ?? 0;
         final isFull = plantCount >= _maxPlants;
         final hasDevice = widget.zone.deviceId != null;
+        final deviceOffline = widget.zone.deviceOnline == false;
 
         return GestureDetector(
           onTap: widget.onTap,
@@ -73,16 +74,18 @@ class _ZoneSummaryCardState extends State<ZoneSummaryCard> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    _sensorInfo(cs, 'Temp', widget.zone.latestTemp != null ? '${widget.zone.latestTemp}°C' : '--'),
+                    _sensorInfo(cs, 'Temp',  deviceOffline ? '--' : (widget.zone.latestTemp  != null ? '${widget.zone.latestTemp}°C'   : '--')),
                     const SizedBox(width: 10),
-                    _sensorInfo(cs, 'Humid', widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%' : '--'),
+                    _sensorInfo(cs, 'Humid', deviceOffline ? '--' : (widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%'   : '--')),
                     const SizedBox(width: 10),
-                    _sensorInfo(cs, 'Light', widget.zone.latestLight != null ? '${widget.zone.latestLight} lx' : '--'),
+                    _sensorInfo(cs, 'Light', deviceOffline ? '--' : (widget.zone.latestLight != null ? '${widget.zone.latestLight} lx' : '--')),
                   ],
                 ),
                 const SizedBox(height: 10),
-                Text(widget.zone.alertSummary ?? 'Summary unavailable',
-                    style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
+                Text(
+                  deviceOffline ? 'Device is offline.' : (widget.zone.alertSummary ?? 'Summary unavailable'),
+                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55)),
+                ),
               ],
             ),
           ),

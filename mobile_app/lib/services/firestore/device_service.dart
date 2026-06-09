@@ -52,9 +52,18 @@ class DeviceService {
     await _firestore.collection('devices').doc(deviceId).delete();
   }
 
-  Future<void> claimDevice(String deviceId, String userId) async {
+  Future<void> claimDevice(
+    String deviceId,
+    String userId, {
+    bool hasLightingModule = false,
+    bool hasFertilizerModule = false,
+  }) async {
     await _firestore.collection('devices').doc(deviceId).set(
-      {'userId': userId},
+      {
+        'userId': userId,
+        'hasLightingModule': hasLightingModule,
+        'hasFertilizerModule': hasFertilizerModule,
+      },
       SetOptions(merge: true),
     );
   }

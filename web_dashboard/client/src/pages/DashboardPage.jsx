@@ -20,11 +20,13 @@ function defaultAlertMessage(status) {
 }
 
 function ZoneCard({ zone, onViewDetails }) {
-  const hasSensorData =
+  const deviceOffline = zone.deviceOnline === false
+  const hasSensorData = !deviceOffline && (
     zone.latestTemp != null ||
     zone.latestHumid != null ||
     zone.latestLight != null ||
     zone.latestMoisture != null
+  )
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
@@ -68,7 +70,9 @@ function ZoneCard({ zone, onViewDetails }) {
           </p>
         </>
       ) : (
-        <p className="text-sm text-gray-400 mb-4">No sensor data available yet.</p>
+        <p className="text-sm text-gray-400 mb-4">
+          {deviceOffline ? 'Device is offline.' : 'No sensor data available yet.'}
+        </p>
       )}
 
       <button

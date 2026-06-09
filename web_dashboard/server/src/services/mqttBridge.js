@@ -135,8 +135,18 @@ async function handleSensors(deviceId, payload) {
 // ─── Status handler ───────────────────────────────────────────────────────────
 // Topic: grownex/{deviceId}/status  — payload: "online" or "offline" (LWT)
 async function handleStatus(deviceId, payload) {
-  const status = payload === 'online' ? 'online' : 'offline'
+  const status   = payload === 'online' ? 'online' : 'offline'
+  const isOnline = status === 'online'
   await db.collection('devices').doc(deviceId).set({ status }, { merge: true })
+
+  // Mirror device online/offline onto the assigned zone so zone cards
+  // can hide stale sensor readings without fetching the device separately.
+  const deviceSnap = await db.collection('devices').doc(deviceId).get()
+  const assignedZoneId = deviceSnap.data()?.assignedZoneId
+  if (assignedZoneId) {
+    await db.collection('zones').doc(assignedZoneId).update({ deviceOnline: isOnline })
+  }
+
   console.log(`[MQTT bridge] ${deviceId} → ${status}`)
 }
 
@@ -189,9 +199,19 @@ let   devicesListenerInitialized = false
 
 // ─── Plant cache ──────────────────────────────────────────────────────────────
 const plantCache = new Map()  // Map<zoneId, Plant[]>
+let   plantsInitialized = false
 
 function watchPlants() {
-  db.collection('plants').onSnapshot(snapshot => {
+  db.collection('plants').onSnapshot(async snapshot => {
+    // Collect affected zoneIds before updating the cache (skip on initial load)
+    const changedZoneIds = new Set()
+    if (plantsInitialized) {
+      snapshot.docChanges().forEach(change => {
+        const { zoneId } = change.doc.data()
+        if (zoneId) changedZoneIds.add(zoneId)
+      })
+    }
+
     const byZone = new Map()
     snapshot.docs.forEach(d => {
       const { zoneId } = d.data()
@@ -202,6 +222,26 @@ function watchPlants() {
     // replace each zone's list; clear zones that no longer have plants
     plantCache.clear()
     byZone.forEach((plants, zoneId) => plantCache.set(zoneId, plants))
+
+    if (!plantsInitialized) { plantsInitialized = true; return }
+
+    // Immediately recompute alertSummary for zones whose plants changed,
+    // using the latest sensor values already stored on the zone document.
+    for (const zoneId of changedZoneIds) {
+      const zoneSnap = await db.collection('zones').doc(zoneId).get()
+      if (!zoneSnap.exists) continue
+      const zone = zoneSnap.data()
+      const sensorFields = {
+        temperature: zone.latestTemp    ?? null,
+        humidity:    zone.latestHumid   ?? null,
+        moisture:    zone.latestMoisture ?? null,
+      }
+      const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(zoneId))
+      await db.collection('zones').doc(zoneId).update(
+        alertSummary != null ? { status, alertSummary } : { status }
+      )
+      console.log(`[MQTT bridge] recomputed alertSummary for zone ${zoneId} after plant change`)
+    }
   })
 }
 

@@ -22,6 +22,7 @@ class Zone {
   final DateTime? createdAt;
   final bool hasFertilizer;
   final bool hasLight;
+  final bool? deviceOnline;
 
   Zone({
     required this.id,
@@ -45,6 +46,7 @@ class Zone {
     this.createdAt,
     this.hasFertilizer = false,
     this.hasLight = false,
+    this.deviceOnline,
   });
 
   factory Zone.fromDocument(DocumentSnapshot doc) {
@@ -100,6 +102,7 @@ class Zone {
       createdAt: createdAt,
       hasFertilizer: map['hasFertilizer'] as bool? ?? false,
       hasLight: map['hasLight'] as bool? ?? false,
+      deviceOnline: map['deviceOnline'] as bool?,
     );
   }
 

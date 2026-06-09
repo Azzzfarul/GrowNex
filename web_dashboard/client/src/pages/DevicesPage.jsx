@@ -5,12 +5,14 @@ import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 
 function AddDeviceModal({ user, onClose }) {
-  const [searchId,    setSearchId]    = useState('')
-  const [foundDevice, setFoundDevice] = useState(null)
-  const [searching,   setSearching]   = useState(false)
-  const [searchError, setSearchError] = useState(null)
-  const [claiming,    setClaiming]    = useState(false)
-  const [claimError,  setClaimError]  = useState(null)
+  const [searchId,           setSearchId]           = useState('')
+  const [foundDevice,        setFoundDevice]        = useState(null)
+  const [searching,          setSearching]          = useState(false)
+  const [searchError,        setSearchError]        = useState(null)
+  const [claiming,           setClaiming]           = useState(false)
+  const [claimError,         setClaimError]         = useState(null)
+  const [hasLightingModule,  setHasLightingModule]  = useState(false)
+  const [hasFertilizerModule,setHasFertilizerModule]= useState(false)
 
   async function search() {
     const id = searchId.trim()
@@ -28,6 +30,8 @@ function AddDeviceModal({ user, onClose }) {
           setSearchError('This device is already registered to another account.')
         } else {
           setFoundDevice(d)
+          setHasLightingModule(!!d.hasLightingModule)
+          setHasFertilizerModule(!!d.hasFertilizerModule)
         }
       }
     } catch {
@@ -42,7 +46,7 @@ function AddDeviceModal({ user, onClose }) {
     setClaiming(true)
     setClaimError(null)
     try {
-      await setDoc(doc(db, 'devices', foundDevice.id), { userId: user.uid }, { merge: true })
+      await setDoc(doc(db, 'devices', foundDevice.id), { userId: user.uid, hasLightingModule, hasFertilizerModule }, { merge: true })
       onClose()
     } catch {
       setClaimError('Failed to claim device. Please try again.')
@@ -97,23 +101,29 @@ function AddDeviceModal({ user, onClose }) {
                 </div>
               </div>
             </div>
-            {(foundDevice.hasFertilizerModule || (isIndoor && foundDevice.hasLightingModule)) && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 mb-1.5">Installed modules</p>
-                <div className="flex gap-1.5 flex-wrap">
-                  {foundDevice.hasFertilizerModule && (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                      🧪 Fertilizer
-                    </span>
-                  )}
-                  {isIndoor && foundDevice.hasLightingModule && (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                      ☀️ Light
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+            <div className="border-t border-green-200 pt-3 mt-1 space-y-2">
+              <p className="text-xs font-semibold text-gray-500">Modules</p>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <span className="text-base leading-none">🧪</span>
+                <span className="flex-1 text-sm text-gray-800">Fertilizer module</span>
+                <input
+                  type="checkbox"
+                  checked={hasFertilizerModule}
+                  onChange={(e) => setHasFertilizerModule(e.target.checked)}
+                  className="w-4 h-4 accent-green-600"
+                />
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <span className="text-base leading-none">☀️</span>
+                <span className="flex-1 text-sm text-gray-800">Light module</span>
+                <input
+                  type="checkbox"
+                  checked={hasLightingModule}
+                  onChange={(e) => setHasLightingModule(e.target.checked)}
+                  className="w-4 h-4 accent-green-600"
+                />
+              </label>
+            </div>
           </div>
         )}
 

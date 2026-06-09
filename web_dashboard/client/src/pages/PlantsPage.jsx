@@ -218,16 +218,22 @@ export default function PlantsPage() {
                 </p>
 
                 {/* Sensor pills */}
-                <div className="flex gap-6">
-                  <SensorPill label="Temp"     value={z.latestTemp     != null ? `${z.latestTemp}°C`     : null} />
-                  <SensorPill label="Humidity" value={z.latestHumid    != null ? `${z.latestHumid}%`    : null} />
-                  <SensorPill label="Moisture" value={z.latestMoisture != null ? `${z.latestMoisture}%` : null} />
-                  <SensorPill label="Light"    value={z.latestLight    != null ? `${z.latestLight} lx`  : null} />
-                </div>
-
-                <p className="text-xs text-gray-400 mt-3">
-                  {z.alertSummary ?? 'Summary unavailable'}
-                </p>
+                {(() => {
+                  const offline = z.deviceOnline === false
+                  return (
+                    <>
+                      <div className="flex gap-6">
+                        <SensorPill label="Temp"     value={!offline && z.latestTemp     != null ? `${z.latestTemp}°C`     : null} />
+                        <SensorPill label="Humidity" value={!offline && z.latestHumid    != null ? `${z.latestHumid}%`    : null} />
+                        <SensorPill label="Moisture" value={!offline && z.latestMoisture != null ? `${z.latestMoisture}%` : null} />
+                        <SensorPill label="Light"    value={!offline && z.latestLight    != null ? `${z.latestLight} lx`  : null} />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-3">
+                        {offline ? 'Device is offline.' : (z.alertSummary ?? 'Summary unavailable')}
+                      </p>
+                    </>
+                  )
+                })()}
 
                 <p className="text-xs text-brand-500 font-medium mt-2">Tap to view zone →</p>
               </button>

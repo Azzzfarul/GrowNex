@@ -15,7 +15,10 @@ class ZoneCardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final hasSensorData = zone.latestTemp != null || zone.latestHumid != null || zone.latestLight != null || zone.latestMoisture != null;
+    final deviceOffline = zone.deviceOnline == false;
+    final hasSensorData = !deviceOffline &&
+        (zone.latestTemp != null || zone.latestHumid != null ||
+         zone.latestLight != null || zone.latestMoisture != null);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -68,8 +71,10 @@ class ZoneCardWidget extends StatelessWidget {
               style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55)),
             ),
           ] else ...[
-            Text('No sensor data available yet.',
-                style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
+            Text(
+              deviceOffline ? 'Device is offline.' : 'No sensor data available yet.',
+              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55)),
+            ),
           ],
           const SizedBox(height: 16),
           SizedBox(

@@ -139,6 +139,38 @@ class _MonitoringTabState extends State<MonitoringTab> {
             children: [
               const Text('Latest readings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 14),
+              if (_deviceStream != null)
+                StreamBuilder<Device?>(
+                  stream: _deviceStream,
+                  builder: (context, deviceSnap) {
+                    final device = deviceSnap.data;
+                    final isOffline = device != null && device.status != 'online';
+                    if (!isOffline) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[50],
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.orange[100]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange[700]),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Device is offline — readings may be outdated.',
+                                style: TextStyle(fontSize: 12, color: Colors.orange[800], fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
               _sensorValue(cs, 'Temperature', widget.zone.latestTemp    != null ? '${widget.zone.latestTemp}°C'    : '--', min: tempMin,  max: tempMax),
               const SizedBox(height: 10),
               _sensorValue(cs, 'Humidity',    widget.zone.latestHumid   != null ? '${widget.zone.latestHumid}%'   : '--', min: humidMin, max: humidMax),

@@ -113,6 +113,12 @@ export default function MonitoringTab({ zone }) {
       {/* Latest readings */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <h3 className="font-semibold text-gray-900 mb-2">Latest readings</h3>
+        {device && !isOnline && (
+          <div className="flex items-center gap-2 bg-orange-50 border border-orange-100 rounded-xl px-3 py-2 mb-3">
+            <span className="text-orange-400 text-sm flex-shrink-0">⚠</span>
+            <p className="text-xs text-orange-600 font-medium">Device is offline — readings may be outdated.</p>
+          </div>
+        )}
         <SensorRow label="Temperature" value={zone.latestTemp     != null ? `${zone.latestTemp}°C`     : null} min={idealTemp[0]}     max={idealTemp[1]} />
         <SensorRow label="Humidity"    value={zone.latestHumid    != null ? `${zone.latestHumid}%`    : null} min={idealHumidity[0]} max={idealHumidity[1]} />
         <SensorRow label="Light"       value={zone.latestLight    != null ? `${zone.latestLight} lx`  : null} />

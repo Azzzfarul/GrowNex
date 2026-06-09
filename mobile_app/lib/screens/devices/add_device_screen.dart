@@ -17,6 +17,8 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   bool _searching = false;
   String? _searchError;
   bool _claiming = false;
+  bool _hasLightingModule = false;
+  bool _hasFertilizerModule = false;
 
   @override
   void dispose() {
@@ -39,7 +41,11 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         if (alreadyClaimed) {
           setState(() => _searchError = 'This device is already registered to another account.');
         } else {
-          setState(() => _foundDevice = device);
+          setState(() {
+            _foundDevice = device;
+            _hasLightingModule = device.hasLightingModule;
+            _hasFertilizerModule = device.hasFertilizerModule;
+          });
         }
       }
     } catch (e) {
@@ -55,7 +61,11 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     setState(() => _claiming = true);
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
-      await DeviceService().claimDevice(device.id, userId);
+      await DeviceService().claimDevice(
+        device.id, userId,
+        hasLightingModule: _hasLightingModule,
+        hasFertilizerModule: _hasFertilizerModule,
+      );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
@@ -182,38 +192,40 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
               ),
             ],
           ),
-          if (device.hasFertilizerModule || (isIndoor && device.hasLightingModule)) ...[
-            const SizedBox(height: 12),
-            const Text('Installed modules', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54)),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              children: [
-                if (device.hasFertilizerModule) _moduleChip('Fertilizer', Icons.science_outlined),
-                if (isIndoor && device.hasLightingModule) _moduleChip('Light', Icons.wb_sunny_outlined),
-              ],
-            ),
-          ],
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 10),
+          const Text('Modules', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Icon(Icons.science_outlined, color: Colors.green[700], size: 18),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Fertilizer module', style: TextStyle(fontSize: 13))),
+              Switch(
+                value: _hasFertilizerModule,
+                onChanged: (v) => setState(() => _hasFertilizerModule = v),
+                activeTrackColor: Colors.green[700],
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Icon(Icons.wb_sunny_outlined, color: Colors.green[700], size: 18),
+              const SizedBox(width: 8),
+              const Expanded(child: Text('Light module', style: TextStyle(fontSize: 13))),
+              Switch(
+                value: _hasLightingModule,
+                onChanged: (v) => setState(() => _hasLightingModule = v),
+                activeTrackColor: Colors.green[700],
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _moduleChip(String label, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.green[100],
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: Colors.green[700]),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: 12, color: Colors.green[700], fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
 }
