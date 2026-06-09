@@ -101,12 +101,12 @@ void publishSensors() {
   doc["temperature"] = temperature;
   doc["humidity"]    = humidity;
   doc["lightLevel"]  = lightLevel;
-  doc["moisture"]    = moisture;
+  doc["soilMoisture1"] = moisture;
 
   char buf[256];
   serializeJson(doc, buf);
   mqtt.publish(TOPIC_SENSORS.c_str(), buf);
-  Serial.printf("[MQTT] sensors → temp=%.1f°C  humid=%.1f%%  moisture=%.1f%%  light=%.1f\n",
+  Serial.printf("[MQTT] sensors → temp=%.1f°C  humid=%.1f%%  soilMoisture1=%.1f%%  light=%.1f\n",
                 temperature, humidity, moisture, lightLevel);
 }
 
