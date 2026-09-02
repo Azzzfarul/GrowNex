@@ -3,11 +3,17 @@ import { initializeApp, cert } from 'firebase-admin/app'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
 
 // ─── Usage ────────────────────────────────────────────────────────────────────
-//   Seed full demo data for a user (run after registering):
+//   Seed demo data for a user (run after registering):
 //     node seed.js <FIREBASE_UID>
 //
 //   Delete all seeded data for a user:
 //     node seed.js <FIREBASE_UID> --clean
+//
+// Side-effect free: the seeded automationConfig has every automation DISABLED, so
+// the MQTT bridge's watchAutomationConfig schedules zero cron jobs, and all device
+// actuator fields are false so watchDeviceActuators has nothing meaningful to
+// publish. Nothing here talks to MQTT or triggers an actuator. (For a guaranteed
+// no-op even on the bridge side, run this while the server is stopped.)
 
 const USER_ID = process.argv[2]
 
@@ -62,7 +68,7 @@ async function clean() {
   for (const zoneDoc of zonesSnap.docs) {
     await deleteSubcollection(zoneDoc.ref, 'stats')
     await deleteSubcollection(zoneDoc.ref, 'sensorReadings')
-    await deleteSubcollection(zoneDoc.ref, 'automationConfig')
+    await deleteSubcollection(zoneDoc.ref, 'aiCache')
   }
 
   // Delete plants linked to seeded zones
@@ -73,8 +79,10 @@ async function clean() {
     plantsSnap.docs.forEach(d => batch.delete(d.ref))
     zonesSnap.docs.forEach(d => batch.delete(d.ref))
     devicesSnap.docs.forEach(d => batch.delete(d.ref))
+    // automationConfig lives in a top-level collection keyed by zoneId
+    zoneIds.forEach(id => batch.delete(db.collection('automationConfig').doc(id)))
     await batch.commit()
-    console.log(`  Deleted ${plantsSnap.size} plants, ${zonesSnap.size} zones, ${devicesSnap.size} devices`)
+    console.log(`  Deleted ${plantsSnap.size} plants, ${zonesSnap.size} zones, ${devicesSnap.size} devices, automationConfig`)
   } else {
     const batch = db.batch()
     devicesSnap.docs.forEach(d => batch.delete(d.ref))
@@ -117,7 +125,7 @@ async function seed() {
     hasFertilizerModule: true,
     irrigationActive:    false,
     fertilizerActive:    false,
-    lightActive:         true,
+    lightActive:         false,
     lastSync:            now,
   })
   console.log(`  Created device: ${deviceRef.id}`)
@@ -128,7 +136,9 @@ async function seed() {
     deviceId:         deviceRef.id,
     zoneName:         'Herb Garden',
     zoneType:         'indoor',
-    status:           'active',
+    status:           'healthy',
+    alertSummary:     'All conditions are within preferred range.',
+    deviceOnline:     true,
     totalPlantSlots:  4,
     hasFertilizer:    true,
     hasLight:         true,
@@ -215,29 +225,37 @@ async function seed() {
       timestamp:     Timestamp.fromDate(new Date(hourMs)),
     }
 
-    // Web dashboard analytics reads from zones/{id}/stats
+    // Analytics (web + mobile) reads the hourly zones/{id}/stats buckets.
     batch.set(zoneRef.collection('stats').doc(docId), reading)
-    // Mobile app analytics reads from zones/{id}/sensorReadings
-    batch.set(zoneRef.collection('sensorReadings').doc(docId), reading)
+    // Raw zones/{id}/sensorReadings feeds the "latest reading" stream; carries a
+    // TTL field (expiresAt) exactly like the MQTT bridge writes.
+    batch.set(zoneRef.collection('sensorReadings').doc(docId), {
+      ...reading,
+      expiresAt: Timestamp.fromDate(new Date(hourMs + 30 * 24 * 60 * 60 * 1000)),
+    })
   }
 
   await batch.commit()
   console.log(`  Seeded ${HOURS} hourly stats + sensorReadings docs`)
 
   // ── 5. Automation config ──────────────────────────────────────────────────
-  await zoneRef.collection('automationConfig').doc('config').set({
-    autoWateringEnabled:    true,
+  // Top-level automationConfig/{zoneId} — the collection the app and MQTT bridge
+  // actually use. Every automation is DISABLED so the bridge's watchAutomationConfig
+  // schedules no cron jobs on seed. Threshold/schedule values are pre-filled purely
+  // so the Automation UI has something to show; they stay inert until toggled on.
+  await db.collection('automationConfig').doc(zoneRef.id).set({
+    autoWateringEnabled:    false,
     wateringThreshold:      40,
     wateringSchedule:       '08:00',
-    wateringDuration:       30,
-    autoLightingEnabled:    true,
-    lightingSchedule:       '06:00-20:00',
+    wateringDuration:       300,
+    autoLightingEnabled:    false,
+    lightingSchedule:       '06:00–20:00',
     autoFertilizingEnabled: false,
-    fertilizingSchedule:    null,
-    fertilizingDuration:    null,
+    fertilizingSchedule:    'MON 06:00',
+    fertilizingDuration:    600,
     aiRecommended:          false,
   })
-  console.log(`  Created automationConfig`)
+  console.log(`  Created automationConfig (all automation disabled)`)
 
   // ── 6. Unclaimed device (for the "Add Device" demo flow) ──────────────────
   const UNCLAIMED_ID = 'GRX-DEMO-HUB02'

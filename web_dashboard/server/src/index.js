@@ -8,6 +8,7 @@ import zonesRoutes from './routes/zones.js'
 import plantsRoutes from './routes/plants.js'
 import devicesRoutes from './routes/devices.js'
 import analyticsRoutes from './routes/analytics.js'
+import aiRoutes from './routes/ai.js'
 
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -20,6 +21,7 @@ app.use('/api/zones',     zonesRoutes)
 app.use('/api/plants',    plantsRoutes)
 app.use('/api/devices',   devicesRoutes)
 app.use('/api/analytics', analyticsRoutes)
+app.use('/api/ai',        aiRoutes)
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 

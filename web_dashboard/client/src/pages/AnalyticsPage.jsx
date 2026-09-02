@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import { fetchAiSummary } from '../lib/aiSummary'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
@@ -58,6 +59,123 @@ function buildChartData(readings, timeRange) {
     soilMoisture3: avg(v.sm3),
     soilMoisture4: avg(v.sm4),
   }))
+}
+
+// ── AI summary fallback (rule-based, trend-aware) ─────────────────────────────
+
+function formatOutOfRangeDuration(n, timeRange, totalBuckets) {
+  if (totalBuckets != null && n >= totalBuckets) return 'the whole period'
+  if (timeRange === 'today') return n <= 1 ? 'about an hour' : `about ${n} hours`
+  return n <= 1 ? 'about a day' : `about ${n} days`
+}
+
+function meanOf(arr) {
+  const v = arr.filter(x => x != null)
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null
+}
+
+function seriesDirection(series, pref) {
+  const v = series.filter(x => x != null)
+  if (v.length < 3) return 'flat'
+  const third = Math.max(1, Math.floor(v.length / 3))
+  const firstMean = meanOf(v.slice(0, third))
+  const lastMean  = meanOf(v.slice(-third))
+  if (firstMean == null || lastMean == null) return 'flat'
+  const span = (pref.min != null && pref.max != null) ? pref.max - pref.min : Math.abs(firstMean) || 1
+  const eps = Math.max(0.3, span * 0.02)
+  const delta = lastMean - firstMean
+  if (delta >  eps) return 'rising'
+  if (delta < -eps) return 'falling'
+  return 'flat'
+}
+
+const TREND_TEXT = {
+  temperature: {
+    badHigh:  (max, dur) => `Too hot — above ${max}°C for ${dur}`,
+    badLow:   (min, dur) => `Too cold — below ${min}°C for ${dur}`,
+    warnFall: 'Temperature drifting down, near the low end',
+    warnRise: 'Temperature climbing toward the high end',
+    warnBrief: dur => `Temperature mostly fine — briefly out of range for ${dur}`,
+    ok: 'Stable and within the ideal range',
+  },
+  humidity: {
+    badHigh:  (max, dur) => `Too humid — above ${max}% for ${dur}`,
+    badLow:   (min, dur) => `Air too dry — below ${min}% for ${dur}`,
+    warnFall: 'Humidity drifting down, near the low end',
+    warnRise: 'Humidity climbing toward the high end',
+    warnBrief: dur => `Humidity mostly fine — briefly out of range for ${dur}`,
+    ok: 'Stable and within the ideal range',
+  },
+  moisture: {
+    badHigh:  (max, dur) => `Soil too wet — above ${max}% for ${dur}`,
+    badLow:   (min, dur) => `Soil too dry — below ${min}% for ${dur}`,
+    warnFall: 'Soil drying out, near the low end',
+    warnRise: 'Soil getting wet, near the high end',
+    warnBrief: dur => `Soil moisture mostly fine — briefly out of range for ${dur}`,
+    ok: 'Stable and within the ideal range',
+  },
+}
+
+// series: ordered (number|null)[] of bucketed averages; pref: {min,max} (nullable)
+// timeRange: 'today' (1 bucket = 1h) | '7days' (1 bucket = 1 day)
+function describeTrend({ series, pref, timeRange, label, kind }) {
+  if (kind === 'light')
+    return { level: 'none', text: "Light sensor data isn't available yet." }
+
+  const nonNull = series.filter(x => x != null)
+  if (nonNull.length < 2)
+    return { level: 'none', text: `Not enough readings yet to summarise ${label}.` }
+  if (pref.min == null || pref.max == null)
+    return { level: 'none', text: `Set plant preferred ${label} range to get a summary.` }
+
+  const t     = TREND_TEXT[kind]
+  const above = nonNull.filter(v => v > pref.max).length
+  const below = nonNull.filter(v => v < pref.min).length
+  const out   = above + below
+  const total = nonNull.length
+  const dir   = seriesDirection(series, pref)
+
+  if (out === 0) {
+    if (dir === 'falling') return { level: 'warn', text: t.warnFall }
+    if (dir === 'rising')  return { level: 'warn', text: t.warnRise }
+    return { level: 'ok', text: t.ok }
+  }
+  if (out < total / 2)
+    return { level: 'warn', text: t.warnBrief(formatOutOfRangeDuration(out, timeRange, total)) }
+
+  const highSide = above >= below
+  const count = highSide ? above : below
+  const dur = formatOutOfRangeDuration(count, timeRange, total)
+  return highSide
+    ? { level: 'bad', text: t.badHigh(Math.round(pref.max), dur) }
+    : { level: 'bad', text: t.badLow(Math.round(pref.min), dur) }
+}
+
+// Combined moisture series: per bucket, mean of moisture + soilMoisture1..4
+function moistureBucketSeries(chartData) {
+  return chartData.map(d => {
+    const v = [d.moisture, d.soilMoisture1, d.soilMoisture2, d.soilMoisture3, d.soilMoisture4]
+      .filter(x => x != null)
+    return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 10) / 10 : null
+  })
+}
+
+function buildOverviewSummary({ selectedZone, plants, results }) {
+  if (!selectedZone)
+    return { level: 'none', text: 'Showing all zones. Pick a single zone for a detailed summary.' }
+  if (!plants.length)
+    return { level: 'none', text: 'Add plants with preferred conditions to see insights.' }
+
+  const rank = { bad: 3, warn: 2, ok: 1, none: 0 }
+  const ranked = [results.temperature, results.humidity, results.moisture]
+    .filter(r => r && r.level !== 'none')
+    .sort((a, b) => rank[b.level] - rank[a.level])
+
+  if (!ranked.length)
+    return { level: 'none', text: 'Add plants with preferred conditions to see insights.' }
+  if (ranked[0].level === 'ok')
+    return { level: 'ok', text: 'Stable and within the ideal range across temperature, humidity and soil moisture.' }
+  return { level: ranked[0].level, text: ranked[0].text }
 }
 
 function getMoistureLines(plants, readings, isAllZones) {
@@ -169,11 +287,27 @@ function MetricCard({ label, value, sub }) {
   )
 }
 
-function ChartCard({ title, children }) {
+function ChartCard({ title, caption, children }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <h3 className="font-semibold text-gray-800 mb-4">{title}</h3>
+      <h3 className={`font-semibold text-gray-800 ${caption ? 'mb-1' : 'mb-4'}`}>{title}</h3>
+      {caption && <div className="mb-3">{caption}</div>}
       {children}
+    </div>
+  )
+}
+
+function SummaryLine({ text, isAi, variant }) {
+  return (
+    <div className={`flex items-start gap-2 ${variant === 'card' ? 'text-sm text-gray-600' : 'text-xs text-gray-500'}`}>
+      <span
+        className={`shrink-0 mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+          isAi ? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-500'
+        }`}
+      >
+        {isAi ? 'AI' : 'Auto'}
+      </span>
+      <span>{text}</span>
     </div>
   )
 }
@@ -209,6 +343,7 @@ export default function AnalyticsPage() {
   const [plants,          setPlants]          = useState([])
   const [loadingZones,    setLoadingZones]    = useState(true)
   const [loadingReadings, setLoadingReadings] = useState(false)
+  const [aiSummaries,     setAiSummaries]     = useState({})
 
   // Live zone subscription
   useEffect(() => {
@@ -258,6 +393,58 @@ export default function AnalyticsPage() {
     })
   }, [zones, selectedZoneId, timeRange])
 
+  // Fetch the AI analytics summary — one server call per zone/time-range; any
+  // failure leaves aiSummaries empty and the UI shows the rule-based text.
+  useEffect(() => {
+    if (selectedZoneId === 'all' || !user) { setAiSummaries({}); return }
+    const zone = zones.find(z => z.id === selectedZoneId)
+    if (!zone) { setAiSummaries({}); return }
+
+    let cancelled = false
+    const cd    = buildChartData(readings, timeRange)
+    const tPref = avgPref(plants, 'preferredTemperatureMin', 'preferredTemperatureMax')
+    const hPref = avgPref(plants, 'preferredHumidityMin',    'preferredHumidityMax')
+    const mPref = avgPref(plants, 'preferredMoistureMin',    'preferredMoistureMax')
+    const tRes  = describeTrend({ series: cd.map(d => d.temp),      pref: tPref, timeRange, label: 'temperature',   kind: 'temperature' })
+    const hRes  = describeTrend({ series: cd.map(d => d.humidity),  pref: hPref, timeRange, label: 'humidity',      kind: 'humidity' })
+    const lRes  = describeTrend({ series: cd.map(d => d.light),     pref: { min: null, max: null }, timeRange, label: 'light', kind: 'light' })
+    const mRes  = describeTrend({ series: moistureBucketSeries(cd), pref: mPref, timeRange, label: 'soil moisture', kind: 'moisture' })
+
+    const payload = {
+      zoneId: selectedZoneId,
+      timeRange,
+      labels: cd.map(d => d.label),
+      series: {
+        temperature: cd.map(d => d.temp),
+        humidity:    cd.map(d => d.humidity),
+        light:       cd.map(d => d.light),
+        moisture:    moistureBucketSeries(cd),
+      },
+      prefs: { temperature: tPref, humidity: hPref, moisture: mPref },
+      latest: {
+        temp:     zone.latestTemp     ?? null,
+        humid:    zone.latestHumid    ?? null,
+        light:    zone.latestLight    ?? null,
+        moisture: zone.latestMoisture ?? null,
+      },
+      plants: plants.map(p => ({ name: p.plantName, species: p.species ?? null, slotNumber: p.slotNumber ?? null })),
+      ruleResults: {
+        overview:    buildOverviewSummary({ selectedZone: zone, plants, results: { temperature: tRes, humidity: hRes, moisture: mRes } }).text,
+        temperature: tRes.text,
+        humidity:    hRes.text,
+        light:       lRes.text,
+        moisture:    mRes.text,
+      },
+    }
+
+    user.getIdToken()
+      .then(tok => fetchAiSummary(tok, payload))
+      .then(r => { if (!cancelled) setAiSummaries(r) })
+      .catch(() => { if (!cancelled) setAiSummaries({}) })
+
+    return () => { cancelled = true }
+  }, [zones, selectedZoneId, timeRange, readings, plants, user])
+
   if (loadingZones) return <p className="text-sm text-gray-400 mt-8 text-center">Loading…</p>
 
   const isAllZones   = selectedZoneId === 'all'
@@ -299,6 +486,22 @@ export default function AnalyticsPage() {
     : []
 
   const insights = selectedZone ? generateInsights(selectedZone, plants, readings) : []
+
+  // Per-graph + overview summaries (AI value preferred, rule-based fallback otherwise)
+  const tempRes  = describeTrend({ series: chartData.map(d => d.temp),     pref: tempPref,  timeRange, label: 'temperature',   kind: 'temperature' })
+  const humidRes = describeTrend({ series: chartData.map(d => d.humidity), pref: humidPref, timeRange, label: 'humidity',      kind: 'humidity' })
+  const lightRes = describeTrend({ series: chartData.map(d => d.light),    pref: { min: null, max: null }, timeRange, label: 'light', kind: 'light' })
+  const moistRes = describeTrend({ series: moistureBucketSeries(chartData), pref: moistPref, timeRange, label: 'soil moisture', kind: 'moisture' })
+  const overviewRes = buildOverviewSummary({
+    selectedZone, plants,
+    results: { temperature: tempRes, humidity: humidRes, moisture: moistRes },
+  })
+  const graphRes = { temperature: tempRes, humidity: humidRes, light: lightRes, moisture: moistRes }
+
+  // AI summary result ({} until loaded / for All Zones). Prefer AI text, fall back to rules.
+  const aiMap    = aiSummaries.summaries || {}
+  const aiAdvice = Array.isArray(aiSummaries.advice) ? aiSummaries.advice : []
+  const aiActive = !!aiSummaries.source && aiSummaries.source !== 'fallback' && aiSummaries.source !== 'error'
 
   return (
     <div className="space-y-5">
@@ -342,6 +545,49 @@ export default function AnalyticsPage() {
         />
       </div>
 
+      {/* AI Summary */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <h3 className="font-semibold text-gray-800 mb-3">AI Summary</h3>
+        <SummaryLine
+          variant="card"
+          text={aiMap.overview ?? overviewRes.text}
+          isAi={aiMap.overview != null}
+        />
+        {aiActive && aiAdvice.length > 0 ? (
+          <div className="space-y-2.5 mt-3">
+            {aiAdvice.map((a, i) => (
+              <div
+                key={i}
+                className={`flex gap-2.5 text-sm p-3 rounded-xl ${
+                  a.severity === 'critical' ? 'bg-red-50 text-red-800'      :
+                  a.severity === 'warn'     ? 'bg-orange-50 text-orange-800' :
+                                              'bg-gray-50 text-gray-600'
+                }`}
+              >
+                <span className="shrink-0">{a.severity === 'critical' ? '🚨' : a.severity === 'warn' ? '⚠️' : 'ℹ️'}</span>
+                <span>{a.text}</span>
+              </div>
+            ))}
+          </div>
+        ) : selectedZone && insights.length > 0 ? (
+          <div className="space-y-2.5 mt-3">
+            {insights.map((ins, i) => (
+              <div
+                key={i}
+                className={`flex gap-2.5 text-sm p-3 rounded-xl ${
+                  ins.ok === true  ? 'bg-green-50 text-green-800'   :
+                  ins.ok === false ? 'bg-orange-50 text-orange-800' :
+                                     'bg-gray-50 text-gray-600'
+                }`}
+              >
+                <span className="shrink-0">{ins.ok === true ? '✅' : ins.ok === false ? '⚠️' : 'ℹ️'}</span>
+                <span>{ins.text}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
       {loadingReadings && (
         <p className="text-sm text-gray-400 text-center py-4">Loading readings…</p>
       )}
@@ -350,11 +596,20 @@ export default function AnalyticsPage() {
       {!loadingReadings && (
         <div className="space-y-4">
           {[
-            { title: 'Temperature (°C)', key: 'temp',     color: '#f97316' },
-            { title: 'Humidity (%)',     key: 'humidity', color: '#22c55e' },
-            { title: 'Light (lx)',       key: 'light',    color: '#eab308' },
-          ].map(({ title, key, color }) => (
-            <ChartCard key={key} title={title}>
+            { title: 'Temperature (°C)', key: 'temp',     color: '#f97316', kind: 'temperature' },
+            { title: 'Humidity (%)',     key: 'humidity', color: '#22c55e', kind: 'humidity' },
+            { title: 'Light (lx)',       key: 'light',    color: '#eab308', kind: 'light' },
+          ].map(({ title, key, color, kind }) => (
+            <ChartCard
+              key={key}
+              title={title}
+              caption={
+                <SummaryLine
+                  text={aiMap[kind] ?? graphRes[kind].text}
+                  isAi={aiMap[kind] != null}
+                />
+              }
+            >
               {noReadings ? <EmptyChart /> : (
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={chartData}>
@@ -369,7 +624,15 @@ export default function AnalyticsPage() {
             </ChartCard>
           ))}
 
-          <ChartCard title="Soil Moisture (%)">
+          <ChartCard
+            title="Soil Moisture (%)"
+            caption={
+              <SummaryLine
+                text={aiMap.moisture ?? moistRes.text}
+                isAi={aiMap.moisture != null}
+              />
+            }
+          >
             {noReadings ? <EmptyChart /> : (
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={chartData}>
@@ -430,28 +693,6 @@ export default function AnalyticsPage() {
                     <span className="text-sm text-gray-400 w-5 text-right">{i + 1}</span>
                     <span className="flex-1 text-sm font-medium text-gray-800">{plant.plantName}</span>
                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${scoreBadge(s)}`}>{s}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Insights */}
-          {insights.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h3 className="font-semibold text-gray-800 mb-4">Insights & Recommendations</h3>
-              <div className="space-y-2.5">
-                {insights.map((ins, i) => (
-                  <div
-                    key={i}
-                    className={`flex gap-2.5 text-sm p-3 rounded-xl ${
-                      ins.ok === true  ? 'bg-green-50 text-green-800'   :
-                      ins.ok === false ? 'bg-orange-50 text-orange-800' :
-                                         'bg-gray-50 text-gray-600'
-                    }`}
-                  >
-                    <span className="shrink-0">{ins.ok === true ? '✅' : ins.ok === false ? '⚠️' : 'ℹ️'}</span>
-                    <span>{ins.text}</span>
                   </div>
                 ))}
               </div>

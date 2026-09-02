@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../models/plant_model.dart';
 import '../../models/sensor_reading_model.dart';
 import '../../models/zone_model.dart';
+import '../../services/ai_summary_service.dart';
 import '../../services/firestore/zone_service.dart';
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
@@ -164,6 +165,154 @@ List<({bool? ok, String text})> _generateInsights(
   return out;
 }
 
+// ── AI summary fallback (rule-based, trend-aware) ─────────────────────────────
+
+String formatOutOfRangeDuration(int n, String timeRange, int totalBuckets) {
+  if (n >= totalBuckets) return 'the whole period';
+  if (timeRange == 'today') return n <= 1 ? 'about an hour' : 'about $n hours';
+  return n <= 1 ? 'about a day' : 'about $n days';
+}
+
+double? _meanOf(List<double> v) =>
+    v.isEmpty ? null : v.reduce((a, b) => a + b) / v.length;
+
+String _seriesDirection(List<double?> series, ({num? min, num? max}) pref) {
+  final v = series.whereType<double>().toList();
+  if (v.length < 3) return 'flat';
+  final third = (v.length / 3).floor().clamp(1, v.length);
+  final firstMean = _meanOf(v.sublist(0, third));
+  final lastMean = _meanOf(v.sublist(v.length - third));
+  if (firstMean == null || lastMean == null) return 'flat';
+  final span = (pref.min != null && pref.max != null)
+      ? (pref.max! - pref.min!).toDouble().abs()
+      : (firstMean.abs() == 0 ? 1.0 : firstMean.abs());
+  final eps = (span * 0.02) < 0.3 ? 0.3 : span * 0.02;
+  final delta = lastMean - firstMean;
+  if (delta > eps) return 'rising';
+  if (delta < -eps) return 'falling';
+  return 'flat';
+}
+
+String _trendWarnEdge(String kind, bool rising) => switch (kind) {
+      'temperature' => rising
+          ? 'Temperature climbing toward the high end'
+          : 'Temperature drifting down, near the low end',
+      'humidity' => rising
+          ? 'Humidity climbing toward the high end'
+          : 'Humidity drifting down, near the low end',
+      'moisture' => rising
+          ? 'Soil getting wet, near the high end'
+          : 'Soil drying out, near the low end',
+      _ => 'Trending toward the edge of the ideal range',
+    };
+
+String _trendBrief(String kind, String dur) => switch (kind) {
+      'temperature' => 'Temperature mostly fine — briefly out of range for $dur',
+      'humidity' => 'Humidity mostly fine — briefly out of range for $dur',
+      'moisture' => 'Soil moisture mostly fine — briefly out of range for $dur',
+      _ => 'Mostly fine — briefly out of range for $dur',
+    };
+
+String _trendBad(String kind, bool high, int bound, String dur) => switch (kind) {
+      'temperature' =>
+        high ? 'Too hot — above $bound°C for $dur' : 'Too cold — below $bound°C for $dur',
+      'humidity' =>
+        high ? 'Too humid — above $bound% for $dur' : 'Air too dry — below $bound% for $dur',
+      'moisture' =>
+        high ? 'Soil too wet — above $bound% for $dur' : 'Soil too dry — below $bound% for $dur',
+      _ => high ? 'Above the ideal range for $dur' : 'Below the ideal range for $dur',
+    };
+
+/// [series] is the ordered list of bucketed averages for one metric.
+/// [timeRange] 'today' => 1 bucket = 1h; '7days' => 1 bucket = 1 day.
+({String level, String text}) describeTrend({
+  required List<double?> series,
+  required ({num? min, num? max}) pref,
+  required String timeRange,
+  required String label,
+  required String kind,
+}) {
+  if (kind == 'light') {
+    return (level: 'none', text: "Light sensor data isn't available yet.");
+  }
+  final nonNull = series.whereType<double>().toList();
+  if (nonNull.length < 2) {
+    return (level: 'none', text: 'Not enough readings yet to summarise $label.');
+  }
+  if (pref.min == null || pref.max == null) {
+    return (level: 'none', text: 'Set plant preferred $label range to get a summary.');
+  }
+
+  final min = pref.min!.toDouble();
+  final max = pref.max!.toDouble();
+  final above = nonNull.where((v) => v > max).length;
+  final below = nonNull.where((v) => v < min).length;
+  final out = above + below;
+  final total = nonNull.length;
+  final dir = _seriesDirection(series, pref);
+
+  if (out == 0) {
+    if (dir == 'falling') return (level: 'warn', text: _trendWarnEdge(kind, false));
+    if (dir == 'rising') return (level: 'warn', text: _trendWarnEdge(kind, true));
+    return (level: 'ok', text: 'Stable and within the ideal range');
+  }
+  if (out < total / 2) {
+    return (
+      level: 'warn',
+      text: _trendBrief(kind, formatOutOfRangeDuration(out, timeRange, total)),
+    );
+  }
+  final highSide = above >= below;
+  final count = highSide ? above : below;
+  final dur = formatOutOfRangeDuration(count, timeRange, total);
+  return (
+    level: 'bad',
+    text: highSide
+        ? _trendBad(kind, true, max.round(), dur)
+        : _trendBad(kind, false, min.round(), dur),
+  );
+}
+
+/// Combined moisture series: per bucket, mean of moisture + soilMoisture1..4.
+List<double?> _moistureBucketSeries(List<SensorReading> readings, String timeRange) {
+  final base = _groupByTime(readings, timeRange, (r) {
+    final vals = [r.moisture, r.soilMoisture1, r.soilMoisture2, r.soilMoisture3, r.soilMoisture4]
+        .whereType<num>()
+        .map((v) => v.toDouble())
+        .toList();
+    return vals.isEmpty ? null : vals.reduce((a, b) => a + b) / vals.length;
+  });
+  return base.map((e) => e.value).toList();
+}
+
+({String level, String text}) buildOverviewSummary({
+  required Zone? selectedZone,
+  required List<Plant> plants,
+  required ({String level, String text}) temperature,
+  required ({String level, String text}) humidity,
+  required ({String level, String text}) moisture,
+}) {
+  if (selectedZone == null) {
+    return (level: 'none', text: 'Showing all zones. Pick a single zone for a detailed summary.');
+  }
+  if (plants.isEmpty) {
+    return (level: 'none', text: 'Add plants with preferred conditions to see insights.');
+  }
+  const rank = {'bad': 3, 'warn': 2, 'ok': 1, 'none': 0};
+  final ranked = [temperature, humidity, moisture].where((r) => r.level != 'none').toList()
+    ..sort((a, b) => rank[b.level]!.compareTo(rank[a.level]!));
+  if (ranked.isEmpty) {
+    return (level: 'none', text: 'Add plants with preferred conditions to see insights.');
+  }
+  if (ranked.first.level == 'ok') {
+    return (
+      level: 'ok',
+      text: 'Stable and within the ideal range across temperature, humidity and soil moisture.',
+    );
+  }
+  return ranked.first;
+}
+
 // ── Score utils ───────────────────────────────────────────────────────────────
 
 Color _scoreColor(int s) {
@@ -199,6 +348,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   List<Plant>         _plants          = [];
   bool                _loadingZones    = true;
   bool                _loadingReadings = false;
+  Map<String, String?> _aiSummaries    = {};
+  String              _aiSource        = 'fallback';
+  List<Advice>        _aiAdvice        = [];
 
   StreamSubscription<List<Zone>>? _zonesSub;
 
@@ -254,6 +406,71 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       _readings        = readingResults.expand((l) => l).toList();
       _plants          = plantResults.expand((l) => l).toList();
       _loadingReadings = false;
+    });
+    _loadAiSummaries();
+  }
+
+  /// One server call for the whole AI summary. Any failure leaves the maps empty
+  /// and the UI shows the rule-based describeTrend / buildOverviewSummary output.
+  Future<void> _loadAiSummaries() async {
+    if (_selectedZoneId == 'all') {
+      if (mounted) setState(() { _aiSummaries = {}; _aiSource = 'fallback'; _aiAdvice = []; });
+      return;
+    }
+    final zoneMatch = _zones.where((z) => z.id == _selectedZoneId);
+    if (zoneMatch.isEmpty) return;
+    final zone = zoneMatch.first;
+
+    final tempEntries  = _groupByTime(_readings, _timeRange, (r) => r.temperature);
+    final humidEntries = _groupByTime(_readings, _timeRange, (r) => r.humidity);
+    final lightEntries = _groupByTime(_readings, _timeRange, (r) => r.lightLevel);
+    final moistSeries  = _moistureBucketSeries(_readings, _timeRange);
+    final tPref = _avgPref(_plants, (p) => p.preferredMoistureMin, (p) => p.preferredMoistureMax);
+    final tempP  = _avgPref(_plants, (p) => p.preferredTemperatureMin, (p) => p.preferredTemperatureMax);
+    final humidP = _avgPref(_plants, (p) => p.preferredHumidityMin, (p) => p.preferredHumidityMax);
+    final tRes = describeTrend(series: tempEntries.map((e) => e.value).toList(),  pref: tempP,  timeRange: _timeRange, label: 'temperature',   kind: 'temperature');
+    final hRes = describeTrend(series: humidEntries.map((e) => e.value).toList(), pref: humidP, timeRange: _timeRange, label: 'humidity',      kind: 'humidity');
+    final lRes = describeTrend(series: lightEntries.map((e) => e.value).toList(), pref: (min: null, max: null), timeRange: _timeRange, label: 'light', kind: 'light');
+    final mRes = describeTrend(series: moistSeries, pref: tPref, timeRange: _timeRange, label: 'soil moisture', kind: 'moisture');
+    final oRes = buildOverviewSummary(selectedZone: zone, plants: _plants, temperature: tRes, humidity: hRes, moisture: mRes);
+
+    Map<String, num?> prefMap(({num? min, num? max}) p) => {'min': p.min, 'max': p.max};
+
+    final payload = <String, dynamic>{
+      'zoneId': _selectedZoneId,
+      'timeRange': _timeRange,
+      'labels': tempEntries.map((e) => e.label).toList(),
+      'series': {
+        'temperature': tempEntries.map((e) => e.value).toList(),
+        'humidity': humidEntries.map((e) => e.value).toList(),
+        'light': lightEntries.map((e) => e.value).toList(),
+        'moisture': moistSeries,
+      },
+      'prefs': {'temperature': prefMap(tempP), 'humidity': prefMap(humidP), 'moisture': prefMap(tPref)},
+      'latest': {
+        'temp': zone.latestTemp,
+        'humid': zone.latestHumid,
+        'light': zone.latestLight,
+        'moisture': zone.latestMoisture,
+      },
+      'plants': _plants
+          .map((p) => {'name': p.plantName, 'species': p.species, 'slotNumber': p.slotNumber})
+          .toList(),
+      'ruleResults': {
+        'overview': oRes.text,
+        'temperature': tRes.text,
+        'humidity': hRes.text,
+        'light': lRes.text,
+        'moisture': mRes.text,
+      },
+    };
+
+    final result = await const AiSummaryService().fetchSummary(payload);
+    if (!mounted) return;
+    setState(() {
+      _aiSummaries = result.summaries ?? {};
+      _aiSource = result.source;
+      _aiAdvice = result.advice;
     });
   }
 
@@ -315,6 +532,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         : <({bool? ok, String text})>[];
 
     final moistureLines = _getMoistureLines(_plants, _readings, isAllZones);
+
+    // Per-graph + overview summaries (AI value preferred, rule-based fallback otherwise)
+    final tempRes = describeTrend(
+      series: _groupByTime(_readings, _timeRange, (r) => r.temperature).map((e) => e.value).toList(),
+      pref: tempP, timeRange: _timeRange, label: 'temperature', kind: 'temperature');
+    final humidRes = describeTrend(
+      series: _groupByTime(_readings, _timeRange, (r) => r.humidity).map((e) => e.value).toList(),
+      pref: humidP, timeRange: _timeRange, label: 'humidity', kind: 'humidity');
+    final lightRes = describeTrend(
+      series: _groupByTime(_readings, _timeRange, (r) => r.lightLevel).map((e) => e.value).toList(),
+      pref: (min: null, max: null), timeRange: _timeRange, label: 'light', kind: 'light');
+    final moistRes = describeTrend(
+      series: _moistureBucketSeries(_readings, _timeRange),
+      pref: moistP, timeRange: _timeRange, label: 'soil moisture', kind: 'moisture');
+    final overviewRes = buildOverviewSummary(
+      selectedZone: selectedZone, plants: _plants,
+      temperature: tempRes, humidity: humidRes, moisture: moistRes);
+    final graphRes = {
+      'temperature': tempRes, 'humidity': humidRes, 'light': lightRes, 'moisture': moistRes,
+    };
 
     final cs = Theme.of(context).colorScheme;
 
@@ -405,6 +642,34 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ),
           const SizedBox(height: 20),
 
+          // AI Summary
+          _SectionCard(
+            title: 'AI Summary',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SummaryLine(
+                  text: _aiSummaries['overview'] ?? overviewRes.text,
+                  isAi: _aiSummaries['overview'] != null,
+                ),
+                if (_aiSource != 'fallback' && _aiAdvice.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  ...List.generate(_aiAdvice.length, (i) => Padding(
+                    padding: EdgeInsets.only(bottom: i < _aiAdvice.length - 1 ? 8 : 0),
+                    child: _AdviceTile(advice: _aiAdvice[i]),
+                  )),
+                ] else if (selectedZone != null && insights.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  ...List.generate(insights.length, (i) => Padding(
+                    padding: EdgeInsets.only(bottom: i < insights.length - 1 ? 8 : 0),
+                    child: _InsightTile(insight: insights[i]),
+                  )),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
           // Loading / charts
           if (_loadingReadings)
             const Center(
@@ -413,20 +678,43 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           else ...[
             _ChartCard(
               title: 'Temperature (°C)',
+              caption: _SummaryLine(
+                dense: true,
+                text: _aiSummaries['temperature'] ?? graphRes['temperature']!.text,
+                isAi: _aiSummaries['temperature'] != null,
+              ),
               child: _buildSingleChart(_groupByTime(_readings, _timeRange, (r) => r.temperature), Colors.orange),
             ),
             const SizedBox(height: 12),
             _ChartCard(
               title: 'Humidity (%)',
+              caption: _SummaryLine(
+                dense: true,
+                text: _aiSummaries['humidity'] ?? graphRes['humidity']!.text,
+                isAi: _aiSummaries['humidity'] != null,
+              ),
               child: _buildSingleChart(_groupByTime(_readings, _timeRange, (r) => r.humidity), Colors.green),
             ),
             const SizedBox(height: 12),
             _ChartCard(
               title: 'Light (lx)',
+              caption: _SummaryLine(
+                dense: true,
+                text: _aiSummaries['light'] ?? graphRes['light']!.text,
+                isAi: _aiSummaries['light'] != null,
+              ),
               child: _buildSingleChart(_groupByTime(_readings, _timeRange, (r) => r.lightLevel), Colors.amber),
             ),
             const SizedBox(height: 12),
-            _ChartCard(title: 'Soil Moisture (%)', child: _buildMoistureChart(moistureLines)),
+            _ChartCard(
+              title: 'Soil Moisture (%)',
+              caption: _SummaryLine(
+                dense: true,
+                text: _aiSummaries['moisture'] ?? graphRes['moisture']!.text,
+                isAi: _aiSummaries['moisture'] != null,
+              ),
+              child: _buildMoistureChart(moistureLines),
+            ),
             const SizedBox(height: 20),
 
             // Zone-specific sections
@@ -496,19 +784,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                   color: _scoreColor(ranking[i].score!))),
                         ),
                       ]),
-                    )),
-                  ),
-                ),
-              ],
-
-              if (insights.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _SectionCard(
-                  title: 'Insights & Recommendations',
-                  child: Column(
-                    children: List.generate(insights.length, (i) => Padding(
-                      padding: EdgeInsets.only(bottom: i < insights.length - 1 ? 8 : 0),
-                      child: _InsightTile(insight: insights[i]),
                     )),
                   ),
                 ),
@@ -701,9 +976,10 @@ class _MetricCard extends StatelessWidget {
 
 class _ChartCard extends StatelessWidget {
   final String title;
+  final Widget? caption;
   final Widget child;
 
-  const _ChartCard({required this.title, required this.child});
+  const _ChartCard({required this.title, this.caption, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -719,10 +995,60 @@ class _ChartCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          if (caption != null) ...[
+            const SizedBox(height: 4),
+            caption!,
+          ],
           const SizedBox(height: 12),
           child,
         ],
       ),
+    );
+  }
+}
+
+class _SummaryLine extends StatelessWidget {
+  final String text;
+  final bool isAi;
+  final bool dense;
+
+  const _SummaryLine({required this.text, required this.isAi, this.dense = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 1),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: isAi
+                ? cs.primary.withValues(alpha: 0.14)
+                : cs.onSurface.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            isAi ? 'AI' : 'Auto',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: isAi ? cs.primary : cs.onSurface.withValues(alpha: 0.55),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: dense ? 11 : 13,
+              color: cs.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -820,6 +1146,39 @@ class _InsightTile extends StatelessWidget {
           Text(icon, style: const TextStyle(fontSize: 14)),
           const SizedBox(width: 8),
           Expanded(child: Text(insight.text, style: TextStyle(color: fg, fontSize: 13))),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdviceTile extends StatelessWidget {
+  final Advice advice;
+
+  const _AdviceTile({required this.advice});
+
+  @override
+  Widget build(BuildContext context) {
+    final isCritical = advice.severity == 'critical';
+    final isWarn = advice.severity == 'warn';
+    final bg = isCritical ? Colors.red.withValues(alpha: 0.1)
+             : isWarn     ? Colors.orange.withValues(alpha: 0.1)
+             : Theme.of(context).colorScheme.surfaceContainerHigh;
+    final fg = isCritical ? Colors.red[800]
+             : isWarn     ? Colors.orange[800]
+             : Theme.of(context).colorScheme.onSurface;
+    final icon = isCritical ? '🚨' : isWarn ? '⚠️' : 'ℹ️';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(icon, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(advice.text, style: TextStyle(color: fg, fontSize: 13))),
         ],
       ),
     );

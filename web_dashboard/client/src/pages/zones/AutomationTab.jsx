@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase'
+import { useAuth } from '../../context/AuthContext'
+import { fetchAutomationPlan } from '../../lib/aiSummary'
 
 function Toggle({ value, onChange }) {
   return (
@@ -36,6 +38,9 @@ function ToggleSetting({ title, subtitle, value, onChange, children }) {
 }
 
 export default function AutomationTab({ zone }) {
+  const { user } = useAuth()
+  const [aiPlan,    setAiPlan]    = useState(null)   // { source, plan, rationale } | null
+  const [aiLoading, setAiLoading] = useState(false)
   const [autoWater,    setAutoWater]    = useState(false)
   const [autoLight,    setAutoLight]    = useState(false)
   const [autoFert,     setAutoFert]     = useState(false)
@@ -132,6 +137,46 @@ export default function AutomationTab({ zone }) {
     setFertSched(fertSchedOrig);     setFertDuration(fertDurOrig)
   }
 
+  async function requestAiPlan() {
+    if (!user) return
+    setAiLoading(true)
+    try {
+      const tok = await user.getIdToken()
+      setAiPlan(await fetchAutomationPlan(tok, { zoneId: zone.id }))
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  async function applyAiPlan(plan) {
+    await setDoc(doc(db, 'automationConfig', zone.id), { ...plan, aiRecommended: true }, { merge: true })
+    setAutoWater(!!plan.autoWateringEnabled)
+    setAutoLight(!!plan.autoLightingEnabled)
+    setAutoFert(!!plan.autoFertilizingEnabled)
+    const set = (v) => (v != null ? String(v) : '')
+    const wt = set(plan.wateringThreshold), ws = plan.wateringSchedule ?? '', wd = set(plan.wateringDuration)
+    const ls = plan.lightingSchedule ?? '', fs = plan.fertilizingSchedule ?? '', fd = set(plan.fertilizingDuration)
+    setWaterThresh(wt);   setWaterThreshOrig(wt)
+    setWaterSched(ws);    setWaterSchedOrig(ws)
+    setWaterDuration(wd); setWaterDurOrig(wd)
+    setLightSched(ls);    setLightSchedOrig(ls)
+    setFertSched(fs);     setFertSchedOrig(fs)
+    setFertDuration(fd);  setFertDurOrig(fd)
+    setAiPlan(null)
+  }
+
+  const planRows = aiPlan?.plan ? [
+    ['Auto watering',            autoWater ? 'On' : 'Off',   aiPlan.plan.autoWateringEnabled ? 'On' : 'Off'],
+    ['Moisture threshold (%)',   waterThresh   || '—',       aiPlan.plan.wateringThreshold ?? '—'],
+    ['Watering time',            waterSched    || '—',       aiPlan.plan.wateringSchedule ?? '—'],
+    ['Watering duration (s)',    waterDuration || '—',       aiPlan.plan.wateringDuration ?? '—'],
+    ['Auto lighting',            autoLight ? 'On' : 'Off',   aiPlan.plan.autoLightingEnabled ? 'On' : 'Off'],
+    ['Lighting schedule',        lightSched    || '—',       aiPlan.plan.lightingSchedule ?? '—'],
+    ['Auto fertilizing',         autoFert ? 'On' : 'Off',    aiPlan.plan.autoFertilizingEnabled ? 'On' : 'Off'],
+    ['Fertilizing schedule',     fertSched     || '—',       aiPlan.plan.fertilizingSchedule ?? '—'],
+    ['Fertilizing duration (s)', fertDuration  || '—',       aiPlan.plan.fertilizingDuration ?? '—'],
+  ] : []
+
   const isDirty = waterThresh !== waterThreshOrig || waterSched !== waterSchedOrig ||
     waterDuration !== waterDurOrig || lightSched !== lightSchedOrig ||
     fertSched !== fertSchedOrig    || fertDuration !== fertDurOrig
@@ -179,7 +224,65 @@ export default function AutomationTab({ zone }) {
 
       {/* Automation toggles */}
       <div>
-        <h3 className="font-bold text-gray-900 mb-3">Automation settings</h3>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h3 className="font-bold text-gray-900">Automation settings</h3>
+          <button
+            onClick={requestAiPlan}
+            disabled={aiLoading}
+            className="text-sm font-medium px-3 py-1.5 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:opacity-50"
+          >
+            {aiLoading ? 'Thinking…' : '✨ Use AI recommendation'}
+          </button>
+        </div>
+
+        {aiPlan && (
+          <div className="bg-brand-50/60 border border-brand-100 rounded-2xl p-4 mb-4">
+            {aiPlan.source === 'error' || !aiPlan.plan ? (
+              <p className="text-sm text-gray-600">Couldn’t reach the AI service. Try again in a moment.</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <p className="text-sm font-semibold text-gray-800">Suggested automation plan</p>
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-brand-100 text-brand-700">
+                    {aiPlan.source === 'ai' ? 'AI' : 'Auto'}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {planRows.map(([label, cur, next]) => (
+                    <div key={label} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-gray-500">{label}</span>
+                      <span className="text-gray-700">
+                        <span className="text-gray-400">{String(cur)}</span>
+                        <span className="mx-1.5 text-gray-300">→</span>
+                        <span className="font-medium">{String(next)}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {aiPlan.rationale?.length > 0 && (
+                  <ul className="mt-3 space-y-1 text-xs text-gray-500 list-disc list-inside">
+                    {aiPlan.rationale.map((r, i) => <li key={i}>{r.text}</li>)}
+                  </ul>
+                )}
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => setAiPlan(null)}
+                    className="flex-1 border border-gray-300 rounded-xl py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    onClick={() => applyAiPlan(aiPlan.plan)}
+                    className="flex-1 bg-brand-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-brand-700"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         <div className="space-y-3">
           <ToggleSetting
             title="Water automation"
