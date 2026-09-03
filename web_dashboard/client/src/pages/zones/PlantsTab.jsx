@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import {
-  collection, query, where, onSnapshot, getDocs,
+  collection, query, where, onSnapshot, getDocs, orderBy, Timestamp,
   addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { useAuth } from '../../context/AuthContext'
-import { fetchPlantProfile, fetchPlantDiagnosis } from '../../lib/aiSummary'
+import { fetchPlantProfile } from '../../lib/aiSummary'
 import { zoneFitHint } from '../../lib/zoneFit'
+import { plantHealth, plantHealthSummary } from '../../lib/plantHealth'
 
 const MAX_PLANTS = 4
 const LIGHT_OPTIONS = ['', 'low', 'medium', 'high']
@@ -396,76 +397,47 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
   )
 }
 
-/* ── Diagnosis card ──────────────────────────────────────────────────── */
-const SEVERITY_STYLE = {
-  'ok':      'bg-green-50 text-green-800',
-  'watch':   'bg-orange-50 text-orange-800',
-  'act-now': 'bg-red-50 text-red-800',
+/* ── Condition block (rule-based per-plant health) ───────────────────── */
+function statScoreBadge(s) {
+  if (s == null) return 'bg-gray-100 text-gray-500'
+  if (s >= 80) return 'bg-green-100 text-green-700'
+  if (s >= 60) return 'bg-yellow-100 text-yellow-700'
+  if (s >= 40) return 'bg-orange-100 text-orange-700'
+  return 'bg-red-100 text-red-700'
 }
 
-function DiagnosisCard({ plantId }) {
-  const { user } = useAuth()
-  const [state, setState] = useState({ status: 'idle' }) // idle | loading | done | error
+function ConditionCard({ plant, zone }) {
+  const [readings, setReadings] = useState(null)
 
-  async function run() {
-    if (!user) return
-    setState({ status: 'loading' })
-    const { source, diagnosis } = await fetchPlantDiagnosis(await user.getIdToken(), { plantId })
-    setState(diagnosis ? { status: 'done', source, diagnosis } : { status: 'error' })
-  }
+  useEffect(() => {
+    if (!zone?.id) return
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - 7)
+    getDocs(query(
+      collection(db, 'zones', zone.id, 'stats'),
+      where('timestamp', '>=', Timestamp.fromDate(cutoff)),
+      orderBy('timestamp', 'asc'),
+    )).then(s => setReadings(s.docs.map(d => d.data()))).catch(() => setReadings([]))
+  }, [zone?.id])
+
+  if (readings == null) return null
+  const h = plantHealth(plant, zone, readings)
 
   return (
     <div className="bg-gray-50 rounded-xl p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Health check</p>
-        <button
-          type="button"
-          onClick={run}
-          disabled={state.status === 'loading'}
-          className="text-xs font-medium px-2.5 py-1 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:opacity-50"
-        >
-          {state.status === 'loading' ? 'Checking…' : state.status === 'done' ? 'Re-run' : 'Run diagnosis'}
-        </button>
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Condition</p>
+        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statScoreBadge(h.score)}`}>
+          {h.score != null ? `${h.score}%` : '—'}
+        </span>
       </div>
-
-      {state.status === 'error' && (
-        <p className="text-sm text-gray-500 mt-2">Couldn’t run the diagnosis. Try again in a moment.</p>
-      )}
-
-      {state.status === 'done' && (
-        <div className="mt-3 space-y-3">
-          <div className="flex items-start gap-2">
-            <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${state.source === 'ai' || state.source === 'cache' ? 'bg-brand-100 text-brand-700' : 'bg-gray-200 text-gray-500'}`}>
-              {state.source === 'ai' || state.source === 'cache' ? 'AI' : 'Auto'}
-            </span>
-            <p className={`text-sm px-2 py-1 rounded ${SEVERITY_STYLE[state.diagnosis.severity] ?? ''}`}>
-              {state.diagnosis.headline}
-            </p>
-          </div>
-          {state.diagnosis.likelyCauses?.length > 0 && (
-            <ul className="space-y-1.5">
-              {state.diagnosis.likelyCauses.map((c, i) => (
-                <li key={i} className="text-sm text-gray-700">
-                  <span className="font-medium">{c.cause}</span>
-                  <span className="text-xs text-gray-400"> · {c.confidence}</span>
-                  {c.evidence && <p className="text-xs text-gray-500">{c.evidence}</p>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {state.diagnosis.steps?.length > 0 && (
-            <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
-              {state.diagnosis.steps.map((s, i) => <li key={i}>{s}</li>)}
-            </ol>
-          )}
-        </div>
-      )}
+      <p className="text-sm text-gray-600">{plantHealthSummary(h)}</p>
     </div>
   )
 }
 
 /* ── Plant Detail Modal ──────────────────────────────────────────────── */
-function PlantDetailModal({ plant, onClose }) {
+function PlantDetailModal({ plant, zone, onClose }) {
   const [name,    setName]    = useState(plant.plantName)
   const [species, setSpecies] = useState(plant.species)
   const [notes,   setNotes]   = useState(plant.notes ?? '')
@@ -596,7 +568,7 @@ function PlantDetailModal({ plant, onClose }) {
             <ConditionFields prefs={prefs} onChange={(p) => { setPrefs(p); setSaved(false) }} />
           </div>
 
-          <DiagnosisCard plantId={plant.id} />
+          {zone && <ConditionCard plant={plant} zone={zone} />}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
@@ -657,7 +629,7 @@ export default function PlantsTab({ zone }) {
         />
       )}
       {selected && (
-        <PlantDetailModal plant={selected} onClose={() => setSelected(null)} />
+        <PlantDetailModal plant={selected} zone={zone} onClose={() => setSelected(null)} />
       )}
 
       <div>

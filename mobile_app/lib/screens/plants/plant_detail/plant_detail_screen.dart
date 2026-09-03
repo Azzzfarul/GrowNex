@@ -1,15 +1,19 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/plant_model.dart';
-import '../../../services/ai_summary_service.dart';
+import '../../../models/sensor_reading_model.dart';
+import '../../../models/zone_model.dart';
 import '../../../services/firestore/plant_service.dart';
+import '../../../utils/plant_health.dart';
 
 class PlantDetailScreen extends StatefulWidget {
   final Plant plant;
   final num? currentMoisture;
+  final Zone? zone;
 
-  const PlantDetailScreen({super.key, required this.plant, this.currentMoisture});
+  const PlantDetailScreen({super.key, required this.plant, this.currentMoisture, this.zone});
 
   @override
   State<PlantDetailScreen> createState() => _PlantDetailScreenState();
@@ -27,13 +31,13 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   late final TextEditingController _tempMaxCtrl;
   String? _lightCondition;
   bool _loading = false;
-  DiagnosisResult? _diag;
-  bool _diagLoading = false;
+  List<SensorReading>? _stats;
 
   @override
   void initState() {
     super.initState();
     final p = widget.plant;
+    _loadStats();
     _nameCtrl = TextEditingController(text: p.plantName);
     _speciesCtrl = TextEditingController(text: p.species);
     _notesCtrl = TextEditingController(text: p.notes);
@@ -93,19 +97,21 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     }
   }
 
-  Future<void> _runDiagnosis() async {
-    setState(() => _diagLoading = true);
-    final res = await const AiSummaryService().fetchPlantDiagnosis({'plantId': widget.plant.id});
-    if (!mounted) return;
-    setState(() {
-      _diag = res.source == 'error' ? null : res;
-      _diagLoading = false;
-      if (res.source == 'error') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Couldn’t run the diagnosis. Try again in a moment.')),
-        );
-      }
-    });
+  Future<void> _loadStats() async {
+    final zone = widget.zone;
+    if (zone == null) return;
+    try {
+      final cutoff = DateTime.now().subtract(const Duration(days: 7));
+      final snap = await FirebaseFirestore.instance
+          .collection('zones').doc(zone.id).collection('stats')
+          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
+          .orderBy('timestamp')
+          .get();
+      if (!mounted) return;
+      setState(() => _stats = snap.docs.map((d) => SensorReading.fromMap(d.id, d.data())).toList());
+    } catch (_) {
+      if (mounted) setState(() => _stats = const []);
+    }
   }
 
   bool _hasAnyCondition() {
@@ -181,8 +187,10 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
           _buildSensorOverview(cs),
           const SizedBox(height: 20),
           _buildPreferredConditions(cs),
-          const SizedBox(height: 20),
-          _buildDiagnosisCard(cs),
+          if (widget.zone != null && _stats != null) ...[
+            const SizedBox(height: 20),
+            _buildConditionCard(cs),
+          ],
           const SizedBox(height: 20),
           _buildNotesField(),
           const SizedBox(height: 24),
@@ -385,15 +393,14 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     );
   }
 
-  Widget _buildDiagnosisCard(ColorScheme cs) {
-    final d = _diag;
-    final sevColor = d == null
-        ? cs.onSurface
-        : d.severity == 'act-now'
-            ? Colors.red.shade600
-            : d.severity == 'watch'
-                ? Colors.orange.shade700
-                : Colors.green.shade600;
+  Widget _buildConditionCard(ColorScheme cs) {
+    final h = plantHealth(widget.plant, widget.zone!, _stats!);
+    final s = h.score;
+    final color = s == null ? cs.onSurface
+        : s >= 80 ? Colors.green.shade600
+        : s >= 60 ? Colors.amber.shade700
+        : s >= 40 ? Colors.orange.shade700
+        : Colors.red.shade600;
 
     return Container(
       width: double.infinity,
@@ -408,51 +415,18 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
         children: [
           Row(
             children: [
-              const Expanded(child: Text('Health check', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-              TextButton(
-                onPressed: _diagLoading ? null : _runDiagnosis,
-                child: Text(_diagLoading
-                    ? 'Checking…'
-                    : d != null
-                        ? 'Re-run'
-                        : 'Run diagnosis'),
+              const Expanded(child: Text('Condition', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                child: Text(s != null ? '$s%' : '—',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
               ),
             ],
           ),
-          if (d != null) ...[
-            const SizedBox(height: 4),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 2),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: d.isAi ? cs.primary.withValues(alpha: 0.14) : cs.onSurface.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(d.isAi ? 'AI' : 'Auto',
-                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: d.isAi ? cs.primary : cs.onSurface.withValues(alpha: 0.55))),
-                ),
-                const SizedBox(width: 8),
-                Expanded(child: Text(d.headline, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: sevColor))),
-              ],
-            ),
-            for (final c in d.causes) ...[
-              const SizedBox(height: 10),
-              Text('${c.cause}  ·  ${c.confidence}',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-              if (c.evidence.isNotEmpty)
-                Text(c.evidence, style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
-            ],
-            if (d.steps.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              ...List.generate(d.steps.length, (i) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text('${i + 1}. ${d.steps[i]}', style: const TextStyle(fontSize: 13)),
-                  )),
-            ],
-          ],
+          const SizedBox(height: 8),
+          Text(plantHealthSummary(h),
+              style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.7))),
         ],
       ),
     );

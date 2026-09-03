@@ -98,7 +98,7 @@ class _PlantsTabState extends State<PlantsTab> {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => PlantDetailScreen(plant: plant, currentMoisture: moisture),
+          builder: (_) => PlantDetailScreen(plant: plant, currentMoisture: moisture, zone: widget.zone),
         ),
       ),
       child: Container(

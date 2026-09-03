@@ -1,8 +1,6 @@
-// Prompts, validation and deterministic fallbacks for the plant-profile and
-// plant-diagnosis AI features. Same discipline as aiAnalytics.js: model output is
-// a suggestion — validate*/clamp it, and there's always a non-AI path.
-
-import { compliancePercent, rangeIssues } from './analyticsRules.js'
+// Prompt, validation and fallback for the plant-profile AI feature (Feature 1).
+// Same discipline as aiAnalytics.js: model output is a suggestion — validate/clamp
+// it, and there's always a non-AI path.
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -15,8 +13,6 @@ function str(v, max) {
 }
 
 const LIGHT = ['low', 'medium', 'high']
-const METRIC_LABEL = { temperature: 'Temperature', humidity: 'Humidity', moisture: 'Soil moisture' }
-const METRIC_UNIT = { temperature: '°C', humidity: '%', moisture: '%' }
 
 // ── Feature 1: plant profile from species ───────────────────────────────────
 
@@ -70,107 +66,6 @@ export function validatePlantProfile(obj, { species } = {}) {
       preferredTemperatureMin: tMin, preferredTemperatureMax: tMax,
       preferredLightCondition: LIGHT.includes(obj?.preferredLightCondition) ? obj.preferredLightCondition : 'medium',
       careNotes: str(obj?.careNotes, 300),
-    },
-  }
-}
-
-// ── Feature 3: plant health diagnosis ──────────────────────────────────────
-
-export function buildDiagnosisMessages({ plant, prefs, latest, series, compliance, siblingNames }) {
-  const system = [
-    'You are a plant-care assistant diagnosing why one plant in an IoT grow zone may be struggling.',
-    'You get the plant, its preferred ranges, recent sensor trends for its zone, and how often each',
-    'metric was in range. Return STRICT JSON only:',
-    '{',
-    '  "headline": string,                       // one sentence summary',
-    '  "severity": "ok"|"watch"|"act-now",',
-    '  "likelyCauses": [ { "cause": string, "confidence": "high"|"medium"|"low", "evidence": string } ],  // 0-4',
-    '  "steps": [ string ]                       // 0-5 concrete actions, most important first',
-    '}',
-    'Ground every claim in the numbers provided. If nothing looks wrong, say so with severity "ok".',
-  ].join('\n')
-
-  const user = JSON.stringify({
-    plant: { name: plant.plantName, species: plant.species, slot: plant.slotNumber },
-    preferredRanges: prefs,
-    latest,
-    compliancePct: compliance,
-    recentSeries: series,
-    otherPlantsInZone: siblingNames,
-  })
-  return { system, user }
-}
-
-export function validateDiagnosis(obj) {
-  const causes = Array.isArray(obj?.likelyCauses)
-    ? obj.likelyCauses.slice(0, 4).map(c => ({
-        cause: str(c?.cause, 120),
-        confidence: ['high', 'medium', 'low'].includes(c?.confidence) ? c.confidence : 'medium',
-        evidence: str(c?.evidence, 200),
-      })).filter(c => c.cause)
-    : []
-  const steps = Array.isArray(obj?.steps)
-    ? obj.steps.map(s => str(s, 200)).filter(Boolean).slice(0, 5)
-    : []
-  const headline = str(obj?.headline, 160)
-
-  if (!headline && !causes.length && !steps.length) throw new Error('AI diagnosis is empty')
-
-  return {
-    diagnosis: {
-      headline: headline ?? 'Reviewed recent conditions for this plant.',
-      severity: ['ok', 'watch', 'act-now'].includes(obj?.severity) ? obj.severity : 'watch',
-      likelyCauses: causes,
-      steps,
-    },
-  }
-}
-
-// Deterministic diagnosis from the rule helpers — always returns something.
-export function fallbackDiagnosis({ prefs, latest, series }) {
-  const issues = rangeIssues(latest, prefs)
-  const causes = []
-  const steps = []
-
-  for (const iss of issues) {
-    const label = METRIC_LABEL[iss.metric]
-    const unit = METRIC_UNIT[iss.metric]
-    const bound = iss.state === 'low' ? `${iss.min.toFixed(0)}${unit} min` : `${iss.max.toFixed(0)}${unit} max`
-    causes.push({
-      cause: `${label} out of range (${iss.state === 'low' ? 'below' : 'above'} preferred)`,
-      confidence: 'high',
-      evidence: `Latest ${label.toLowerCase()} is ${Number(iss.value).toFixed(1)}${unit} vs ${bound}.`,
-    })
-    if (iss.metric === 'moisture') steps.push(iss.state === 'low' ? 'Increase watering frequency or amount.' : 'Reduce watering; let the medium dry out more between cycles.')
-    if (iss.metric === 'temperature') steps.push(iss.state === 'low' ? 'Move the zone somewhere warmer or add gentle heat.' : 'Improve ventilation or shade the zone during peak heat.')
-    if (iss.metric === 'humidity') steps.push(iss.state === 'low' ? 'Raise humidity (tray of water, grouping plants, humidifier).' : 'Improve airflow to bring humidity down.')
-  }
-
-  // Persistent-drift check from the series compliance
-  for (const metric of ['temperature', 'humidity', 'moisture']) {
-    const p = prefs?.[metric]
-    const s = series?.[metric]
-    if (!p || !s) continue
-    const pct = compliancePercent(s, p.min, p.max)
-    if (pct != null && pct < 60 && !issues.some(i => i.metric === metric)) {
-      causes.push({
-        cause: `${METRIC_LABEL[metric]} frequently outside preferred range`,
-        confidence: 'medium',
-        evidence: `In range only ${pct}% of the recent period.`,
-      })
-    }
-  }
-
-  const headline = causes.length
-    ? `${causes.length} condition${causes.length > 1 ? 's' : ''} may be affecting this plant.`
-    : 'Recent conditions look within the preferred ranges for this plant.'
-
-  return {
-    diagnosis: {
-      headline,
-      severity: causes.some(c => c.confidence === 'high') ? 'act-now' : causes.length ? 'watch' : 'ok',
-      likelyCauses: causes,
-      steps: steps.length ? [...new Set(steps)] : (causes.length ? [] : ['No action needed right now — keep monitoring.']),
     },
   }
 }

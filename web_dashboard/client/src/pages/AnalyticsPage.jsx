@@ -6,6 +6,7 @@ import {
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { fetchAiSummary } from '../lib/aiSummary'
+import { compliancePercent, plantHealth, plantHealthSummary } from '../lib/plantHealth'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
@@ -214,12 +215,6 @@ function zoneHealthScore(zone, plants) {
   return scores.length ? Math.round(scores.reduce((a, b) => a + b) / scores.length) : null
 }
 
-function compliancePercent(readings, field, min, max) {
-  if (min == null || max == null) return null
-  const valid = readings.filter(r => r[field] != null)
-  if (!valid.length) return null
-  return Math.round(valid.filter(r => r[field] >= min && r[field] <= max).length / valid.length * 100)
-}
 
 function generateInsights(zone, plants, readings) {
   if (!plants.length)
@@ -490,9 +485,9 @@ export default function AnalyticsPage() {
 
   const ranking = selectedZone
     ? plants
-        .map(p => ({ plant: p, score: healthScoreForPlant(selectedZone, p) }))
-        .filter(x => x.score != null)
-        .sort((a, b) => b.score - a.score)
+        .map(p => ({ plant: p, health: plantHealth(p, selectedZone, readings) }))
+        .filter(x => x.health.score != null)
+        .sort((a, b) => b.health.score - a.health.score)
     : []
 
   const insights = selectedZone ? generateInsights(selectedZone, plants, readings) : []
@@ -698,11 +693,16 @@ export default function AnalyticsPage() {
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <h3 className="font-semibold text-gray-800 mb-4">Plant Ranking</h3>
               <div className="space-y-3">
-                {ranking.map(({ plant, score: s }, i) => (
-                  <div key={plant.id} className="flex items-center gap-3">
-                    <span className="text-sm text-gray-400 w-5 text-right">{i + 1}</span>
-                    <span className="flex-1 text-sm font-medium text-gray-800">{plant.plantName}</span>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${scoreBadge(s)}`}>{s}%</span>
+                {ranking.map(({ plant, health }, i) => (
+                  <div key={plant.id} className="flex items-start gap-3">
+                    <span className="text-sm text-gray-400 w-5 text-right pt-0.5">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-gray-800 truncate">{plant.plantName}</span>
+                        <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${scoreBadge(health.score)}`}>{health.score}%</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">{plantHealthSummary(health)}</p>
+                    </div>
                   </div>
                 ))}
               </div>

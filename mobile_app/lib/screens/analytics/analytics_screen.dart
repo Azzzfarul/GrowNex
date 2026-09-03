@@ -10,6 +10,7 @@ import '../../models/sensor_reading_model.dart';
 import '../../models/zone_model.dart';
 import '../../services/ai_summary_service.dart';
 import '../../services/firestore/zone_service.dart';
+import '../../utils/plant_health.dart';
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
@@ -533,9 +534,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final compHumid = selectedZone != null ? _compliancePercent(_readings, (r) => r.humidity, humidP.min, humidP.max) : null;
 
     final ranking = selectedZone != null
-        ? (_plants.map((p) => (plant: p, score: _healthScoreForPlant(selectedZone, p))).where((x) => x.score != null).toList()
-            ..sort((a, b) => b.score!.compareTo(a.score!)))
-        : <({Plant plant, int? score})>[];
+        ? (_plants.map((p) => (plant: p, health: plantHealth(p, selectedZone, _readings))).where((x) => x.health.score != null).toList()
+            ..sort((a, b) => b.health.score!.compareTo(a.health.score!)))
+        : <({Plant plant, PlantHealthResult health})>[];
 
     final insights = selectedZone != null
         ? _generateInsights(selectedZone, _plants, _readings)
@@ -770,31 +771,49 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 _SectionCard(
                   title: 'Plant Ranking',
                   child: Column(
-                    children: List.generate(ranking.length, (i) => Padding(
-                      padding: EdgeInsets.only(bottom: i < ranking.length - 1 ? 10 : 0),
-                      child: Row(children: [
-                        SizedBox(
-                          width: 22,
-                          child: Text('${i + 1}',
-                              textAlign: TextAlign.right,
-                              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45))),
+                    children: List.generate(ranking.length, (i) {
+                      final r = ranking[i];
+                      final s = r.health.score!;
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: i < ranking.length - 1 ? 12 : 0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 22,
+                              child: Text('${i + 1}',
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45))),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(child: Text(r.plant.plantName, style: const TextStyle(fontWeight: FontWeight.w500))),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: _scoreColor(s).withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text('$s%',
+                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _scoreColor(s))),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(plantHealthSummary(r.health),
+                                      style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.55))),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(child: Text(ranking[i].plant.plantName, style: const TextStyle(fontWeight: FontWeight.w500))),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _scoreColor(ranking[i].score!).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text('${ranking[i].score}%',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: _scoreColor(ranking[i].score!))),
-                        ),
-                      ]),
-                    )),
+                      );
+                    }),
                   ),
                 ),
               ],

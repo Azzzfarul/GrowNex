@@ -7,11 +7,7 @@ import {
   buildSummaryMessages, validateSummary,
   buildPlanMessages, validatePlan, fallbackPlan,
 } from '../services/aiAnalytics.js'
-import {
-  buildPlantProfileMessages, validatePlantProfile,
-  buildDiagnosisMessages, validateDiagnosis, fallbackDiagnosis,
-} from '../services/aiPlant.js'
-import { compliancePercent } from '../services/analyticsRules.js'
+import { buildPlantProfileMessages, validatePlantProfile } from '../services/aiPlant.js'
 
 const router = Router()
 const TTL_MS = parseInt(process.env.AI_CACHE_TTL_MS || '1800000')
@@ -168,81 +164,6 @@ router.post('/plant-profile', verifyToken, async (req, res) => {
     } catch (aiErr) {
       console.warn('[ai] plant-profile fallback:', aiErr.message)
       return res.json({ source: 'fallback', profile: null })
-    }
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
-})
-
-// ── POST /api/ai/plant-diagnosis ───────────────────────────────────────────
-// Body: { plantId }  →  { source: 'ai'|'cache'|'fallback', diagnosis: {...} }
-router.post('/plant-diagnosis', verifyToken, async (req, res) => {
-  try {
-    const db = getFirestore()
-    const plantId = String(req.body?.plantId ?? '')
-    if (!plantId) return res.status(400).json({ error: 'plantId is required' })
-
-    const plantSnap = await db.collection('plants').doc(plantId).get()
-    if (!plantSnap.exists) return res.status(404).json({ error: 'Plant not found' })
-    const plant = { id: plantSnap.id, ...plantSnap.data() }
-
-    const zone = await loadOwnedZone(db, plant.zoneId, req.user.uid)
-    if (!zone) return res.status(403).json({ error: 'Forbidden' })
-
-    // Last 7 days of hourly stats for the plant's zone
-    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7)
-    const statsSnap = await db.collection('zones').doc(plant.zoneId).collection('stats')
-      .where('timestamp', '>=', cutoff).orderBy('timestamp', 'asc').get()
-    const rows = statsSnap.docs.map(d => d.data())
-    const slotKey = `soilMoisture${plant.slotNumber}`
-    const series = {
-      temperature: round1(rows.map(r => r.temperature ?? null)),
-      humidity:    round1(rows.map(r => r.humidity ?? null)),
-      moisture:    round1(rows.map(r => r[slotKey] ?? r.moisture ?? null)),
-    }
-
-    const prefs = {
-      temperature: { min: plant.preferredTemperatureMin ?? null, max: plant.preferredTemperatureMax ?? null },
-      humidity:    { min: plant.preferredHumidityMin ?? null,    max: plant.preferredHumidityMax ?? null },
-      moisture:    { min: plant.preferredMoistureMin ?? null,     max: plant.preferredMoistureMax ?? null },
-    }
-    const latest = {
-      temperature: zone.data().latestTemp ?? null,
-      humidity:    zone.data().latestHumid ?? null,
-      moisture:    zone.data()[`latestMoisture${plant.slotNumber}`] ?? zone.data().latestMoisture ?? null,
-    }
-    const compliance = {
-      temperature: compliancePercent(series.temperature, prefs.temperature.min, prefs.temperature.max),
-      humidity:    compliancePercent(series.humidity, prefs.humidity.min, prefs.humidity.max),
-      moisture:    compliancePercent(series.moisture, prefs.moisture.min, prefs.moisture.max),
-    }
-
-    const inputHash = createHash('sha256')
-      .update(JSON.stringify({ series, prefs, latest, model: MODEL }))
-      .digest('hex')
-    const cacheRef = db.collection('zones').doc(plant.zoneId).collection('aiCache').doc(`diagnosis-${plantId}`)
-    const cached = await cacheRef.get()
-    if (cached.exists) {
-      const c = cached.data()
-      if (c.inputHash === inputHash && Date.now() - c.generatedAt < TTL_MS && c.diagnosis) {
-        return res.json({ source: 'cache', diagnosis: c.diagnosis })
-      }
-    }
-
-    if (!aiEnabled()) {
-      return res.json({ source: 'fallback', ...fallbackDiagnosis({ prefs, latest, series }) })
-    }
-
-    try {
-      const siblingSnap = await db.collection('plants').where('zoneId', '==', plant.zoneId).get()
-      const siblingNames = siblingSnap.docs.map(d => d.data().plantName).filter(n => n && n !== plant.plantName)
-      const { system, user } = buildDiagnosisMessages({ plant, prefs, latest, series, compliance, siblingNames })
-      const { diagnosis } = validateDiagnosis(await chatJson({ system, user, maxTokens: 800 }))
-      await cacheRef.set({ inputHash, generatedAt: Date.now(), diagnosis })
-      return res.json({ source: 'ai', diagnosis })
-    } catch (aiErr) {
-      console.warn('[ai] plant-diagnosis fallback:', aiErr.message)
-      return res.json({ source: 'fallback', ...fallbackDiagnosis({ prefs, latest, series }) })
     }
   } catch (err) {
     res.status(500).json({ error: err.message })

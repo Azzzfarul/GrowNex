@@ -49,26 +49,6 @@ class PlantProfileResult {
   bool get isAi => source == 'ai' || source == 'cache';
 }
 
-class DiagnosisCause {
-  final String cause;
-  final String confidence;
-  final String evidence;
-  const DiagnosisCause(this.cause, this.confidence, this.evidence);
-}
-
-class DiagnosisResult {
-  final String source; // 'ai' | 'cache' | 'fallback' | 'error'
-  final String headline;
-  final String severity; // 'ok' | 'watch' | 'act-now'
-  final List<DiagnosisCause> causes;
-  final List<String> steps;
-  const DiagnosisResult(this.source, this.headline, this.severity, this.causes, this.steps);
-  bool get isAi => source == 'ai' || source == 'cache';
-
-  static const DiagnosisResult error =
-      DiagnosisResult('error', '', 'watch', [], []);
-}
-
 class AiSummaryService {
   const AiSummaryService();
 
@@ -145,33 +125,4 @@ class AiSummaryService {
     }
   }
 
-  Future<DiagnosisResult> fetchPlantDiagnosis(Map<String, dynamic> payload) async {
-    try {
-      final data = await _post('/api/ai/plant-diagnosis', payload);
-      final d = data?['diagnosis'];
-      if (d is! Map) return DiagnosisResult.error;
-      final causes = (d['likelyCauses'] as List? ?? [])
-          .whereType<Map>()
-          .map((c) => DiagnosisCause(
-                (c['cause'] ?? '').toString(),
-                (c['confidence'] ?? 'medium').toString(),
-                (c['evidence'] ?? '').toString(),
-              ))
-          .where((c) => c.cause.isNotEmpty)
-          .toList();
-      final steps = (d['steps'] as List? ?? [])
-          .map((s) => s.toString())
-          .where((s) => s.isNotEmpty)
-          .toList();
-      return DiagnosisResult(
-        (data?['source'] ?? 'fallback').toString(),
-        (d['headline'] ?? '').toString(),
-        (d['severity'] ?? 'watch').toString(),
-        causes,
-        steps,
-      );
-    } catch (_) {
-      return DiagnosisResult.error;
-    }
-  }
 }
