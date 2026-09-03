@@ -52,3 +52,31 @@ export async function fetchAutomationPlan(idToken, payload) {
     return { source: 'error', plan: null, rationale: [] }
   }
 }
+
+/**
+ * @param {string} idToken
+ * @param {object} payload  { species, zoneType }
+ * @returns {Promise<{ source: string, profile: object|null }>}
+ */
+export async function fetchPlantProfile(idToken, payload) {
+  try {
+    const data = await postJson('/api/ai/plant-profile', idToken, payload)
+    return { source: data.source ?? 'fallback', profile: data.profile ?? null }
+  } catch {
+    return { source: 'error', profile: null }
+  }
+}
+
+/**
+ * @param {string} idToken
+ * @param {object} payload  { plantId }
+ * @returns {Promise<{ source: string, diagnosis: object|null }>}
+ */
+export async function fetchPlantDiagnosis(idToken, payload) {
+  try {
+    const data = await postJson('/api/ai/plant-diagnosis', idToken, payload)
+    return { source: data.source ?? 'fallback', diagnosis: data.diagnosis ?? null }
+  } catch {
+    return { source: 'error', diagnosis: null }
+  }
+}

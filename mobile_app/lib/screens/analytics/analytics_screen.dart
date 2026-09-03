@@ -131,6 +131,12 @@ List<({bool? ok, String text})> _generateInsights(
   List<SensorReading> readings,
 ) {
   if (plants.isEmpty) return [(ok: null, text: 'Add plants with preferred conditions to see insights.')];
+
+  final hasLatest = zone.latestTemp != null || zone.latestHumid != null || zone.latestMoisture != null;
+  if (!hasLatest && readings.isEmpty) {
+    return [(ok: null, text: 'No sensor readings for this zone yet. Connect a device to start monitoring.')];
+  }
+
   final moist = _avgPref(plants, (p) => p.preferredMoistureMin, (p) => p.preferredMoistureMax);
   final temp  = _avgPref(plants, (p) => p.preferredTemperatureMin, (p) => p.preferredTemperatureMax);
   final humid = _avgPref(plants, (p) => p.preferredHumidityMin, (p) => p.preferredHumidityMax);
@@ -302,7 +308,11 @@ List<double?> _moistureBucketSeries(List<SensorReading> readings, String timeRan
   final ranked = [temperature, humidity, moisture].where((r) => r.level != 'none').toList()
     ..sort((a, b) => rank[b.level]!.compareTo(rank[a.level]!));
   if (ranked.isEmpty) {
-    return (level: 'none', text: 'Add plants with preferred conditions to see insights.');
+    final hasPrefs = plants.any((p) =>
+        p.preferredTemperatureMin != null || p.preferredHumidityMin != null || p.preferredMoistureMin != null);
+    return hasPrefs
+        ? (level: 'none', text: 'No sensor readings for this zone yet — connect a device to start monitoring.')
+        : (level: 'none', text: 'Add plants with preferred conditions to see insights.');
   }
   if (ranked.first.level == 'ok') {
     return (

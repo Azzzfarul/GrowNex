@@ -1,12 +1,22 @@
 import { useState, useEffect } from 'react'
 import {
-  collection, query, where, onSnapshot,
+  collection, query, where, onSnapshot, getDocs,
   addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../../firebase'
+import { useAuth } from '../../context/AuthContext'
+import { fetchPlantProfile, fetchPlantDiagnosis } from '../../lib/aiSummary'
+import { zoneFitHint } from '../../lib/zoneFit'
 
 const MAX_PLANTS = 4
 const LIGHT_OPTIONS = ['', 'low', 'medium', 'high']
+
+const ZONE_HINT_REASON = {
+  temperature: 'needs a different temperature range than',
+  light:       'needs a different light level than',
+  humidity:    'prefers a different humidity than',
+  moisture:    'prefers different soil moisture than',
+}
 
 function statusColor(status) {
   switch (status?.toLowerCase()) {
@@ -151,6 +161,7 @@ function ConditionFields({ prefs, onChange }) {
 
 /* ── Add Plant Modal ─────────────────────────────────────────────────── */
 function AddPlantModal({ zone, takenSlots, onClose }) {
+  const { user } = useAuth()
   const [species,      setSpecies]     = useState('')
   const [name,         setName]        = useState('')
   const [selectedSlot, setSelectedSlot]= useState(null)
@@ -158,6 +169,58 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
   const [prefs,        setPrefs]       = useState({})
   const [errors,       setErrors]      = useState({})
   const [loading,      setLoading]     = useState(false)
+  const [aiLoading,    setAiLoading]   = useState(false)
+  const [aiMeta,       setAiMeta]      = useState(null)   // { source, commonName, confidence, careNotes }
+  const [zonesById,    setZonesById]   = useState(null)   // { zid: { zone, plants } } for the fit hint
+  const [hintDismissed, setHintDismissed] = useState(false)
+
+  // Load the user's other zones + their plants once — for the wrong-zone hint (Feature 2)
+  useEffect(() => {
+    if (!zone.userId) return
+    let cancelled = false
+    getDocs(query(collection(db, 'zones'), where('userId', '==', zone.userId))).then(async (zs) => {
+      const zones = zs.docs.map((d) => ({ id: d.id, ...d.data() }))
+      const ids = zones.map((z) => z.id).slice(0, 10)
+      const map = {}
+      await Promise.all(zones.map(async (z) => {
+        const ps = await getDocs(query(collection(db, 'plants'), where('zoneId', '==', z.id)))
+        map[z.id] = { zone: z, plants: ps.docs.map((d) => d.data()) }
+      }))
+      void ids
+      if (!cancelled) setZonesById(map)
+    })
+    return () => { cancelled = true }
+  }, [zone.userId])
+
+  async function suggestConditions() {
+    if (species.trim().length < 3 || !user) return
+    setAiLoading(true)
+    try {
+      const { source, profile } = await fetchPlantProfile(await user.getIdToken(), {
+        species: species.trim(),
+        zoneType: zone.zoneType ?? 'indoor',
+      })
+      if (profile) {
+        setPrefs((p) => ({ ...p, ...profile }))
+        setShowPrefs(true)
+        setAiMeta({
+          source,
+          commonName: profile.commonName ?? null,
+          confidence: profile.confidence ?? 'high',
+          careNotes: profile.careNotes ?? null,
+        })
+        if (profile.careNotes && !name.trim()) { /* leave nickname alone */ }
+      } else {
+        setAiMeta({ source: 'fallback' })
+      }
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  const zoneHint = (!hintDismissed && zonesById && (prefs.preferredTemperatureMin != null || prefs.preferredMoistureMin != null))
+    ? zoneFitHint(prefs, zone.id, zonesById)
+    : null
 
   function validate() {
     const e = {}
@@ -186,6 +249,7 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
         preferredTemperatureMin:  prefs.preferredTemperatureMin ?? null,
         preferredTemperatureMax:  prefs.preferredTemperatureMax ?? null,
         preferredLightCondition:  prefs.preferredLightCondition ?? null,
+        notes: aiMeta?.careNotes ?? null,
         createdAt: serverTimestamp(),
       })
       onClose()
@@ -213,15 +277,36 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Species <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
-              value={species}
-              onChange={(e) => setSpecies(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              placeholder="e.g. Phalaenopsis"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={species}
+                onChange={(e) => { setSpecies(e.target.value); setAiMeta(null) }}
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                placeholder="e.g. Phalaenopsis"
+              />
+              <button
+                type="button"
+                onClick={suggestConditions}
+                disabled={aiLoading || species.trim().length < 3}
+                className="shrink-0 text-sm font-medium px-3 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:opacity-40"
+              >
+                {aiLoading ? '…' : '✨ Suggest'}
+              </button>
+            </div>
             {errors.species && <p className="text-xs text-red-500 mt-1">{errors.species}</p>}
-            <p className="text-xs text-gray-400 mt-1">An accurate species helps give better care recommendations.</p>
+            {aiMeta?.source === 'fallback' || aiMeta?.source === 'error' ? (
+              <p className="text-xs text-gray-400 mt-1">Couldn’t fetch suggestions — enter the conditions manually.</p>
+            ) : aiMeta ? (
+              <p className="text-xs text-gray-500 mt-1">
+                {aiMeta.commonName
+                  ? <>Interpreted as <span className="font-medium">{aiMeta.commonName}</span>. </>
+                  : null}
+                {aiMeta.confidence === 'low' && <span className="text-orange-500">Low-confidence guess — double-check these. </span>}
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1">An accurate species helps give better care recommendations.</p>
+            )}
           </div>
 
           <div>
@@ -256,11 +341,38 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
             </button>
             {showPrefs && (
               <div className="px-4 pb-4 border-t border-gray-100 pt-4">
-                <p className="text-xs text-gray-400 mb-3">Helps compute ideal zone environment. Edit any time from plant details.</p>
+                {aiMeta && aiMeta.source !== 'fallback' && aiMeta.source !== 'error' ? (
+                  <p className="text-xs text-brand-600 mb-3">
+                    <span className="font-semibold">AI suggestion</span> — adjust as needed. Different growth
+                    stages need different soil moisture and feeding; revisit these as the plant matures.
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-400 mb-3">Helps compute ideal zone environment. Edit any time from plant details.</p>
+                )}
                 <ConditionFields prefs={prefs} onChange={setPrefs} />
               </div>
             )}
           </div>
+
+          {zoneHint && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm">
+              <p className="text-amber-800">
+                This plant {ZONE_HINT_REASON[zoneHint.reason] ?? 'is a poorer fit for'} {zone.zoneName}’s other plants
+                {zoneHint.kind === 'move' ? (
+                  <> — <span className="font-semibold">{zoneHint.zone.zoneName}</span> is a closer match.</>
+                ) : (
+                  <>, and none of your other zones suit it either. Consider giving it its own zone.</>
+                )}
+              </p>
+              <button
+                type="button"
+                onClick={() => setHintDismissed(true)}
+                className="text-xs text-amber-700 underline mt-1"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-1">
             <button
@@ -280,6 +392,74 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
           </div>
         </form>
       </div>
+    </div>
+  )
+}
+
+/* ── Diagnosis card ──────────────────────────────────────────────────── */
+const SEVERITY_STYLE = {
+  'ok':      'bg-green-50 text-green-800',
+  'watch':   'bg-orange-50 text-orange-800',
+  'act-now': 'bg-red-50 text-red-800',
+}
+
+function DiagnosisCard({ plantId }) {
+  const { user } = useAuth()
+  const [state, setState] = useState({ status: 'idle' }) // idle | loading | done | error
+
+  async function run() {
+    if (!user) return
+    setState({ status: 'loading' })
+    const { source, diagnosis } = await fetchPlantDiagnosis(await user.getIdToken(), { plantId })
+    setState(diagnosis ? { status: 'done', source, diagnosis } : { status: 'error' })
+  }
+
+  return (
+    <div className="bg-gray-50 rounded-xl p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Health check</p>
+        <button
+          type="button"
+          onClick={run}
+          disabled={state.status === 'loading'}
+          className="text-xs font-medium px-2.5 py-1 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:opacity-50"
+        >
+          {state.status === 'loading' ? 'Checking…' : state.status === 'done' ? 'Re-run' : 'Run diagnosis'}
+        </button>
+      </div>
+
+      {state.status === 'error' && (
+        <p className="text-sm text-gray-500 mt-2">Couldn’t run the diagnosis. Try again in a moment.</p>
+      )}
+
+      {state.status === 'done' && (
+        <div className="mt-3 space-y-3">
+          <div className="flex items-start gap-2">
+            <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${state.source === 'ai' || state.source === 'cache' ? 'bg-brand-100 text-brand-700' : 'bg-gray-200 text-gray-500'}`}>
+              {state.source === 'ai' || state.source === 'cache' ? 'AI' : 'Auto'}
+            </span>
+            <p className={`text-sm px-2 py-1 rounded ${SEVERITY_STYLE[state.diagnosis.severity] ?? ''}`}>
+              {state.diagnosis.headline}
+            </p>
+          </div>
+          {state.diagnosis.likelyCauses?.length > 0 && (
+            <ul className="space-y-1.5">
+              {state.diagnosis.likelyCauses.map((c, i) => (
+                <li key={i} className="text-sm text-gray-700">
+                  <span className="font-medium">{c.cause}</span>
+                  <span className="text-xs text-gray-400"> · {c.confidence}</span>
+                  {c.evidence && <p className="text-xs text-gray-500">{c.evidence}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {state.diagnosis.steps?.length > 0 && (
+            <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700">
+              {state.diagnosis.steps.map((s, i) => <li key={i}>{s}</li>)}
+            </ol>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -415,6 +595,8 @@ function PlantDetailModal({ plant, onClose }) {
             </p>
             <ConditionFields prefs={prefs} onChange={(p) => { setPrefs(p); setSaved(false) }} />
           </div>
+
+          <DiagnosisCard plantId={plant.id} />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>

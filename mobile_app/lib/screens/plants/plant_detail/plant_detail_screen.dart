@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/plant_model.dart';
+import '../../../services/ai_summary_service.dart';
 import '../../../services/firestore/plant_service.dart';
 
 class PlantDetailScreen extends StatefulWidget {
@@ -26,6 +27,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   late final TextEditingController _tempMaxCtrl;
   String? _lightCondition;
   bool _loading = false;
+  DiagnosisResult? _diag;
+  bool _diagLoading = false;
 
   @override
   void initState() {
@@ -88,6 +91,21 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _runDiagnosis() async {
+    setState(() => _diagLoading = true);
+    final res = await const AiSummaryService().fetchPlantDiagnosis({'plantId': widget.plant.id});
+    if (!mounted) return;
+    setState(() {
+      _diag = res.source == 'error' ? null : res;
+      _diagLoading = false;
+      if (res.source == 'error') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Couldn’t run the diagnosis. Try again in a moment.')),
+        );
+      }
+    });
   }
 
   bool _hasAnyCondition() {
@@ -163,6 +181,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
           _buildSensorOverview(cs),
           const SizedBox(height: 20),
           _buildPreferredConditions(cs),
+          const SizedBox(height: 20),
+          _buildDiagnosisCard(cs),
           const SizedBox(height: 20),
           _buildNotesField(),
           const SizedBox(height: 24),
@@ -362,6 +382,79 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
           onChanged: (v) => setState(() => _lightCondition = v),
         ),
       ],
+    );
+  }
+
+  Widget _buildDiagnosisCard(ColorScheme cs) {
+    final d = _diag;
+    final sevColor = d == null
+        ? cs.onSurface
+        : d.severity == 'act-now'
+            ? Colors.red.shade600
+            : d.severity == 'watch'
+                ? Colors.orange.shade700
+                : Colors.green.shade600;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainer,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(child: Text('Health check', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+              TextButton(
+                onPressed: _diagLoading ? null : _runDiagnosis,
+                child: Text(_diagLoading
+                    ? 'Checking…'
+                    : d != null
+                        ? 'Re-run'
+                        : 'Run diagnosis'),
+              ),
+            ],
+          ),
+          if (d != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: d.isAi ? cs.primary.withValues(alpha: 0.14) : cs.onSurface.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(d.isAi ? 'AI' : 'Auto',
+                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: d.isAi ? cs.primary : cs.onSurface.withValues(alpha: 0.55))),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(d.headline, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: sevColor))),
+              ],
+            ),
+            for (final c in d.causes) ...[
+              const SizedBox(height: 10),
+              Text('${c.cause}  ·  ${c.confidence}',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              if (c.evidence.isNotEmpty)
+                Text(c.evidence, style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
+            ],
+            if (d.steps.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ...List.generate(d.steps.length, (i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('${i + 1}. ${d.steps[i]}', style: const TextStyle(fontSize: 13)),
+                  )),
+            ],
+          ],
+        ],
+      ),
     );
   }
 

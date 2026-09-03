@@ -171,8 +171,13 @@ function buildOverviewSummary({ selectedZone, plants, results }) {
     .filter(r => r && r.level !== 'none')
     .sort((a, b) => rank[b.level] - rank[a.level])
 
-  if (!ranked.length)
-    return { level: 'none', text: 'Add plants with preferred conditions to see insights.' }
+  if (!ranked.length) {
+    const hasPrefs = plants.some(p =>
+      p.preferredTemperatureMin != null || p.preferredHumidityMin != null || p.preferredMoistureMin != null)
+    return hasPrefs
+      ? { level: 'none', text: 'No sensor readings for this zone yet — connect a device to start monitoring.' }
+      : { level: 'none', text: 'Add plants with preferred conditions to see insights.' }
+  }
   if (ranked[0].level === 'ok')
     return { level: 'ok', text: 'Stable and within the ideal range across temperature, humidity and soil moisture.' }
   return { level: ranked[0].level, text: ranked[0].text }
@@ -219,6 +224,11 @@ function compliancePercent(readings, field, min, max) {
 function generateInsights(zone, plants, readings) {
   if (!plants.length)
     return [{ ok: null, text: 'Add plants with preferred conditions to see insights.' }]
+
+  // Nothing to evaluate yet — no live values on the zone and no history.
+  const hasLatest = zone.latestTemp != null || zone.latestHumid != null || zone.latestMoisture != null
+  if (!hasLatest && !readings.length)
+    return [{ ok: null, text: 'No sensor readings for this zone yet. Connect a device to start monitoring.' }]
 
   const moist = avgPref(plants, 'preferredMoistureMin', 'preferredMoistureMax')
   const temp  = avgPref(plants, 'preferredTemperatureMin', 'preferredTemperatureMax')

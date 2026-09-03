@@ -53,6 +53,8 @@ class _PlantsTabState extends State<PlantsTab> {
                           builder: (_) => AddPlantScreen(
                             zoneId: widget.zone.id,
                             takenSlots: takenSlots,
+                            zoneType: widget.zone.zoneType,
+                            userId: widget.zone.userId,
                           ),
                         ),
                       ),
