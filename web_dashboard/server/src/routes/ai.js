@@ -146,7 +146,7 @@ router.post('/plant-profile', verifyToken, async (req, res) => {
     const zoneType = req.body?.zoneType === 'outdoor' ? 'outdoor' : 'indoor'
     if (species.length < 2) return res.status(400).json({ error: 'species is required' })
 
-    const PROFILE_V = 2  // bump to invalidate cached profiles after a shape/prompt change
+    const PROFILE_V = 3  // bump to invalidate cached profiles after a shape/prompt change
     const slug = `${species}-${zoneType}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 200)
     const cacheRef = db.collection('aiPlantProfiles').doc(slug)
     const cached = await cacheRef.get()
@@ -158,7 +158,7 @@ router.post('/plant-profile', verifyToken, async (req, res) => {
 
     try {
       const { system, user } = buildPlantProfileMessages({ species, zoneType })
-      const { profile } = validatePlantProfile(await chatJson({ system, user, maxTokens: 500 }), { species })
+      const { profile } = validatePlantProfile(await chatJson({ system, user, maxTokens: 800 }), { species })
       await cacheRef.set({ v: PROFILE_V, model: MODEL, generatedAt: Date.now(), species, zoneType, profile })
       return res.json({ source: 'ai', profile })
     } catch (aiErr) {

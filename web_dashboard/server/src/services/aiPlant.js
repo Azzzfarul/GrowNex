@@ -28,7 +28,9 @@ export function buildPlantProfileMessages({ species, zoneType }) {
     '  "preferredHumidityMin": number, "preferredHumidityMax": number,   // relative humidity %',
     '  "preferredTemperatureMin": number, "preferredTemperatureMax": number,  // °C',
     '  "preferredLightCondition": "low"|"medium"|"high",',
-    '  "careNotes": string           // one or two short sentences',
+    '  "careNotes": string           // 4-6 plain sentences of practical care for this species:',
+    '                                 //   watering habit, light placement, feeding, humidity/temp',
+    '                                 //   quirks, common mistakes, and a seasonal note. Grower-friendly.',
     '}',
     'Assume a mature, vegetative plant. If the common name is ambiguous (e.g. "pepper", "mint",',
     '"sage", "lily"), pick the most common cultivated interpretation and say which in commonName.',
@@ -65,7 +67,7 @@ export function validatePlantProfile(obj, { species } = {}) {
       preferredHumidityMin: hMin, preferredHumidityMax: hMax,
       preferredTemperatureMin: tMin, preferredTemperatureMax: tMax,
       preferredLightCondition: LIGHT.includes(obj?.preferredLightCondition) ? obj.preferredLightCondition : 'medium',
-      careNotes: str(obj?.careNotes, 300),
+      careNotes: str(obj?.careNotes, 900),
     },
   }
 }

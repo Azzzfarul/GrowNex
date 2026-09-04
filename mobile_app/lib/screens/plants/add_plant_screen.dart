@@ -293,13 +293,18 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
             Text('Interpreted as $_aiCommonName. ',
                 style: const TextStyle(color: Colors.black87, fontSize: 12, fontWeight: FontWeight.w500)),
           if (_aiConfidence == 'low')
-            const Text('Low-confidence guess — double-check these.',
+            const Text('Low-confidence guess — double-check these. ',
                 style: TextStyle(color: Colors.orange, fontSize: 12)),
+          if (_aiCareNotes != null && _aiCareNotes!.trim().isNotEmpty)
+            const Text('Care tips added to Notes below.',
+                style: TextStyle(color: Colors.black54, fontSize: 12)),
         ],
       );
     }
-    return const Text('An accurate species helps the AI give better care recommendations.',
-        style: TextStyle(color: Colors.black54, fontSize: 12));
+    return const Text(
+      '✨ Suggest fills in the preferred conditions below and adds care tips for this species to Notes.',
+      style: TextStyle(color: Colors.black54, fontSize: 12),
+    );
   }
 
   static const _hintReason = {

@@ -304,9 +304,12 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
                   ? <>Interpreted as <span className="font-medium">{aiMeta.commonName}</span>. </>
                   : null}
                 {aiMeta.confidence === 'low' && <span className="text-orange-500">Low-confidence guess — double-check these. </span>}
+                {aiMeta.careNotes && <span>Care tips added to Notes below. </span>}
               </p>
             ) : (
-              <p className="text-xs text-gray-400 mt-1">An accurate species helps give better care recommendations.</p>
+              <p className="text-xs text-gray-400 mt-1">
+                ✨ Suggest fills in the preferred conditions below and adds care tips for this species to Notes.
+              </p>
             )}
           </div>
 
