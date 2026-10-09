@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_service.dart';
 import '../../theme_notifier.dart';
 import '../auth/login_screen.dart';
+import '../notifications/notification_settings_screen.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -172,7 +173,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           title: 'Notifications',
           subtitle: 'Manage alerts and reminders',
           icon: Icons.notifications_outlined,
-          onTap: null,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationSettingsScreen()),
+          ),
         ),
 
         _ProfileListItem(

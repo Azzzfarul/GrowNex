@@ -1,15 +1,50 @@
 import mqtt from 'mqtt'
 import cron from 'node-cron'
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
+import { notify } from './notifications.js'
+import { runDailySummary } from './dailySummary.js'
 
 const BROKER      = process.env.MQTT_BROKER_HOST || 'broker.hivemq.com'
-const READING_TTL_MS = 30 * 24 * 60 * 60 * 1000  // raw sensorReadings kept for 30 days
+// Raw sensorReadings kept for 7 days — nothing reads them past that; analytics/history
+// always comes from zones/{id}/stats (hourly, no expiry). Pruned nightly in dailySummary.js.
+const READING_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const BROKER_PORT = parseInt(process.env.MQTT_BROKER_PORT || '1883')
 const MQTT_USER   = process.env.MQTT_USER || ''
 const MQTT_PASS   = process.env.MQTT_PASS || ''
 const db          = getFirestore()
 
 let client
+
+// ─── Zone-alert notifications (fire only when status worsens) ─────────────────
+const STATUS_RANK        = { unknown: 0, healthy: 1, attention: 2, critical: 3 }
+const zoneStatusCache    = new Map()  // Map<zoneId, lastStatus>
+const lastAlertAt        = new Map()  // Map<zoneId, timestamp>
+const ALERT_COOLDOWN_MS  = 30 * 60 * 1000
+
+async function maybeNotifyStatus(zoneId, newStatus, alertSummary) {
+  const prev = zoneStatusCache.get(zoneId)
+  zoneStatusCache.set(zoneId, newStatus)
+
+  if (!['attention', 'critical'].includes(newStatus)) return
+  if ((STATUS_RANK[newStatus] ?? 0) <= (STATUS_RANK[prev ?? 'unknown'] ?? 0)) return  // not worse (or first sighting)
+
+  const last = lastAlertAt.get(zoneId) ?? 0
+  if (Date.now() - last < ALERT_COOLDOWN_MS) return
+  lastAlertAt.set(zoneId, Date.now())
+
+  const z = (await db.collection('zones').doc(zoneId).get()).data() ?? {}
+  await notify({
+    userId: z.userId,
+    zoneId,
+    zoneName: z.zoneName ?? null,
+    type: 'threshold',
+    severity: newStatus === 'critical' ? 'critical' : 'warn',
+    title: newStatus === 'critical'
+      ? `${z.zoneName ?? 'A zone'}: conditions critical`
+      : `${z.zoneName ?? 'A zone'} needs attention`,
+    message: alertSummary || 'Sensor readings are outside the preferred range.',
+  })
+}
 
 // ─── Helper: get or create a device document using hardwareId as doc ID ───────
 async function getOrCreateDevice(deviceId) {
@@ -76,6 +111,8 @@ async function handleSensors(deviceId, payload) {
     expiresAt: Timestamp.fromDate(new Date(Date.now() + READING_TTL_MS)),
   }
 
+  const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(assignedZoneId))
+
   await Promise.all([
     db.collection('zones').doc(assignedZoneId)
       .collection('sensorReadings').add(reading),
@@ -98,10 +135,7 @@ async function handleSensors(deviceId, payload) {
       latestHumid:     humidity,
       latestLight:     lightLevel,
       latestTimestamp: FieldValue.serverTimestamp(),
-      ...(() => {
-        const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(assignedZoneId))
-        return alertSummary != null ? { status, alertSummary } : { status }
-      })(),
+      ...(alertSummary != null ? { status, alertSummary } : { status }),
     }),
 
     db.collection('devices').doc(deviceId).update({
@@ -111,6 +145,8 @@ async function handleSensors(deviceId, payload) {
   ])
 
   console.log(`[MQTT bridge] sensor write → zone ${assignedZoneId}`)
+
+  await maybeNotifyStatus(assignedZoneId, status, alertSummary)
 
   // ── Moisture threshold check (30-minute cooldown per device) ──────────────
   const configSnap = await db.collection('automationConfig').doc(assignedZoneId).get()
@@ -240,6 +276,7 @@ function watchPlants() {
       await db.collection('zones').doc(zoneId).update(
         alertSummary != null ? { status, alertSummary } : { status }
       )
+      await maybeNotifyStatus(zoneId, status, alertSummary)
       console.log(`[MQTT bridge] recomputed alertSummary for zone ${zoneId} after plant change`)
     }
   })
@@ -347,6 +384,22 @@ async function triggerActuator(zoneId, actuator, state) {
   })
 
   publishCommand(deviceId, merged)
+
+  // Notify on the "started" event only (automation-driven — manual toggles never
+  // call triggerActuator; the auto-off setTimeout passes state=false).
+  if (state === true) {
+    const LABEL = { irrigation: 'Irrigation', fertilizer: 'Fertilizer', light: 'Grow light' }
+    const z = (await db.collection('zones').doc(zoneId).get()).data() ?? {}
+    await notify({
+      userId: z.userId,
+      zoneId,
+      zoneName: z.zoneName ?? null,
+      type: 'actuator',
+      severity: 'info',
+      title: `${LABEL[actuator] ?? actuator} started`,
+      message: `${LABEL[actuator] ?? actuator} turned on in ${z.zoneName ?? 'a zone'}.`,
+    })
+  }
 }
 
 // Schedule string parsers
@@ -455,6 +508,18 @@ export function init() {
   watchPlants()
   watchDeviceActuators()
   watchAutomationConfig()
+
+  // Nightly per-user summary notification
+  const summaryCron = process.env.DAILY_SUMMARY_CRON || '0 20 * * *'
+  const summaryTz   = process.env.DAILY_SUMMARY_TZ   || 'Asia/Kuala_Lumpur'
+  if (cron.validate(summaryCron)) {
+    cron.schedule(summaryCron, () => {
+      runDailySummary().catch(e => console.error('[daily summary] failed:', e.message))
+    }, { timezone: summaryTz })
+    console.log(`[MQTT bridge] daily summary scheduled: "${summaryCron}" (${summaryTz})`)
+  } else {
+    console.warn(`[MQTT bridge] invalid DAILY_SUMMARY_CRON: "${summaryCron}"`)
+  }
 
   client.on('message', (topic, buf) => {
     const parts    = topic.split('/')   // ['grownex', deviceId, ...]

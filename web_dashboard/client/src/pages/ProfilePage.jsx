@@ -275,6 +275,70 @@ function DeleteAccountModal({ onClose }) {
   )
 }
 
+const NOTIF_TYPES = [
+  { key: 'threshold', label: 'Zone alerts',      hint: 'When a zone’s conditions go out of range' },
+  { key: 'actuator',  label: 'Actuator activity', hint: 'When automation waters, lights or feeds a zone' },
+  { key: 'daily',     label: 'Daily summary',     hint: 'An evening recap of every zone' },
+]
+
+function NotificationSettingsDialog({ user, onClose }) {
+  const [prefs, setPrefs] = useState(null)
+
+  useEffect(() => {
+    getDoc(doc(db, 'users', user.uid)).then((snap) => {
+      setPrefs(snap.exists() ? (snap.data().notificationPrefs ?? {}) : {})
+    })
+  }, [user])
+
+  const toggle = async (key) => {
+    const enabled = prefs[key] !== false          // absent = enabled
+    const next = { ...prefs, [key]: !enabled }
+    setPrefs(next)
+    await updateDoc(doc(db, 'users', user.uid), { notificationPrefs: next }).catch(() => {})
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h2 className="text-lg font-bold text-gray-900 mb-1">Notifications</h2>
+        <p className="text-sm text-gray-500 mb-5">Choose what you get notified about.</p>
+
+        {prefs == null ? (
+          <p className="text-sm text-gray-400 py-6 text-center">Loading…</p>
+        ) : (
+          <div className="space-y-3 mb-5">
+            {NOTIF_TYPES.map(({ key, label, hint }) => {
+              const on = prefs[key] !== false
+              return (
+                <div key={key} className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{label}</p>
+                    <p className="text-xs text-gray-400">{hint}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggle(key)}
+                    className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${on ? 'bg-brand-500' : 'bg-gray-200'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${on ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const MENU_ITEMS = [
   {
     id: 'account',
@@ -288,7 +352,7 @@ const MENU_ITEMS = [
     label: 'Notifications',
     subtitle: 'Manage alerts and reminders',
     icon: '🔔',
-    active: false,
+    active: true,
   },
   {
     id: 'theme',
@@ -306,6 +370,7 @@ export default function ProfilePage() {
   const [username,       setUsername]       = useState(null)
   const [showEdit,       setShowEdit]       = useState(false)
   const [showTheme,      setShowTheme]      = useState(false)
+  const [showNotif,      setShowNotif]      = useState(false)
   const [showDeleteAcct, setShowDeleteAcct] = useState(false)
 
   useEffect(() => {
@@ -329,8 +394,9 @@ export default function ProfilePage() {
     .slice(0, 2)
 
   function handleMenuClick(id) {
-    if (id === 'account') setShowEdit(true)
-    if (id === 'theme')   setShowTheme(true)
+    if (id === 'account')       setShowEdit(true)
+    if (id === 'notifications') setShowNotif(true)
+    if (id === 'theme')         setShowTheme(true)
   }
 
   return (
@@ -395,6 +461,10 @@ export default function ProfilePage() {
           onClose={() => setShowEdit(false)}
           onSaved={(newName) => setUsername(newName)}
         />
+      )}
+
+      {showNotif && (
+        <NotificationSettingsDialog user={user} onClose={() => setShowNotif(false)} />
       )}
 
       {showTheme && (
