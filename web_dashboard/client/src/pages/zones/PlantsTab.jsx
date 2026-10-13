@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import {
   collection, query, where, onSnapshot, getDocs, orderBy, Timestamp,
-  addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
+  addDoc, setDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { useAuth } from '../../context/AuthContext'
 import { fetchPlantProfile } from '../../lib/aiSummary'
 import { zoneFitHint } from '../../lib/zoneFit'
 import { plantHealth, plantHealthSummary } from '../../lib/plantHealth'
+import { uploadPlantPhoto, removePlantPhoto } from '../../lib/photoUpload'
 
 const MAX_PLANTS = 4
 const LIGHT_OPTIONS = ['', 'low', 'medium', 'high']
@@ -174,6 +175,15 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
   const [aiMeta,       setAiMeta]      = useState(null)   // { source, commonName, confidence, careNotes }
   const [zonesById,    setZonesById]   = useState(null)   // { zid: { zone, plants } } for the fit hint
   const [hintDismissed, setHintDismissed] = useState(false)
+  const [photoFile,    setPhotoFile]   = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(null)
+
+  function handlePhotoPick(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoFile(file)
+    setPhotoPreview(URL.createObjectURL(file))
+  }
 
   // Load the user's other zones + their plants once — for the wrong-zone hint (Feature 2)
   useEffect(() => {
@@ -237,7 +247,8 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
     if (Object.keys(errs).length) { setErrors(errs); return }
     setLoading(true)
     try {
-      await addDoc(collection(db, 'plants'), {
+      const plantRef = doc(collection(db, 'plants'))
+      await setDoc(plantRef, {
         zoneId:     zone.id,
         plantName:  name.trim() || species.trim(),
         species:    species.trim(),
@@ -251,8 +262,13 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
         preferredTemperatureMax:  prefs.preferredTemperatureMax ?? null,
         preferredLightCondition:  prefs.preferredLightCondition ?? null,
         notes: aiMeta?.careNotes ?? null,
+        photoUrl: null,
         createdAt: serverTimestamp(),
       })
+      if (photoFile) {
+        const { error } = await uploadPlantPhoto(plantRef.id, photoFile)
+        if (error) console.warn('Plant created, but photo upload failed:', error)
+      }
       onClose()
     } catch {
       setErrors({ submit: 'Failed to add plant. Please try again.' })
@@ -274,6 +290,20 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+              {photoPreview ? (
+                <img src={photoPreview} alt="Plant preview" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-2xl text-gray-300">🌿</span>
+              )}
+            </div>
+            <label className="text-sm font-medium text-brand-700 hover:text-brand-800 cursor-pointer">
+              {photoFile ? 'Change photo' : 'Add photo'} <span className="text-gray-400 font-normal">(optional)</span>
+              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
+            </label>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Species <span className="text-red-500">*</span>
@@ -457,6 +487,30 @@ function PlantDetailModal({ plant, zone, onClose }) {
   const [saved,          setSaved]          = useState(false)
   const [showDelConfirm, setShowDelConfirm] = useState(false)
   const [deleting,       setDeleting]       = useState(false)
+  const [photoUrl,       setPhotoUrl]       = useState(plant.photoUrl ?? null)
+  const [photoBusy,      setPhotoBusy]      = useState(false)
+  const [photoError,     setPhotoError]     = useState(null)
+
+  async function handlePhotoFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setPhotoBusy(true)
+    setPhotoError(null)
+    const { photoUrl: url, error } = await uploadPlantPhoto(plant.id, file)
+    if (error) setPhotoError(error)
+    else setPhotoUrl(url)
+    setPhotoBusy(false)
+  }
+
+  async function handleRemovePhoto() {
+    setPhotoBusy(true)
+    setPhotoError(null)
+    const { error } = await removePlantPhoto(plant.id)
+    if (error) setPhotoError(error)
+    else setPhotoUrl(null)
+    setPhotoBusy(false)
+  }
 
   async function handleSave() {
     setLoading(true)
@@ -528,9 +582,37 @@ function PlantDetailModal({ plant, zone, onClose }) {
           </div>
         )}
 
-        <div className="w-full h-36 rounded-xl bg-gray-100 flex items-center justify-center mb-5">
-          <span className="text-5xl text-gray-300">🌿</span>
+        <div className="w-full h-36 rounded-xl bg-gray-100 flex items-center justify-center mb-2 overflow-hidden">
+          {photoUrl ? (
+            <img src={photoUrl} alt={plant.plantName} className="w-full h-full object-contain" />
+          ) : (
+            <span className="text-5xl text-gray-300">🌿</span>
+          )}
         </div>
+        <div className="flex items-center gap-3 mb-5">
+          <label className="text-xs font-medium text-brand-700 hover:text-brand-800 cursor-pointer">
+            {photoBusy ? 'Working…' : photoUrl ? 'Change photo' : 'Add photo'}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handlePhotoFile}
+              disabled={photoBusy}
+              className="hidden"
+            />
+          </label>
+          {photoUrl && (
+            <button
+              type="button"
+              onClick={handleRemovePhoto}
+              disabled={photoBusy}
+              className="text-xs font-medium text-red-400 hover:text-red-600 disabled:opacity-50"
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        {photoError && <p className="text-xs text-red-500 mb-3">{photoError}</p>}
 
         <div className="flex gap-2 mb-5 flex-wrap">
           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${statusColor(plant.status)}`}>
@@ -662,13 +744,24 @@ export default function PlantsTab({ zone }) {
                   onClick={() => setSelected(plant)}
                   className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-brand-200 hover:shadow-md transition-all"
                 >
-                  <div className="flex items-start justify-between mb-1.5">
-                    <p className="font-bold text-gray-900 text-base">{plant.plantName}</p>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize flex-shrink-0 ml-2 ${statusColor(plant.status)}`}>
-                      {plant.status}
-                    </span>
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0 w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
+                      {plant.photoUrl ? (
+                        <img src={plant.photoUrl} alt={plant.plantName} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xl text-gray-300">🌿</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between mb-1.5">
+                        <p className="font-bold text-gray-900 text-base">{plant.plantName}</p>
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize flex-shrink-0 ml-2 ${statusColor(plant.status)}`}>
+                          {plant.status}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500 mb-3">{plant.species}</p>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-500 mb-3">{plant.species}</p>
                   <div className="flex gap-2 flex-wrap">
                     {plant.slotNumber > 0 && (
                       <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../models/device_model.dart';
 import '../../../models/plant_model.dart';
@@ -8,6 +9,7 @@ import '../../../models/zone_model.dart';
 import '../../../services/firestore/device_service.dart';
 import '../../../services/firestore/plant_service.dart';
 import '../../../services/firestore/zone_service.dart';
+import '../../../services/photo_service.dart';
 
 class OverviewTab extends StatefulWidget {
   final Zone zone;
@@ -22,6 +24,8 @@ class _OverviewTabState extends State<OverviewTab> {
   late final TextEditingController _zoneNameCtrl;
   bool _renameLoading = false;
   late final Stream<List<Plant>> _plantsStream;
+  late String? _photoUrl;
+  bool _photoBusy = false;
 
   Future<Device?>? _assignedDeviceFuture;
   bool _removeLoading = false;
@@ -36,6 +40,7 @@ class _OverviewTabState extends State<OverviewTab> {
     super.initState();
     _zoneNameCtrl = TextEditingController(text: widget.zone.zoneName);
     _plantsStream = PlantService().watchPlantsByZone(widget.zone.id);
+    _photoUrl = widget.zone.zonePhotoUrl;
     _syncDeviceState(widget.zone);
   }
 
@@ -50,6 +55,9 @@ class _OverviewTabState extends State<OverviewTab> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.zone.zoneName != widget.zone.zoneName) {
       _zoneNameCtrl.text = widget.zone.zoneName;
+    }
+    if (oldWidget.zone.zonePhotoUrl != widget.zone.zonePhotoUrl) {
+      _photoUrl = widget.zone.zonePhotoUrl;
     }
     if (oldWidget.zone.deviceId != widget.zone.deviceId) {
       setState(() {
@@ -125,19 +133,105 @@ class _OverviewTabState extends State<OverviewTab> {
 
   Widget _buildPhotoCard() {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      height: 180,
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(18),
-        image: widget.zone.zonePhotoUrl != null
-            ? DecorationImage(image: NetworkImage(widget.zone.zonePhotoUrl!), fit: BoxFit.cover)
-            : null,
-      ),
-      child: widget.zone.zonePhotoUrl == null
-          ? Center(child: Icon(Icons.photo, size: 48, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)))
-          : null,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          children: [
+            Container(
+              height: 180,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: _photoUrl != null
+                  ? Image.network(_photoUrl!, fit: BoxFit.contain)
+                  : Center(child: Icon(Icons.photo, size: 48, color: cs.onSurface.withValues(alpha: 0.38))),
+            ),
+            if (_photoBusy)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            TextButton(
+              onPressed: _photoBusy ? null : _pickZonePhoto,
+              child: Text(_photoUrl != null ? 'Change photo' : 'Add photo'),
+            ),
+            if (_photoUrl != null)
+              TextButton(
+                onPressed: _photoBusy ? null : _removeZonePhoto,
+                style: TextButton.styleFrom(foregroundColor: Colors.red[400]),
+                child: const Text('Remove'),
+              ),
+          ],
+        ),
+      ],
     );
+  }
+
+  Future<void> _pickZonePhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    final file = await ImagePicker().pickImage(source: source, maxWidth: 1280, imageQuality: 80);
+    if (file == null || !mounted) return;
+
+    setState(() => _photoBusy = true);
+    try {
+      final url = await PhotoService().uploadZonePhoto(widget.zone.id, file);
+      if (mounted) setState(() => _photoUrl = url);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
+  }
+
+  Future<void> _removeZonePhoto() async {
+    setState(() => _photoBusy = true);
+    try {
+      await PhotoService().removeZonePhoto(widget.zone.id);
+      if (mounted) setState(() => _photoUrl = null);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove photo: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
   }
 
   Future<void> _renameZone() async {

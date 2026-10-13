@@ -2,10 +2,13 @@
 // Scheduled from mqttBridge.init() at DAILY_SUMMARY_CRON / DAILY_SUMMARY_TZ.
 
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
+import { getStorage } from 'firebase-admin/storage'
 import { notify } from './notifications.js'
 
 const db = getFirestore()
+const bucket = getStorage().bucket()
 const PRUNE_MS = 30 * 24 * 60 * 60 * 1000
+const SNAPSHOT_RETENTION_MS = 48 * 60 * 60 * 1000
 
 // Deletes zones/{id}/sensorReadings docs whose expiresAt has passed (plain batch deletes —
 // billed as normal deletes, unlike a Firestore TTL policy which needs billing enabled).
@@ -27,6 +30,24 @@ async function pruneSensorReadings(zoneRefs) {
       totalDeleted += staleSnap.size
       if (staleSnap.size < 500) break
     }
+  }
+  return totalDeleted
+}
+
+// Deletes zones/{id}/snapshots docs (+ their Storage object) older than the 48h camera-feed
+// retention window. Volume is tiny (at most 12 docs/zone by construction — one per 4h bucket),
+// so a plain sequential loop is fine; no 500-doc batching needed like pruneSensorReadings.
+async function pruneZoneSnapshots(zoneRefs) {
+  const cutoff = Timestamp.fromDate(new Date(Date.now() - SNAPSHOT_RETENTION_MS))
+  let totalDeleted = 0
+  for (const zoneRef of zoneRefs) {
+    const staleSnap = await zoneRef.collection('snapshots').where('capturedAt', '<', cutoff).get()
+    for (const doc of staleSnap.docs) {
+      const { storagePath } = doc.data()
+      if (storagePath) await bucket.file(storagePath).delete({ ignoreNotFound: true }).catch(() => {})
+      await doc.ref.delete()
+    }
+    totalDeleted += staleSnap.size
   }
   return totalDeleted
 }
@@ -95,6 +116,13 @@ export async function runDailySummary() {
     if (deleted) console.log(`[daily summary] pruned ${deleted} stale sensorReadings doc(s)`)
   } catch (err) {
     console.warn('[daily summary] sensorReadings prune skipped:', err.message)
+  }
+
+  try {
+    const deleted = await pruneZoneSnapshots(zonesSnap.docs.map(d => d.ref))
+    if (deleted) console.log(`[daily summary] pruned ${deleted} stale zone snapshot(s)`)
+  } catch (err) {
+    console.warn('[daily summary] zone snapshot prune skipped:', err.message)
   }
 
   console.log(`[daily summary] sent to ${byUser.size} user(s)`)

@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../models/zone_model.dart';
 import '../../services/firestore/zone_service.dart';
+import '../../services/photo_service.dart';
 
 class AddZoneScreen extends StatefulWidget {
   const AddZoneScreen({super.key});
@@ -16,6 +20,7 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
   final _nameCtrl = TextEditingController();
   String _zoneType = 'indoor';
   bool _loading = false;
+  XFile? _photoFile;
 
   @override
   void dispose() {
@@ -29,8 +34,9 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
     setState(() => _loading = true);
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final zoneRef = ZoneService().newZoneRef();
       final zone = Zone(
-        id: '',
+        id: zoneRef.id,
         userId: userId,
         zoneName: _nameCtrl.text.trim(),
         zoneType: _zoneType,
@@ -39,7 +45,18 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
         createdAt: DateTime.now(),
       );
 
-      await ZoneService().createZone(zone);
+      await ZoneService().createZoneWithId(zone);
+      if (_photoFile != null) {
+        try {
+          await PhotoService().uploadZonePhoto(zone.id, _photoFile!);
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Zone created, but photo upload failed: $e')),
+            );
+          }
+        }
+      }
 
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -49,6 +66,56 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Widget _buildPhotoPicker() {
+    return Row(
+      children: [
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(14),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: _photoFile != null
+              ? Image.file(File(_photoFile!.path), fit: BoxFit.cover)
+              : Icon(Icons.photo_outlined, size: 28, color: Colors.grey[400]),
+        ),
+        const SizedBox(width: 12),
+        TextButton(
+          onPressed: _pickPhoto,
+          child: Text(_photoFile != null ? 'Change photo' : 'Add photo (optional)'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final file = await ImagePicker().pickImage(source: source, maxWidth: 1280, imageQuality: 80);
+    if (file != null && mounted) setState(() => _photoFile = file);
   }
 
   @override
@@ -66,6 +133,8 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildPhotoPicker(),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _nameCtrl,
                 decoration: const InputDecoration(labelText: 'Zone name', border: OutlineInputBorder()),

@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
-import { doc, onSnapshot, collection, query, where } from 'firebase/firestore'
+import { useState, useEffect, useRef } from 'react'
+import { doc, onSnapshot, collection, query, where, orderBy, limit } from 'firebase/firestore'
 import { db } from '../../firebase'
+import { uploadZoneSnapshot } from '../../lib/photoUpload'
 
 function SensorRow({ label, value, min, max }) {
   const numVal   = parseFloat(value)
@@ -54,6 +55,11 @@ function dominantLight(plants) {
 export default function MonitoringTab({ zone }) {
   const [device, setDevice] = useState(undefined) // undefined = loading
   const [plants, setPlants] = useState([])
+  const [snapshots, setSnapshots] = useState([])
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+  const [viewerUrl, setViewerUrl] = useState(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     if (!zone.deviceId) { setDevice(null); return }
@@ -68,6 +74,24 @@ export default function MonitoringTab({ zone }) {
       (snap) => setPlants(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
     )
   }, [zone.id])
+
+  useEffect(() => {
+    return onSnapshot(
+      query(collection(db, 'zones', zone.id, 'snapshots'), orderBy('capturedAt', 'desc'), limit(12)),
+      (snap) => setSnapshots(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    )
+  }, [zone.id])
+
+  async function handleSnapshotFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    const { error } = await uploadZoneSnapshot(zone.id, file)
+    if (error) setUploadError(error)
+    setUploading(false)
+  }
 
   const lastUpdated = zone.latestTimestamp
     ? zone.latestTimestamp?.toDate
@@ -152,13 +176,58 @@ export default function MonitoringTab({ zone }) {
         )}
       </div>
 
-      {/* Camera placeholder */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm h-48 flex items-center justify-center">
-        <div className="text-center">
-          <span className="text-4xl text-gray-200">📷</span>
-          <p className="text-sm text-gray-400 mt-2">Camera feed</p>
+      {/* Camera feed */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-semibold text-gray-900">Camera feed</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Last 48 hours · one photo per 4-hour window</p>
+          </div>
+          <label className="shrink-0 text-sm font-medium px-3 py-1.5 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100 cursor-pointer transition-colors">
+            {uploading ? 'Uploading…' : '+ Add photo'}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleSnapshotFile}
+              disabled={uploading}
+              className="hidden"
+            />
+          </label>
         </div>
+        {uploadError && <p className="text-xs text-red-500 mb-3">{uploadError}</p>}
+        {snapshots.length === 0 ? (
+          <div className="h-32 flex items-center justify-center">
+            <div className="text-center">
+              <span className="text-4xl text-gray-200">📷</span>
+              <p className="text-sm text-gray-400 mt-2">No photos yet</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {snapshots.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setViewerUrl(s.imageUrl)}
+                className="shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-gray-100"
+              >
+                <img src={s.imageUrl} alt="Zone snapshot" className="w-full h-full object-contain" />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {viewerUrl && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => setViewerUrl(null)}
+        >
+          <img src={viewerUrl} alt="Zone snapshot full size" className="max-w-full max-h-full rounded-lg" />
+        </div>
+      )}
     </div>
   )
 }

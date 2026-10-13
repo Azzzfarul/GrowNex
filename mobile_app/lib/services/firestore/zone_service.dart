@@ -10,6 +10,13 @@ class ZoneService {
     return docRef.id;
   }
 
+  DocumentReference<Map<String, dynamic>> newZoneRef() => _firestore.collection('zones').doc();
+
+  Future<void> createZoneWithId(Zone zone) async {
+    if (zone.id.isEmpty) throw ArgumentError('Zone id is required');
+    await _firestore.collection('zones').doc(zone.id).set(zone.toMap());
+  }
+
   Future<void> updateZone(Zone zone) async {
     if (zone.id.isEmpty) throw ArgumentError('Zone id is required');
     await _firestore.collection('zones').doc(zone.id).update(zone.toMap());

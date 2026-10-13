@@ -10,6 +10,13 @@ class PlantService {
     return docRef.id;
   }
 
+  DocumentReference<Map<String, dynamic>> newPlantRef() => _firestore.collection('plants').doc();
+
+  Future<void> createPlantWithId(Plant plant) async {
+    if (plant.id.isEmpty) throw ArgumentError('Plant id is required');
+    await _firestore.collection('plants').doc(plant.id).set(plant.toMap());
+  }
+
   Future<void> updatePlant(Plant plant) async {
     if (plant.id.isEmpty) throw ArgumentError('Plant id is required');
     await _firestore.collection('plants').doc(plant.id).update(plant.toMap());

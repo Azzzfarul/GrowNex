@@ -1,14 +1,24 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import { uploadZonePhoto } from '../lib/photoUpload'
 
 function AddZoneModal({ userId, onClose }) {
   const [zoneName, setZoneName] = useState('')
   const [zoneType, setZoneType] = useState('indoor')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [photoFile, setPhotoFile] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(null)
+
+  function handlePhotoPick(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoFile(file)
+    setPhotoPreview(URL.createObjectURL(file))
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -16,14 +26,20 @@ function AddZoneModal({ userId, onClose }) {
     setLoading(true)
     setError('')
     try {
-      await addDoc(collection(db, 'zones'), {
+      const zoneRef = doc(collection(db, 'zones'))
+      await setDoc(zoneRef, {
         userId,
         zoneName: zoneName.trim(),
         zoneType,
         status: 'healthy',
         totalPlantSlots: 0,
+        zonePhotoUrl: null,
         createdAt: serverTimestamp(),
       })
+      if (photoFile) {
+        const { error: photoErr } = await uploadZonePhoto(zoneRef.id, photoFile)
+        if (photoErr) console.warn('Zone created, but photo upload failed:', photoErr)
+      }
       onClose()
     } catch {
       setError('Failed to create zone. Please try again.')
@@ -36,6 +52,20 @@ function AddZoneModal({ userId, onClose }) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         <h2 className="text-xl font-bold text-gray-900 mb-5">Add Zone</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+              {photoPreview ? (
+                <img src={photoPreview} alt="Zone preview" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-2xl text-gray-300">🖼</span>
+              )}
+            </div>
+            <label className="text-sm font-medium text-brand-700 hover:text-brand-800 cursor-pointer">
+              {photoFile ? 'Change photo' : 'Add photo'} <span className="text-gray-400 font-normal">(optional)</span>
+              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
+            </label>
+          </div>
+
           <div>
             <label className="block text-sm text-gray-500 mb-1">Zone name</label>
             <input

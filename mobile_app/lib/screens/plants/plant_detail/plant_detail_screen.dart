@@ -1,11 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../models/plant_model.dart';
 import '../../../models/sensor_reading_model.dart';
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/plant_service.dart';
+import '../../../services/photo_service.dart';
 import '../../../utils/plant_health.dart';
 
 class PlantDetailScreen extends StatefulWidget {
@@ -31,12 +33,15 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   late final TextEditingController _tempMaxCtrl;
   String? _lightCondition;
   bool _loading = false;
+  bool _photoBusy = false;
+  late String? _photoUrl;
   List<SensorReading>? _stats;
 
   @override
   void initState() {
     super.initState();
     final p = widget.plant;
+    _photoUrl = p.photoUrl;
     _loadStats();
     _nameCtrl = TextEditingController(text: p.plantName);
     _speciesCtrl = TextEditingController(text: p.species);
@@ -82,6 +87,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
         preferredTemperatureMax: double.tryParse(_tempMaxCtrl.text.trim()),
         preferredLightCondition: _lightCondition,
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        photoUrl: _photoUrl,
         createdAt: widget.plant.createdAt,
       );
       await PlantService().updatePlant(updated);
@@ -214,11 +220,105 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   }
 
   Widget _buildPhotoSection(ColorScheme cs) {
-    return Container(
-      height: 180,
-      decoration: BoxDecoration(color: cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(18)),
-      child: Center(child: Icon(Icons.local_florist, size: 60, color: cs.onSurface.withValues(alpha: 0.38))),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          children: [
+            Container(
+              height: 180,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: _photoUrl != null
+                  ? Image.network(_photoUrl!, fit: BoxFit.contain)
+                  : Center(child: Icon(Icons.local_florist, size: 60, color: cs.onSurface.withValues(alpha: 0.38))),
+            ),
+            if (_photoBusy)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            TextButton(
+              onPressed: _photoBusy ? null : _pickPlantPhoto,
+              child: Text(_photoUrl != null ? 'Change photo' : 'Add photo'),
+            ),
+            if (_photoUrl != null)
+              TextButton(
+                onPressed: _photoBusy ? null : _removePlantPhoto,
+                style: TextButton.styleFrom(foregroundColor: Colors.red[400]),
+                child: const Text('Remove'),
+              ),
+          ],
+        ),
+      ],
     );
+  }
+
+  Future<void> _pickPlantPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    final file = await ImagePicker().pickImage(source: source, maxWidth: 1280, imageQuality: 80);
+    if (file == null || !mounted) return;
+
+    setState(() => _photoBusy = true);
+    try {
+      final url = await PhotoService().uploadPlantPhoto(widget.plant.id, file);
+      if (mounted) setState(() => _photoUrl = url);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
+  }
+
+  Future<void> _removePlantPhoto() async {
+    setState(() => _photoBusy = true);
+    try {
+      await PhotoService().removePlantPhoto(widget.plant.id);
+      if (mounted) setState(() => _photoUrl = null);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove photo: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
   }
 
   Widget _buildField(String label, TextEditingController controller) {

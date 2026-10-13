@@ -15,6 +15,7 @@ class Plant {
   final num? preferredTemperatureMax;
   final String? preferredLightCondition;
   final String? notes;
+  final String? photoUrl;
   final DateTime? createdAt;
 
   Plant({
@@ -32,6 +33,7 @@ class Plant {
     this.preferredTemperatureMax,
     this.preferredLightCondition,
     this.notes,
+    this.photoUrl,
     this.createdAt,
   });
 
@@ -72,6 +74,7 @@ class Plant {
       preferredTemperatureMax: _n(map['preferredTemperatureMax']),
       preferredLightCondition: map['preferredLightCondition'] as String?,
       notes: map['notes'] as String?,
+      photoUrl: map['photoUrl'] as String?,
       createdAt: createdAt,
     );
   }
@@ -91,6 +94,7 @@ class Plant {
       'preferredTemperatureMax': preferredTemperatureMax,
       'preferredLightCondition': preferredLightCondition,
       'notes': notes,
+      'photoUrl': photoUrl,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
     };
   }

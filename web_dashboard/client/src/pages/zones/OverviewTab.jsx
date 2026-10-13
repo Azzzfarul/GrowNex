@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { doc, onSnapshot, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
 import { db } from '../../firebase'
+import { uploadZonePhoto, removeZonePhoto } from '../../lib/photoUpload'
 
 function ModuleChip({ label }) {
   return (
@@ -27,8 +28,29 @@ export default function OverviewTab({ zone }) {
   const [zoneName,      setZoneName]      = useState(zone.zoneName ?? '')
   const [renameLoading, setRenameLoading] = useState(false)
   const [plantCount,    setPlantCount]    = useState(null)
+  const [photoBusy,     setPhotoBusy]     = useState(false)
+  const [photoError,    setPhotoError]    = useState(null)
 
   useEffect(() => { setZoneName(zone.zoneName ?? '') }, [zone.zoneName])
+
+  async function handlePhotoFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setPhotoBusy(true)
+    setPhotoError(null)
+    const { error } = await uploadZonePhoto(zone.id, file)
+    if (error) setPhotoError(error)
+    setPhotoBusy(false)
+  }
+
+  async function handleRemovePhoto() {
+    setPhotoBusy(true)
+    setPhotoError(null)
+    const { error } = await removeZonePhoto(zone.id)
+    if (error) setPhotoError(error)
+    setPhotoBusy(false)
+  }
 
   useEffect(() => {
     return onSnapshot(
@@ -116,11 +138,35 @@ export default function OverviewTab({ zone }) {
       {/* Zone photo */}
       <div className="w-full h-44 rounded-2xl bg-gray-100 overflow-hidden flex items-center justify-center">
         {zone.zonePhotoUrl ? (
-          <img src={zone.zonePhotoUrl} alt={zone.zoneName} className="w-full h-full object-cover" />
+          <img src={zone.zonePhotoUrl} alt={zone.zoneName} className="w-full h-full object-contain" />
         ) : (
           <span className="text-5xl text-gray-300">🖼</span>
         )}
       </div>
+      <div className="flex items-center gap-3 -mt-2">
+        <label className="text-xs font-medium text-brand-700 hover:text-brand-800 cursor-pointer">
+          {photoBusy ? 'Working…' : zone.zonePhotoUrl ? 'Change photo' : 'Add photo'}
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handlePhotoFile}
+            disabled={photoBusy}
+            className="hidden"
+          />
+        </label>
+        {zone.zonePhotoUrl && (
+          <button
+            type="button"
+            onClick={handleRemovePhoto}
+            disabled={photoBusy}
+            className="text-xs font-medium text-red-400 hover:text-red-600 disabled:opacity-50"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      {photoError && <p className="text-xs text-red-500">{photoError}</p>}
 
       {/* Info card */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">

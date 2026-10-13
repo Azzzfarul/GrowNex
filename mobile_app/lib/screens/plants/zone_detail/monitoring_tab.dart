@@ -1,10 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../models/device_model.dart';
 import '../../../models/plant_model.dart';
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/device_service.dart';
 import '../../../services/firestore/plant_service.dart';
+import '../../../services/photo_service.dart';
 
 class MonitoringTab extends StatefulWidget {
   final Zone zone;
@@ -18,11 +21,20 @@ class MonitoringTab extends StatefulWidget {
 class _MonitoringTabState extends State<MonitoringTab> {
   Stream<Device?>? _deviceStream;
   late final Stream<List<Plant>> _plantsStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _snapshotsStream;
+  bool _uploadingSnapshot = false;
 
   @override
   void initState() {
     super.initState();
     _plantsStream = PlantService().watchPlantsByZone(widget.zone.id);
+    _snapshotsStream = FirebaseFirestore.instance
+        .collection('zones')
+        .doc(widget.zone.id)
+        .collection('snapshots')
+        .orderBy('capturedAt', descending: true)
+        .limit(12)
+        .snapshots();
     _syncStream(widget.zone.deviceId);
   }
 
@@ -281,11 +293,121 @@ class _MonitoringTabState extends State<MonitoringTab> {
 
   Widget _buildImagePreview() {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      height: 200,
-      decoration: BoxDecoration(color: cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(18)),
-      child: Center(child: Icon(Icons.camera_alt, size: 44, color: cs.onSurface.withValues(alpha: 0.38))),
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Camera feed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    SizedBox(height: 2),
+                    Text('Last 48 hours · one photo per 4-hour window', style: TextStyle(fontSize: 11)),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: _uploadingSnapshot ? null : _pickZoneSnapshot,
+                child: Text(_uploadingSnapshot ? 'Uploading…' : '+ Add photo'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: _snapshotsStream,
+            builder: (context, snapshot) {
+              final docs = snapshot.data?.docs ?? [];
+              if (docs.isEmpty) {
+                return SizedBox(
+                  height: 96,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.camera_alt, size: 36, color: cs.onSurface.withValues(alpha: 0.28)),
+                        const SizedBox(height: 6),
+                        Text('No photos yet', style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.45))),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return SizedBox(
+                height: 96,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: docs.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (context, i) {
+                    final imageUrl = docs[i].data()['imageUrl'] as String?;
+                    return GestureDetector(
+                      onTap: () => imageUrl != null ? _showFullImage(imageUrl) : null,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: imageUrl != null
+                            ? Image.network(imageUrl, width: 96, height: 96, fit: BoxFit.contain)
+                            : Container(width: 96, height: 96, color: cs.surfaceContainerHigh),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
+  }
+
+  void _showFullImage(String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: InteractiveViewer(child: Image.network(imageUrl)),
+      ),
+    );
+  }
+
+  Future<void> _pickZoneSnapshot() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    final file = await ImagePicker().pickImage(source: source, maxWidth: 1280, imageQuality: 80);
+    if (file == null || !mounted) return;
+
+    setState(() => _uploadingSnapshot = true);
+    try {
+      await PhotoService().uploadZoneSnapshot(widget.zone.id, file);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingSnapshot = false);
+    }
   }
 
   Widget _sensorValue(ColorScheme cs, String label, String value, {double? min, double? max}) {

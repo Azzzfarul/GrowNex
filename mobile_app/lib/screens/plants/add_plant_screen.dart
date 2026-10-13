@@ -1,11 +1,15 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../models/plant_model.dart';
 import '../../models/zone_model.dart';
 import '../../services/ai_summary_service.dart';
 import '../../services/firestore/plant_service.dart';
+import '../../services/photo_service.dart';
 import '../../utils/zone_fit.dart';
 
 class AddPlantScreen extends StatefulWidget {
@@ -50,6 +54,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   String? _aiCareNotes;
   Map<String, ({Zone zone, List<Plant> plants})> _zonesById = {};
   bool _hintDismissed = false;
+  XFile? _photoFile;
 
   @override
   void initState() {
@@ -145,8 +150,9 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
 
     setState(() => _loading = true);
     try {
+      final plantRef = PlantService().newPlantRef();
       final plant = Plant(
-        id: '',
+        id: plantRef.id,
         zoneId: widget.zoneId,
         plantName: _nameCtrl.text.trim().isEmpty ? _speciesCtrl.text.trim() : _nameCtrl.text.trim(),
         species: _speciesCtrl.text.trim(),
@@ -162,7 +168,18 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         notes: (_aiCareNotes != null && _aiCareNotes!.trim().isNotEmpty) ? _aiCareNotes!.trim() : null,
         createdAt: DateTime.now(),
       );
-      await PlantService().createPlant(plant);
+      await PlantService().createPlantWithId(plant);
+      if (_photoFile != null) {
+        try {
+          await PhotoService().uploadPlantPhoto(plant.id, _photoFile!);
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Plant created, but photo upload failed: $e')),
+            );
+          }
+        }
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
@@ -213,6 +230,8 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         key: _formKey,
         child: ListView(
           children: [
+            _buildPhotoPicker(),
+            const SizedBox(height: 16),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -277,6 +296,56 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildPhotoPicker() {
+    return Row(
+      children: [
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(14),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: _photoFile != null
+              ? Image.file(File(_photoFile!.path), fit: BoxFit.cover)
+              : Icon(Icons.local_florist_outlined, size: 28, color: Colors.grey[400]),
+        ),
+        const SizedBox(width: 12),
+        TextButton(
+          onPressed: _pickPhoto,
+          child: Text(_photoFile != null ? 'Change photo' : 'Add photo (optional)'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take photo'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final file = await ImagePicker().pickImage(source: source, maxWidth: 1280, imageQuality: 80);
+    if (file != null && mounted) setState(() => _photoFile = file);
   }
 
   bool get _aiApplied => _aiSource == 'ai' || _aiSource == 'cache';

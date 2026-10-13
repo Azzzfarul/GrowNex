@@ -113,7 +113,23 @@ class _PlantsTabState extends State<PlantsTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(12),
+                    image: plant.photoUrl != null
+                        ? DecorationImage(image: NetworkImage(plant.photoUrl!), fit: BoxFit.cover)
+                        : null,
+                  ),
+                  child: plant.photoUrl == null
+                      ? Icon(Icons.local_florist, size: 22, color: cs.onSurface.withValues(alpha: 0.38))
+                      : null,
+                ),
                 Expanded(child: Text(plant.plantName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
