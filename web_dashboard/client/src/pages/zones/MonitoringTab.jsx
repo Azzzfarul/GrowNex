@@ -54,6 +54,7 @@ function dominantLight(plants) {
 
 export default function MonitoringTab({ zone }) {
   const [device, setDevice] = useState(undefined) // undefined = loading
+  const [camera, setCamera] = useState(null)
   const [plants, setPlants] = useState([])
   const [snapshots, setSnapshots] = useState([])
   const [uploading, setUploading] = useState(false)
@@ -67,6 +68,13 @@ export default function MonitoringTab({ zone }) {
       setDevice(snap.exists() ? { id: snap.id, ...snap.data() } : null)
     })
   }, [zone.deviceId])
+
+  useEffect(() => {
+    if (!zone.cameraDeviceId) { setCamera(null); return }
+    return onSnapshot(doc(db, 'devices', zone.cameraDeviceId), (snap) => {
+      setCamera(snap.exists() ? { id: snap.id, ...snap.data() } : null)
+    })
+  }, [zone.cameraDeviceId])
 
   useEffect(() => {
     return onSnapshot(
@@ -182,6 +190,14 @@ export default function MonitoringTab({ zone }) {
           <div>
             <h3 className="font-semibold text-gray-900">Camera feed</h3>
             <p className="text-xs text-gray-400 mt-0.5">Last 48 hours · one photo per 4-hour window</p>
+            {camera && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                Auto-captured by {camera.deviceName} ·{' '}
+                <span className={camera.status === 'online' ? 'text-green-600' : 'text-red-400'}>
+                  {camera.status === 'online' ? 'Online' : 'Offline'}
+                </span>
+              </p>
+            )}
           </div>
           <label className="shrink-0 text-sm font-medium px-3 py-1.5 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100 cursor-pointer transition-colors">
             {uploading ? 'Uploading…' : '+ Add photo'}

@@ -3,6 +3,7 @@ import cron from 'node-cron'
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { notify } from './notifications.js'
 import { runDailySummary } from './dailySummary.js'
+import { saveZoneSnapshot } from './cameraSnapshots.js'
 
 const BROKER      = process.env.MQTT_BROKER_HOST || 'broker.hivemq.com'
 // Raw sensorReadings kept for 7 days — nothing reads them past that; analytics/history
@@ -47,18 +48,24 @@ async function maybeNotifyStatus(zoneId, newStatus, alertSummary) {
 }
 
 // ─── Helper: get or create a device document using hardwareId as doc ID ───────
+// Camera nodes (firmware_cam/) identify as ESP32CAM-<MAC>; sensor/relay nodes as ESP32-<MAC>.
+// A camera is assigned via zones.cameraDeviceId, not zones.deviceId, but still sets
+// devices.assignedZoneId — so never look up "the zone's device" by assignedZoneId alone.
+const isCameraId = id => id.startsWith('ESP32CAM-')
+
 async function getOrCreateDevice(deviceId) {
   const ref  = db.collection('devices').doc(deviceId)
   const snap = await ref.get()
   if (!snap.exists) {
+    const camera = isCameraId(deviceId)
     await ref.set({
       deviceName:          deviceId,
-      deviceType:          'indoor',
+      deviceType:          camera ? 'camera' : 'indoor',
       status:              'online',
       assignedZoneId:      null,
       hasLightingModule:   false,
       hasFertilizerModule: false,
-      totalSlots:          4,
+      totalSlots:          camera ? 0 : 4,
       userId:              '',
       lastSync:            FieldValue.serverTimestamp(),
     })
@@ -173,17 +180,40 @@ async function handleSensors(deviceId, payload) {
 async function handleStatus(deviceId, payload) {
   const status   = payload === 'online' ? 'online' : 'offline'
   const isOnline = status === 'online'
-  await db.collection('devices').doc(deviceId).set({ status }, { merge: true })
+  const { assignedZoneId } = await getOrCreateDevice(deviceId)
+  await db.collection('devices').doc(deviceId).update({ status })
 
   // Mirror device online/offline onto the assigned zone so zone cards
   // can hide stale sensor readings without fetching the device separately.
-  const deviceSnap = await db.collection('devices').doc(deviceId).get()
-  const assignedZoneId = deviceSnap.data()?.assignedZoneId
-  if (assignedZoneId) {
+  // Cameras don't produce readings, so they must not flip deviceOnline.
+  if (assignedZoneId && !isCameraId(deviceId)) {
     await db.collection('zones').doc(assignedZoneId).update({ deviceOnline: isOnline })
   }
 
   console.log(`[MQTT bridge] ${deviceId} → ${status}`)
+}
+
+// ─── Camera image handler ─────────────────────────────────────────────────────
+// Topic: grownex/{deviceId}/camera
+// Payload: raw JPEG bytes (not JSON), one per 4h bucket — see firmware_cam/
+const MAX_IMAGE_BYTES = 1.5 * 1024 * 1024
+
+async function handleCameraImage(deviceId, buf) {
+  if (!isCameraId(deviceId)) return
+  if (buf.length < 4 || buf[0] !== 0xFF || buf[1] !== 0xD8 || buf.length > MAX_IMAGE_BYTES) {
+    console.warn(`[MQTT bridge] ${deviceId}: rejected camera payload (${buf.length} bytes, not a JPEG or too large)`)
+    return
+  }
+
+  const { assignedZoneId } = await getOrCreateDevice(deviceId)
+  await db.collection('devices').doc(deviceId).update({ lastSync: FieldValue.serverTimestamp() })
+  if (!assignedZoneId) {
+    console.log(`[MQTT bridge] ${deviceId}: photo from unassigned camera — ignored`)
+    return
+  }
+
+  const { bucketId } = await saveZoneSnapshot(assignedZoneId, buf, deviceId)
+  console.log(`[MQTT bridge] camera snapshot (${Math.round(buf.length / 1024)} KB) → zone ${assignedZoneId} / ${bucketId}`)
 }
 
 // ─── Actuator state handler ───────────────────────────────────────────────────
@@ -362,12 +392,14 @@ const COOLDOWN_MS    = 30 * 60 * 1000  // 30 minutes
 // triggerActuator: reads current device state, merges one field, publishes.
 // Calls publishCommand directly (no debounce) — schedule/threshold should fire immediately.
 async function triggerActuator(zoneId, actuator, state) {
-  const snap = await db.collection('devices')
-    .where('assignedZoneId', '==', zoneId).limit(1).get()
-  if (snap.empty) return
+  // Use zones.deviceId (the relay node) — a camera in the same zone shares assignedZoneId.
+  const z = (await db.collection('zones').doc(zoneId).get()).data() ?? {}
+  if (!z.deviceId) return
+  const deviceSnap = await db.collection('devices').doc(z.deviceId).get()
+  if (!deviceSnap.exists) return
 
-  const deviceId   = snap.docs[0].id
-  const deviceData = snap.docs[0].data()
+  const deviceId   = deviceSnap.id
+  const deviceData = deviceSnap.data()
 
   const merged = {
     irrigationActive: actuator === 'irrigation' ? state : !!deviceData.irrigationActive,
@@ -389,7 +421,6 @@ async function triggerActuator(zoneId, actuator, state) {
   // call triggerActuator; the auto-off setTimeout passes state=false).
   if (state === true) {
     const LABEL = { irrigation: 'Irrigation', fertilizer: 'Fertilizer', light: 'Grow light' }
-    const z = (await db.collection('zones').doc(zoneId).get()).data() ?? {}
     await notify({
       userId: z.userId,
       zoneId,
@@ -502,6 +533,7 @@ export function init() {
     client.subscribe('grownex/+/sensors')
     client.subscribe('grownex/+/actuators/state')
     client.subscribe('grownex/+/status')
+    client.subscribe('grownex/+/camera')
   })
 
   // Register Firestore listeners once — outside connect to prevent stacking on reconnect
@@ -524,7 +556,14 @@ export function init() {
   client.on('message', (topic, buf) => {
     const parts    = topic.split('/')   // ['grownex', deviceId, ...]
     const deviceId = parts[1]
-    const raw      = buf.toString()
+
+    if (parts[2] === 'camera') {  // binary JPEG — handle before any toString()
+      handleCameraImage(deviceId, buf)
+        .catch(e => console.error(`[MQTT bridge] ${deviceId} camera upload failed:`, e.message))
+      return
+    }
+
+    const raw = buf.toString()
 
     if (parts[2] === 'status') {
       handleStatus(deviceId, raw)

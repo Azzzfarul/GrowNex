@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { collection, query, where, onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, doc, getDoc, runTransaction } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 
@@ -13,6 +13,37 @@ function AddDeviceModal({ user, onClose }) {
   const [claimError,         setClaimError]         = useState(null)
   const [hasLightingModule,  setHasLightingModule]  = useState(false)
   const [hasFertilizerModule,setHasFertilizerModule]= useState(false)
+  const [nearbyDevices,      setNearbyDevices]      = useState(null) // null = still loading
+  const [discoverError,      setDiscoverError]      = useState(null)
+  const [showManual,         setShowManual]         = useState(false)
+
+  // Discovery: the bridge auto-creates a devices/{id} doc with userId '' on a device's first MQTT
+  // message, so unclaimed devices are already listed here. Only online ones are shown (status is
+  // retained + LWT) so stale/test docs don't clutter the list; anything else uses the ID fallback.
+  useEffect(() => {
+    return onSnapshot(
+      query(collection(db, 'devices'), where('userId', '==', '')),
+      (snap) => {
+        setNearbyDevices(snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((d) => d.status === 'online')
+          .sort((a, b) => (b.lastSync?.toMillis?.() ?? 0) - (a.lastSync?.toMillis?.() ?? 0)))
+      },
+      (err) => {
+        console.error('Device discovery failed:', err)
+        setDiscoverError("Couldn't search for devices. Enter the device ID instead.")
+        setShowManual(true)
+      }
+    )
+  }, [])
+
+  function selectDevice(d) {
+    setFoundDevice(d)
+    setHasLightingModule(!!d.hasLightingModule)
+    setHasFertilizerModule(!!d.hasFertilizerModule)
+    setSearchError(null)
+    setClaimError(null)
+  }
 
   async function search() {
     const id = searchId.trim()
@@ -29,9 +60,7 @@ function AddDeviceModal({ user, onClose }) {
         if (d.userId && d.userId !== user.uid) {
           setSearchError('This device is already registered to another account.')
         } else {
-          setFoundDevice(d)
-          setHasLightingModule(!!d.hasLightingModule)
-          setHasFertilizerModule(!!d.hasFertilizerModule)
+          selectDevice(d)
         }
       }
     } catch {
@@ -46,24 +75,92 @@ function AddDeviceModal({ user, onClose }) {
     setClaiming(true)
     setClaimError(null)
     try {
-      await setDoc(doc(db, 'devices', foundDevice.id), { userId: user.uid, hasLightingModule, hasFertilizerModule }, { merge: true })
+      // Transaction so two users claiming the same listed device can't both win.
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, 'devices', foundDevice.id)
+        const snap = await tx.get(ref)
+        if (!snap.exists()) throw new Error('This device no longer exists.')
+        const owner = snap.data().userId
+        if (owner && owner !== user.uid) throw new Error('This device was just claimed by another account.')
+        tx.update(ref, { userId: user.uid, hasLightingModule, hasFertilizerModule })
+      })
       onClose()
-    } catch {
-      setClaimError('Failed to claim device. Please try again.')
+    } catch (err) {
+      setClaimError(err?.message?.startsWith('This device')
+        ? err.message
+        : 'Failed to claim device. Please try again.')
       setClaiming(false)
     }
   }
 
   const isIndoor = foundDevice?.deviceType?.toLowerCase() === 'indoor'
+  const isCamera = foundDevice?.deviceType === 'camera'
   const isOnline = foundDevice?.status === 'online'
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         <h2 className="text-xl font-bold text-gray-900 mb-1">Add Device</h2>
-        <p className="text-sm text-gray-400 mb-5">Enter your ESP32 device ID to link it to your account.</p>
+        <p className="text-sm text-gray-400 mb-5">Select a device that's powered on and connected, or enter its ID.</p>
 
-        {/* Search row */}
+        {/* Discovered (unclaimed + online) devices */}
+        {!discoverError && (
+          <div className="mb-3">
+            <p className="text-xs font-semibold text-gray-500 mb-2">New devices nearby</p>
+            {nearbyDevices === null ? (
+              <p className="text-sm text-gray-400 py-3">Searching…</p>
+            ) : nearbyDevices.length === 0 ? (
+              <p className="text-sm text-gray-400 bg-gray-50 rounded-xl px-3 py-3">
+                No new devices found. Power on your device and keep the server running — it appears
+                here within a few seconds of connecting.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-56 overflow-y-auto">
+                {nearbyDevices.map((d) => {
+                  const camera = d.deviceType === 'camera'
+                  const selected = foundDevice?.id === d.id
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => selectDevice(d)}
+                      className={`w-full flex items-center gap-3 text-left border rounded-xl px-3 py-2.5 transition-colors ${
+                        selected ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="text-xl leading-none">{camera ? '📷' : '🖥️'}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">{d.deviceName}</p>
+                        <p className="text-xs text-gray-400 truncate">
+                          {camera ? 'Camera' : d.deviceType === 'outdoor' ? 'Outdoor' : 'Indoor'}
+                          {d.deviceName !== d.id && <span className="font-mono"> · {d.id}</span>}
+                        </p>
+                      </div>
+                      <span className="flex items-center gap-1 text-xs font-medium text-green-600 flex-shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        Online
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {discoverError && (
+          <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-3">{discoverError}</p>
+        )}
+
+        {!showManual ? (
+          <button
+            type="button"
+            onClick={() => setShowManual(true)}
+            className="text-xs font-medium text-brand-700 hover:text-brand-800 mb-4"
+          >
+            Can't see your device? Enter its ID
+          </button>
+        ) : (
         <div className="flex gap-2 mb-3">
           <input
             type="text"
@@ -81,6 +178,7 @@ function AddDeviceModal({ user, onClose }) {
             {searching ? '…' : 'Find'}
           </button>
         </div>
+        )}
 
         {searchError && (
           <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-3">{searchError}</p>
@@ -101,7 +199,7 @@ function AddDeviceModal({ user, onClose }) {
                 </div>
               </div>
             </div>
-            <div className="border-t border-green-200 pt-3 mt-1 space-y-2">
+            {!isCamera && <div className="border-t border-green-200 pt-3 mt-1 space-y-2">
               <p className="text-xs font-semibold text-gray-500">Modules</p>
               <label className="flex items-center gap-3 cursor-pointer">
                 <span className="text-base leading-none">🧪</span>
@@ -123,7 +221,7 @@ function AddDeviceModal({ user, onClose }) {
                   className="w-4 h-4 accent-green-600"
                 />
               </label>
-            </div>
+            </div>}
           </div>
         )}
 
@@ -228,12 +326,14 @@ export default function DevicesPage() {
                 className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition-shadow"
               >
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${online ? 'bg-green-50' : 'bg-gray-100'}`}>
-                  <span className={`text-xl leading-none ${online ? '' : 'grayscale opacity-50'}`}>🖥️</span>
+                  <span className={`text-xl leading-none ${online ? '' : 'grayscale opacity-50'}`}>
+                    {device.deviceType === 'camera' ? '📷' : '🖥️'}
+                  </span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-gray-900">{device.deviceName}</p>
                   <p className="text-sm text-gray-400 capitalize">
-                    {device.deviceType === 'indoor' ? 'Indoor' : 'Outdoor'}
+                    {device.deviceType === 'camera' ? 'Camera' : device.deviceType === 'indoor' ? 'Indoor' : 'Outdoor'}
                   </p>
                 </div>
                 <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0 ${online ? 'bg-green-50' : 'bg-gray-100'}`}>
