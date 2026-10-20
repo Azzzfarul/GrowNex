@@ -165,7 +165,8 @@ pio run -t upload        # flash a connected ESP32
 pio device monitor       # serial monitor @ 115200 baud
 ```
 
-Set your WiFi and MQTT credentials in `firmware/src/main.cpp` (or an `include/` secrets header) before flashing.
+Before flashing, copy `firmware/include/secrets.example.h` to `firmware/include/secrets.h` and fill in your WiFi
+and MQTT credentials (`secrets.h` is gitignored; the build fails with a hint if it's missing).
 The device publishes sensor readings every 60s and subscribes to actuator command topics; the server's
 MQTT bridge relays these to and from Firestore.
 
@@ -181,8 +182,9 @@ pio run -t upload        # flash — ESP32-CAM seated on the ESP32-CAM-MB USB bo
 pio device monitor       # serial monitor @ 115200 baud — note the "Device ID: ESP32CAM-…" line
 ```
 
-1. Set the same WiFi/MQTT credentials at the top of `firmware_cam/src/main.cpp` (frame size, JPEG
-   quality, flip/mirror and flash LED are constants there too).
+1. Copy `firmware_cam/include/secrets.example.h` to `firmware_cam/include/secrets.h` and fill in the same
+   WiFi/MQTT credentials. Frame size, JPEG quality, flip/mirror and flash LED are constants at the top of
+   `firmware_cam/src/main.cpp`.
 2. With the server running, the camera registers itself as a `camera` device on its first message.
    Claim its `ESP32CAM-…` ID on the Devices page, then assign it in the zone's Overview → **Camera** card.
 3. Photos are published as raw JPEG to `grownex/{id}/camera`; the bridge stores them exactly like a manual

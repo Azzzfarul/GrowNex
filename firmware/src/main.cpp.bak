@@ -4,8 +4,8 @@
 #include <ArduinoJson.h>
 
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
-const char* SSID     = "Kanon";
-const char* PASSWORD = "1sampai9";
+const char* SSID     = "your-wifi-ssid";
+const char* PASSWORD = "your-wifi-password";
 
 // ─── MQTT Broker ──────────────────────────────────────────────────────────────
 const char* MQTT_BROKER = "broker.hivemq.com";

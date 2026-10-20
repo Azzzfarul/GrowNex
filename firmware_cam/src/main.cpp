@@ -11,15 +11,23 @@
 #include <time.h>
 #include "esp_camera.h"
 
+// ─── Credentials ──────────────────────────────────────────────────────────────
+// WiFi/MQTT credentials live in include/secrets.h (gitignored).
+#if __has_include("secrets.h")
+#include "secrets.h"
+#else
+#error "Missing include/secrets.h: copy include/secrets.example.h to include/secrets.h and fill in your credentials"
+#endif
+
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
-const char* SSID     = "Kanon";
-const char* PASSWORD = "1sampai9";
+const char* SSID     = WIFI_SSID;
+const char* PASSWORD = WIFI_PASSWORD;
 
 // ─── MQTT Broker ──────────────────────────────────────────────────────────────
-const char* MQTT_BROKER = "b6da2a10099e464284c8e7011e086e00.s1.eu.hivemq.cloud";
+const char* MQTT_BROKER = MQTT_HOST;
 const int   MQTT_PORT   = 8883;
-const char* MQTT_USER   = "grownex-iot";
-const char* MQTT_PASS   = "Abcd_123456";
+const char* MQTT_USER   = MQTT_USERNAME;
+const char* MQTT_PASS   = MQTT_PASSWORD;
 
 // ─── Capture settings ─────────────────────────────────────────────────────────
 #define FRAME_SIZE      FRAMESIZE_SVGA  // 800x600 ≈ 30–80 KB; FRAMESIZE_XGA (1024x768) for more detail
