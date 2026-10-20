@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { doc, onSnapshot, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore'
+import { doc, onSnapshot, setDoc, updateDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
 import { db } from '../../firebase'
 import { uploadZonePhoto, removeZonePhoto } from '../../lib/photoUpload'
@@ -30,8 +30,17 @@ export default function OverviewTab({ zone }) {
   const [plantCount,    setPlantCount]    = useState(null)
   const [photoBusy,     setPhotoBusy]     = useState(false)
   const [photoError,    setPhotoError]    = useState(null)
+  const [latestSnapshot, setLatestSnapshot] = useState(null)
 
   useEffect(() => { setZoneName(zone.zoneName ?? '') }, [zone.zoneName])
+
+  // Newest camera-feed photo (ESP32-CAM or manual) — shown in the banner when there's no zone photo
+  useEffect(() => {
+    return onSnapshot(
+      query(collection(db, 'zones', zone.id, 'snapshots'), orderBy('capturedAt', 'desc'), limit(1)),
+      (snap) => setLatestSnapshot(snap.empty ? null : snap.docs[0].data())
+    )
+  }, [zone.id])
 
   async function handlePhotoFile(e) {
     const file = e.target.files?.[0]
@@ -76,7 +85,7 @@ export default function OverviewTab({ zone }) {
       .then((snap) => {
         const available = snap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((d) => !d.assignedZoneId)
+          .filter((d) => !d.assignedZoneId && d.deviceType !== 'camera')
         setAvailableDevices(available)
       })
       .finally(() => setDevicesLoading(false))
@@ -136,9 +145,17 @@ export default function OverviewTab({ zone }) {
   return (
     <div className="space-y-4">
       {/* Zone photo */}
-      <div className="w-full h-44 rounded-2xl bg-gray-100 overflow-hidden flex items-center justify-center">
+      <div className="relative w-full h-44 rounded-2xl bg-gray-100 overflow-hidden flex items-center justify-center">
         {zone.zonePhotoUrl ? (
           <img src={zone.zonePhotoUrl} alt={zone.zoneName} className="w-full h-full object-contain" />
+        ) : latestSnapshot?.imageUrl ? (
+          <>
+            <img src={latestSnapshot.imageUrl} alt={`${zone.zoneName} camera feed`} className="w-full h-full object-contain" />
+            <span className="absolute bottom-2 left-2 text-xs font-medium px-2 py-0.5 rounded-full bg-black/50 text-white">
+              📷 Latest camera photo
+              {latestSnapshot.capturedAt?.toDate && ` · ${latestSnapshot.capturedAt.toDate().toLocaleString()}`}
+            </span>
+          </>
         ) : (
           <span className="text-5xl text-gray-300">🖼</span>
         )}
@@ -273,6 +290,136 @@ export default function OverviewTab({ zone }) {
         )}
       </div>
 
+      <CameraCard zone={zone} user={user} />
+    </div>
+  )
+}
+
+// ESP32-CAM node (firmware_cam/) that auto-uploads the zone's camera feed. Linked via
+// zones.cameraDeviceId ⇄ devices.assignedZoneId — separate from the sensor node's zones.deviceId.
+function CameraCard({ zone, user }) {
+  const [camera,           setCamera]           = useState(undefined) // undefined=loading, null=not found
+  const [availableCameras, setAvailableCameras] = useState([])
+  const [camerasLoading,   setCamerasLoading]   = useState(false)
+  const [selectedId,       setSelectedId]       = useState('')
+  const [busy,             setBusy]             = useState(false)
+  const [error,            setError]            = useState(null)
+
+  useEffect(() => {
+    if (!zone.cameraDeviceId) { setCamera(null); return }
+    return onSnapshot(doc(db, 'devices', zone.cameraDeviceId), (snap) => {
+      setCamera(snap.exists() ? { id: snap.id, ...snap.data() } : null)
+    })
+  }, [zone.cameraDeviceId])
+
+  useEffect(() => {
+    if (zone.cameraDeviceId || !user) return
+    setCamerasLoading(true)
+    setSelectedId('')
+    getDocs(query(collection(db, 'devices'), where('userId', '==', user.uid)))
+      .then((snap) => {
+        setAvailableCameras(snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((d) => d.deviceType === 'camera' && !d.assignedZoneId))
+      })
+      .finally(() => setCamerasLoading(false))
+  }, [zone.cameraDeviceId, user])
+
+  async function assign() {
+    if (!selectedId) return
+    setBusy(true)
+    setError(null)
+    try {
+      await updateDoc(doc(db, 'zones', zone.id), { cameraDeviceId: selectedId })
+      await setDoc(doc(db, 'devices', selectedId), {
+        assignedZoneId: zone.id,
+        userId: user.uid,
+      }, { merge: true })
+      setSelectedId('')
+    } catch {
+      setError('Failed to assign camera. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove() {
+    if (!zone.cameraDeviceId) return
+    setBusy(true)
+    setError(null)
+    try {
+      await updateDoc(doc(db, 'devices', zone.cameraDeviceId), { assignedZoneId: null })
+      await updateDoc(doc(db, 'zones', zone.id), { cameraDeviceId: null })
+    } catch {
+      setError('Failed to remove camera. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const isOnline = camera?.status === 'online'
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      <h3 className="font-semibold text-gray-900 mb-1">Camera</h3>
+      <p className="text-xs text-gray-400 mb-3">Uploads a photo to the Camera feed every 4 hours.</p>
+
+      {error && (
+        <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-3">{error}</p>
+      )}
+
+      {zone.cameraDeviceId ? (
+        camera === undefined ? (
+          <p className="text-sm text-gray-400">Loading…</p>
+        ) : camera === null ? (
+          <p className="text-sm text-red-400">Camera not found.</p>
+        ) : (
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">{camera.deviceName}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-400'}`} />
+                <span className={`text-xs font-medium ${isOnline ? 'text-green-600' : 'text-red-500'}`}>
+                  {isOnline ? 'Online' : 'Offline'}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={remove}
+              disabled={busy}
+              className="text-xs text-red-400 hover:text-red-600 font-medium border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+            >
+              {busy ? 'Removing…' : 'Remove'}
+            </button>
+          </div>
+        )
+      ) : camerasLoading ? (
+        <p className="text-sm text-gray-400">Loading cameras…</p>
+      ) : availableCameras.length === 0 ? (
+        <p className="text-sm text-gray-400">
+          No available cameras. Register your ESP32-CAM (ID starts with ESP32CAM-) from the Devices page.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <select
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+          >
+            <option value="">Select camera</option>
+            {availableCameras.map((d) => (
+              <option key={d.id} value={d.id}>{d.deviceName}</option>
+            ))}
+          </select>
+          <button
+            onClick={assign}
+            disabled={!selectedId || busy}
+            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
+          >
+            {busy ? 'Assigning…' : 'Assign camera'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

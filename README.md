@@ -5,6 +5,7 @@ Full-stack IoT smart plant / farming monitoring and automation system.
 | Part | Stack | Location |
 |------|-------|----------|
 | Firmware | C++ / Arduino (ESP32), PlatformIO | [`firmware/`](firmware/) |
+| Camera firmware | C++ / Arduino (ESP32-CAM), PlatformIO | [`firmware_cam/`](firmware_cam/) |
 | Backend | Express.js + MQTT bridge, Firebase Admin | [`web_dashboard/server/`](web_dashboard/server/) |
 | Web dashboard | React + Vite + Tailwind CSS | [`web_dashboard/client/`](web_dashboard/client/) |
 | Mobile app | Flutter / Dart | [`mobile_app/`](mobile_app/) |
@@ -167,6 +168,28 @@ pio device monitor       # serial monitor @ 115200 baud
 Set your WiFi and MQTT credentials in `firmware/src/main.cpp` (or an `include/` secrets header) before flashing.
 The device publishes sensor readings every 60s and subscribes to actuator command topics; the server's
 MQTT bridge relays these to and from Firestore.
+
+### Camera node (ESP32-CAM)
+
+A separate PlatformIO project for an AI-Thinker ESP32-CAM that fills each zone's **Camera feed**
+automatically: one photo right after boot, then one per 4-hour UTC window (00/04/08/12/16/20).
+
+```bash
+cd firmware_cam
+pio run                  # build
+pio run -t upload        # flash — ESP32-CAM seated on the ESP32-CAM-MB USB board
+pio device monitor       # serial monitor @ 115200 baud — note the "Device ID: ESP32CAM-…" line
+```
+
+1. Set the same WiFi/MQTT credentials at the top of `firmware_cam/src/main.cpp` (frame size, JPEG
+   quality, flip/mirror and flash LED are constants there too).
+2. With the server running, the camera registers itself as a `camera` device on its first message.
+   Claim its `ESP32CAM-…` ID on the Devices page, then assign it in the zone's Overview → **Camera** card.
+3. Photos are published as raw JPEG to `grownex/{id}/camera`; the bridge stores them exactly like a manual
+   "+ Add photo" upload. Photos taken while the server is down are not queued (they're lost, like sensor readings).
+
+If the board keeps resetting ("Brownout detector was triggered"), power it from a solid 5V/2A supply —
+the camera plus WiFi peaks above what many USB ports deliver.
 
 ---
 

@@ -92,9 +92,9 @@ export default function DeviceDetailPage() {
     setDeleting(true)
     try {
       if (device.assignedZoneId) {
-        await updateDoc(doc(db, 'zones', device.assignedZoneId), {
-          deviceId: null, hasFertilizer: false, hasLight: false,
-        })
+        await updateDoc(doc(db, 'zones', device.assignedZoneId), device.deviceType === 'camera'
+          ? { cameraDeviceId: null }
+          : { deviceId: null, hasFertilizer: false, hasLight: false })
       }
       await deleteDoc(doc(db, 'devices', deviceId))
       navigate('/devices')
@@ -127,6 +127,7 @@ export default function DeviceDetailPage() {
   const totalSlots = device.totalSlots || 4
   const slotsLeft = Math.max(0, totalSlots - zoneInfo.plantsUsed)
   const sensorAvailable = isSensorAvailable(device.lastSync)
+  const isCamera = device.deviceType === 'camera'
 
   return (
     <div>
@@ -188,6 +189,11 @@ export default function DeviceDetailPage() {
                 onChange={(e) => setDeviceName(e.target.value)}
               />
             </div>
+            {isCamera ? (
+              <p className="text-sm text-gray-500">
+                📷 Camera node — uploads a photo to its zone's Camera feed every 4 hours.
+              </p>
+            ) : (
             <div className="space-y-3">
               <label className="flex items-center gap-3 cursor-pointer">
                 <span className="text-lg leading-none">☀️</span>
@@ -215,6 +221,7 @@ export default function DeviceDetailPage() {
                 <span className="text-xs text-green-600 font-semibold">Built-in</span>
               </div>
             </div>
+            )}
           </div>
         </div>
 
@@ -228,31 +235,42 @@ export default function DeviceDetailPage() {
                 {!zoneInfo.loaded ? '…' : (zoneInfo.zone?.zoneName ?? 'Not assigned')}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Plant slots</span>
-              <span className="text-sm font-semibold text-gray-800">
-                {!zoneInfo.loaded
-                  ? '…'
-                  : device.assignedZoneId
-                  ? `${zoneInfo.plantsUsed} used · ${slotsLeft} left (of ${totalSlots})`
-                  : `${totalSlots} total`}
-              </span>
-            </div>
+            {!isCamera && (
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-500">Plant slots</span>
+                <span className="text-sm font-semibold text-gray-800">
+                  {!zoneInfo.loaded
+                    ? '…'
+                    : device.assignedZoneId
+                    ? `${zoneInfo.plantsUsed} used · ${slotsLeft} left (of ${totalSlots})`
+                    : `${totalSlots} total`}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Sensor status */}
+        {/* Sensor / camera status */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h2 className="font-bold text-gray-900 mb-4">Sensor status</h2>
+          <h2 className="font-bold text-gray-900 mb-4">{isCamera ? 'Camera status' : 'Sensor status'}</h2>
           <div className="space-y-3">
+            {isCamera ? (
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-500">Connection</span>
+                <span className={`text-sm font-semibold ${device.status === 'online' ? 'text-green-600' : 'text-red-400'}`}>
+                  {device.status === 'online' ? 'Online' : 'Offline'}
+                </span>
+              </div>
+            ) : (
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-500">Availability</span>
+                <span className={`text-sm font-semibold ${sensorAvailable ? 'text-green-600' : 'text-red-400'}`}>
+                  {sensorAvailable ? 'Available' : 'Unavailable'}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Availability</span>
-              <span className={`text-sm font-semibold ${sensorAvailable ? 'text-green-600' : 'text-red-400'}`}>
-                {sensorAvailable ? 'Available' : 'Unavailable'}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Last sync</span>
+              <span className="text-sm text-gray-500">{isCamera ? 'Last photo' : 'Last sync'}</span>
               <span className="text-sm font-semibold text-gray-800">{formatLastSync(device.lastSync)}</span>
             </div>
           </div>

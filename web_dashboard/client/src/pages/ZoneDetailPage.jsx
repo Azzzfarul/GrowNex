@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { doc, deleteDoc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore'
+import { doc, deleteDoc, updateDoc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '../firebase'
 import OverviewTab from './zones/OverviewTab'
 import PlantsTab from './zones/PlantsTab'
@@ -35,6 +35,10 @@ export default function ZoneDetailPage() {
       await Promise.all(plantsSnap.docs.map((d) => deleteDoc(d.ref)))
       // Delete automationConfig
       await deleteDoc(doc(db, 'automationConfig', zoneId)).catch(() => {})
+      // Unassign the sensor node and camera so they can be reassigned
+      for (const id of [zone?.deviceId, zone?.cameraDeviceId].filter(Boolean)) {
+        await updateDoc(doc(db, 'devices', id), { assignedZoneId: null }).catch(() => {})
+      }
       // Delete zone
       await deleteDoc(doc(db, 'zones', zoneId))
       navigate('/plants')
