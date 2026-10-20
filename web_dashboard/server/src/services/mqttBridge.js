@@ -567,6 +567,7 @@ export function init() {
 
     if (parts[2] === 'status') {
       handleStatus(deviceId, raw)
+        .catch(e => console.error(`[MQTT bridge] ${deviceId} status update failed:`, e.message))
       return
     }
 
@@ -574,8 +575,14 @@ export function init() {
     try { payload = JSON.parse(raw) }
     catch { return }
 
-    if (parts[2] === 'sensors')                                handleSensors(deviceId, payload)
-    else if (parts[2] === 'actuators' && parts[3] === 'state') handleActuatorState(deviceId, payload)
+    // Unhandled rejections crash the bridge (e.g. update() on a device deleted mid-handler)
+    if (parts[2] === 'sensors') {
+      handleSensors(deviceId, payload)
+        .catch(e => console.error(`[MQTT bridge] ${deviceId} sensor write failed:`, e.message))
+    } else if (parts[2] === 'actuators' && parts[3] === 'state') {
+      handleActuatorState(deviceId, payload)
+        .catch(e => console.error(`[MQTT bridge] ${deviceId} actuator state failed:`, e.message))
+    }
   })
 
   client.on('error',     err => console.error('[MQTT bridge] error:', err.message))
