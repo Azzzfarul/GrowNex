@@ -28,7 +28,7 @@ class _OverviewTabState extends State<OverviewTab> {
   late String? _photoUrl;
   bool _photoBusy = false;
 
-  Future<Device?>? _assignedDeviceFuture;
+  Stream<Device?>? _assignedDeviceStream;  // live, so Online/Offline stays current
   bool _removeLoading = false;
 
   Device? _selectedDevice;
@@ -78,10 +78,10 @@ class _OverviewTabState extends State<OverviewTab> {
 
   void _syncDeviceState(Zone zone) {
     if (zone.deviceId != null) {
-      _assignedDeviceFuture = DeviceService().getDevice(zone.deviceId!);
+      _assignedDeviceStream = DeviceService().watchDevice(zone.deviceId!);
       _availableDevicesFuture = null;
     } else {
-      _assignedDeviceFuture = null;
+      _assignedDeviceStream = null;
       _dropdownKey++;
       final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
       _availableDevicesFuture = DeviceService().getAvailableDevices(userId);
@@ -89,18 +89,21 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   Future<void> _assign() async {
-    if (_selectedDevice == null) return;
+    // Local copy: the zone write below fires the zone listener at once, and didUpdateWidget
+    // then clears _selectedDevice before the device write runs.
+    final device = _selectedDevice;
+    if (device == null) return;
     setState(() => _assignLoading = true);
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
       await ZoneService().updateZoneDevice(
         widget.zone.id,
-        _selectedDevice!.id,
-        hasFertilizer: _selectedDevice!.hasFertilizerModule,
-        hasLight: _selectedDevice!.hasLightingModule,
-        totalPlantSlots: _selectedDevice!.totalSlots,
+        device.id,
+        hasFertilizer: device.hasFertilizerModule,
+        hasLight: device.hasLightingModule,
+        totalPlantSlots: device.totalSlots,
       );
-      await DeviceService().assignDeviceToZone(_selectedDevice!.id, widget.zone.id, userId);
+      await DeviceService().assignDeviceToZone(device.id, widget.zone.id, userId);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign device: $e')));
@@ -386,8 +389,8 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   Widget _buildAssignedDevice() {
-    return FutureBuilder<Device?>(
-      future: _assignedDeviceFuture,
+    return StreamBuilder<Device?>(
+      stream: _assignedDeviceStream,
       builder: (context, snapshot) {
         final deviceName = snapshot.data?.deviceName ?? widget.zone.deviceId ?? '...';
         final isOnline = snapshot.data?.status == 'online';

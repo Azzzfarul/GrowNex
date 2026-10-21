@@ -7,6 +7,12 @@ import '../../../services/ai_summary_service.dart';
 import '../../../services/firestore/automation_config_service.dart';
 import '../../../services/firestore/device_service.dart';
 
+// Formats the bridge's schedule parsers accept (web_dashboard/server/src/services/mqttBridge.js).
+// Same rules as the web Automation tab.
+final _timeRe  = RegExp(r'^([01]?\d|2[0-3]):[0-5]\d$');
+final _lightRe = RegExp(r'^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$');
+final _fertRe  = RegExp(r'^(MON|TUE|WED|THU|FRI|SAT|SUN)\s([01]?\d|2[0-3]):[0-5]\d$');
+
 class AutomationTab extends StatefulWidget {
   final Zone zone;
 
@@ -24,6 +30,10 @@ class _AutomationTabState extends State<AutomationTab> {
 
   Stream<Device?>? _deviceStream;
 
+  // Until the saved config arrives the form shows defaults; a toggle then would overwrite
+  // the real config, so nothing is editable before this is true.
+  bool _loaded = false;
+  String? _loadError;  // shown with a Retry button instead of an endless spinner
   bool _autoWater     = false;
   bool _autoLight     = false;
   bool _autoFertilizer = false;
@@ -75,8 +85,17 @@ class _AutomationTabState extends State<AutomationTab> {
   }
 
   Future<void> _loadConfig() async {
-    final config = await _configService.getConfig(widget.zone.id);
-    if (config != null && mounted) {
+    if (_loadError != null) setState(() => _loadError = null);
+    final AutomationConfig? config;
+    try {
+      config = await _configService.getConfig(widget.zone.id);
+    } catch (e) {
+      if (mounted) setState(() => _loadError = 'Could not load automation settings.\n$e');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _loaded = true);
+    if (config case final config?) {
       setState(() {
         _autoWater      = config.autoWateringEnabled;
         _autoLight      = config.autoLightingEnabled;
@@ -99,23 +118,46 @@ class _AutomationTabState extends State<AutomationTab> {
     }
   }
 
-  Future<void> _saveToggle(AutomationConfig config) async {
-    await _configService.saveConfig(widget.zone.id, config);
+  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+  // A toggle writes only its own flag — never the (possibly unsaved) text fields.
+  Future<void> _saveToggle(String field, bool value) async {
+    try {
+      await _configService.saveFields(widget.zone.id, {field: value});
+    } catch (e) {
+      if (mounted) _snack('Failed to save: $e');
+    }
   }
 
   Future<void> _saveTextConfig() async {
-    final config = AutomationConfig(
-      autoWateringEnabled:    _autoWater,
-      wateringThreshold:      num.tryParse(_wateringThresholdCtrl.text),
-      wateringSchedule:       _wateringScheduleCtrl.text.trim().isEmpty ? null : _wateringScheduleCtrl.text.trim(),
-      wateringDuration:       int.tryParse(_wateringDurationCtrl.text),
-      autoLightingEnabled:    _autoLight,
-      lightingSchedule:       _lightingScheduleCtrl.text.trim().isEmpty ? null : _lightingScheduleCtrl.text.trim(),
-      autoFertilizingEnabled: _autoFertilizer,
-      fertilizingSchedule:    _fertilizingScheduleCtrl.text.trim().isEmpty ? null : _fertilizingScheduleCtrl.text.trim(),
-      fertilizingDuration:    int.tryParse(_fertilizingDurationCtrl.text),
-    );
-    await _configService.saveConfig(widget.zone.id, config);
+    String? text(TextEditingController c, {bool upper = false}) {
+      final v = upper ? c.text.trim().toUpperCase() : c.text.trim();
+      return v.isEmpty ? null : v;
+    }
+    final ws = text(_wateringScheduleCtrl), ls = text(_lightingScheduleCtrl), fs = text(_fertilizingScheduleCtrl, upper: true);
+    // Only check fields the user changed: a hidden field (e.g. lighting without a light
+    // module) holding an old value must not block saving the others.
+    bool bad(String? v, String saved, RegExp re) => v != null && v != saved.trim() && !re.hasMatch(v);
+    final error = bad(ws, _savedWaterSchedule, _timeRe) ? 'Watering time must look like 07:00 (24-hour).'
+        : bad(ls, _savedLightSchedule, _lightRe) ? 'Lighting schedule must look like 08:00–18:00.'
+        : bad(fs, _savedFertSchedule, _fertRe) ? 'Fertilizing schedule must look like MON 06:00.'
+        : null;
+    if (error != null) return _snack(error);
+
+    try {
+      await _configService.saveFields(widget.zone.id, {
+        'wateringThreshold':   num.tryParse(_wateringThresholdCtrl.text.trim()),
+        'wateringSchedule':    ws,
+        'wateringDuration':    int.tryParse(_wateringDurationCtrl.text.trim()),
+        'lightingSchedule':    ls,
+        'fertilizingSchedule': fs,
+        'fertilizingDuration': int.tryParse(_fertilizingDurationCtrl.text.trim()),
+      });
+    } catch (e) {
+      if (mounted) _snack('Failed to save: $e');
+      return;
+    }
+    if (!mounted) return;
     setState(() {
       _savedWaterThreshold = _wateringThresholdCtrl.text;
       _savedWaterSchedule  = _wateringScheduleCtrl.text;
@@ -136,18 +178,6 @@ class _AutomationTabState extends State<AutomationTab> {
       _fertilizingDurationCtrl.text = _savedFertDuration;
     });
   }
-
-  AutomationConfig _currentConfig() => AutomationConfig(
-    autoWateringEnabled:    _autoWater,
-    wateringThreshold:      num.tryParse(_wateringThresholdCtrl.text),
-    wateringSchedule:       _wateringScheduleCtrl.text.trim().isEmpty ? null : _wateringScheduleCtrl.text.trim(),
-    wateringDuration:       int.tryParse(_wateringDurationCtrl.text),
-    autoLightingEnabled:    _autoLight,
-    lightingSchedule:       _lightingScheduleCtrl.text.trim().isEmpty ? null : _lightingScheduleCtrl.text.trim(),
-    autoFertilizingEnabled: _autoFertilizer,
-    fertilizingSchedule:    _fertilizingScheduleCtrl.text.trim().isEmpty ? null : _fertilizingScheduleCtrl.text.trim(),
-    fertilizingDuration:    int.tryParse(_fertilizingDurationCtrl.text),
-  );
 
   Future<void> _requestAiPlan() async {
     setState(() => _aiLoading = true);
@@ -320,6 +350,21 @@ class _AutomationTabState extends State<AutomationTab> {
       );
     }
 
+    if (!_loaded) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: _loadError == null
+              ? const CircularProgressIndicator()
+              : Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_loadError!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  OutlinedButton(onPressed: _loadConfig, child: const Text('Retry')),
+                ]),
+        ),
+      );
+    }
+
     final isDirty = _wateringThresholdCtrl.text != _savedWaterThreshold ||
         _wateringScheduleCtrl.text    != _savedWaterSchedule  ||
         _wateringDurationCtrl.text    != _savedWaterDuration  ||
@@ -389,7 +434,7 @@ class _AutomationTabState extends State<AutomationTab> {
               value: _autoWater,
               onChanged: (v) {
                 setState(() => _autoWater = v);
-                _saveToggle(_currentConfig().copyWith(autoWateringEnabled: v));
+                _saveToggle('autoWateringEnabled', v);
               },
               expandedContent: Column(
                 children: [
@@ -426,7 +471,7 @@ class _AutomationTabState extends State<AutomationTab> {
                 value: _autoLight,
                 onChanged: (v) {
                   setState(() => _autoLight = v);
-                  _saveToggle(_currentConfig().copyWith(autoLightingEnabled: v));
+                  _saveToggle('autoLightingEnabled', v);
                 },
                 expandedContent: TextField(
                   controller: _lightingScheduleCtrl,
@@ -443,7 +488,7 @@ class _AutomationTabState extends State<AutomationTab> {
                 value: _autoFertilizer,
                 onChanged: (v) {
                   setState(() => _autoFertilizer = v);
-                  _saveToggle(_currentConfig().copyWith(autoFertilizingEnabled: v));
+                  _saveToggle('autoFertilizingEnabled', v);
                 },
                 expandedContent: Column(
                   children: [

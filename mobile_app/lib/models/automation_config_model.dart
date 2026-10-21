@@ -45,32 +45,6 @@ class AutomationConfig {
     );
   }
 
-  AutomationConfig copyWith({
-    bool? autoWateringEnabled,
-    num? wateringThreshold,
-    String? wateringSchedule,
-    int? wateringDuration,
-    bool? autoLightingEnabled,
-    String? lightingSchedule,
-    bool? autoFertilizingEnabled,
-    String? fertilizingSchedule,
-    int? fertilizingDuration,
-    bool? aiRecommended,
-  }) {
-    return AutomationConfig(
-      autoWateringEnabled:    autoWateringEnabled    ?? this.autoWateringEnabled,
-      wateringThreshold:      wateringThreshold      ?? this.wateringThreshold,
-      wateringSchedule:       wateringSchedule       ?? this.wateringSchedule,
-      wateringDuration:       wateringDuration       ?? this.wateringDuration,
-      autoLightingEnabled:    autoLightingEnabled    ?? this.autoLightingEnabled,
-      lightingSchedule:       lightingSchedule       ?? this.lightingSchedule,
-      autoFertilizingEnabled: autoFertilizingEnabled ?? this.autoFertilizingEnabled,
-      fertilizingSchedule:    fertilizingSchedule    ?? this.fertilizingSchedule,
-      fertilizingDuration:    fertilizingDuration    ?? this.fertilizingDuration,
-      aiRecommended:          aiRecommended          ?? this.aiRecommended,
-    );
-  }
-
   Map<String, dynamic> toMap() {
     return {
       'autoWateringEnabled': autoWateringEnabled,

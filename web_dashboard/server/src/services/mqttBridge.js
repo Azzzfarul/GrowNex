@@ -26,8 +26,9 @@ async function maybeNotifyStatus(zoneId, newStatus, alertSummary) {
   const prev = zoneStatusCache.get(zoneId)
   zoneStatusCache.set(zoneId, newStatus)
 
+  if (prev === undefined) return  // first status since restart — don't re-alert on every reboot
   if (!['attention', 'critical'].includes(newStatus)) return
-  if ((STATUS_RANK[newStatus] ?? 0) <= (STATUS_RANK[prev ?? 'unknown'] ?? 0)) return  // not worse (or first sighting)
+  if ((STATUS_RANK[newStatus] ?? 0) <= (STATUS_RANK[prev] ?? 0)) return  // not worse
 
   const last = lastAlertAt.get(zoneId) ?? 0
   if (Date.now() - last < ALERT_COOLDOWN_MS) return
@@ -58,7 +59,9 @@ async function getOrCreateDevice(deviceId) {
   const snap = await ref.get()
   if (!snap.exists) {
     const camera = isCameraId(deviceId)
-    await ref.set({
+    // create(), not set(): a device's first messages (status, state, sensors) arrive together,
+    // and a late set() would overwrite the doc — un-claiming it if the user claimed it meanwhile.
+    const created = await ref.create({
       deviceName:          deviceId,
       deviceType:          camera ? 'camera' : 'indoor',
       status:              'online',
@@ -68,8 +71,8 @@ async function getOrCreateDevice(deviceId) {
       totalSlots:          camera ? 0 : 4,
       userId:              '',
       lastSync:            FieldValue.serverTimestamp(),
-    })
-    console.log(`[MQTT bridge] new device registered: ${deviceId}`)
+    }).then(() => true, e => { if (e.code === 6) return false; throw e })  // 6 = ALREADY_EXISTS
+    if (created) console.log(`[MQTT bridge] new device registered: ${deviceId}`)
   }
   return (await ref.get()).data()
 }
@@ -109,9 +112,7 @@ async function handleSensors(deviceId, payload) {
     moisture,
   }
 
-  // Raw reading keeps a TTL field so Firestore auto-deletes it after 30 days.
-  // Configure the TTL policy once in Firebase Console → Firestore → TTL
-  // (collection group: sensorReadings, field: expiresAt).
+  // expiresAt is read by the nightly prune in dailySummary.js (no Firestore TTL policy).
   const reading = {
     ...sensorFields,
     timestamp: FieldValue.serverTimestamp(),
@@ -166,9 +167,11 @@ async function handleSensors(deviceId, payload) {
       const last = lastIrrTrigger.get(deviceId) ?? 0
       if (Date.now() - last > COOLDOWN_MS) {
         lastIrrTrigger.set(deviceId, Date.now())
-        await triggerActuator(assignedZoneId, 'irrigation', true)
+        // Like the cron jobs: the auto-off is scheduled even if the "on" reports an error — the
+        // write may have committed anyway, and nothing else would ever switch the pump off.
+        await fireActuator(assignedZoneId, 'irrigation', true)
         const waterDuration = (cfg.wateringDuration ?? 300) * 1000
-        setTimeout(() => triggerActuator(assignedZoneId, 'irrigation', false), waterDuration)
+        setTimeout(() => fireActuator(assignedZoneId, 'irrigation', false), waterDuration)
         console.log(`[MQTT bridge] threshold trigger → ${deviceId} (moisture ${moisture}% < ${cfg.wateringThreshold}%), auto-off in ${waterDuration / 1000}s`)
       }
     }
@@ -294,25 +297,29 @@ function watchPlants() {
     // Immediately recompute alertSummary for zones whose plants changed,
     // using the latest sensor values already stored on the zone document.
     for (const zoneId of changedZoneIds) {
-      const zoneSnap = await db.collection('zones').doc(zoneId).get()
-      if (!zoneSnap.exists) continue
-      const zone = zoneSnap.data()
-      const sensorFields = {
-        temperature: zone.latestTemp    ?? null,
-        humidity:    zone.latestHumid   ?? null,
-        moisture:    zone.latestMoisture ?? null,
+      try {
+        const zoneSnap = await db.collection('zones').doc(zoneId).get()
+        if (!zoneSnap.exists) continue
+        const zone = zoneSnap.data()
+        const sensorFields = {
+          temperature: zone.latestTemp    ?? null,
+          humidity:    zone.latestHumid   ?? null,
+          moisture:    zone.latestMoisture ?? null,
+        }
+        const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(zoneId))
+        await db.collection('zones').doc(zoneId).update(
+          alertSummary != null ? { status, alertSummary } : { status }
+        )
+        await maybeNotifyStatus(zoneId, status, alertSummary)
+        console.log(`[MQTT bridge] recomputed alertSummary for zone ${zoneId} after plant change`)
+      } catch (e) {
+        console.error(`[MQTT bridge] status recompute failed for zone ${zoneId}:`, e.message)
       }
-      const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(zoneId))
-      await db.collection('zones').doc(zoneId).update(
-        alertSummary != null ? { status, alertSummary } : { status }
-      )
-      await maybeNotifyStatus(zoneId, status, alertSummary)
-      console.log(`[MQTT bridge] recomputed alertSummary for zone ${zoneId} after plant change`)
     }
-  })
+  }, err => console.error('[MQTT bridge] plants listener stopped:', err.message))
 }
 
-function computeZoneStatus(sensorFields, plants) {
+export function computeZoneStatus(sensorFields, plants) {
   if (!plants || plants.length === 0) return { status: 'unknown', alertSummary: null }
 
   const avg = field => {
@@ -325,8 +332,9 @@ function computeZoneStatus(sensorFields, plants) {
 
   const check = (val, min, max, label, unit) => {
     if (val == null || min == null || max == null) return
-    if (val < min) issues.push(`${label} too low (${val}${unit}, ideal ≥ ${min.toFixed(1)}${unit})`)
-    else if (val > max) issues.push(`${label} too high (${val}${unit}, ideal ≤ ${max.toFixed(1)}${unit})`)
+    const v = Math.round(val * 10) / 10  // moisture is an average, e.g. 41.666…
+    if (val < min) issues.push(`${label} too low (${v}${unit}, ideal ≥ ${min.toFixed(1)}${unit})`)
+    else if (val > max) issues.push(`${label} too high (${v}${unit}, ideal ≤ ${max.toFixed(1)}${unit})`)
   }
 
   check(temperature, avg('preferredTemperatureMin'), avg('preferredTemperatureMax'), 'Temperature', '°C')
@@ -380,7 +388,7 @@ function watchDeviceActuators() {
         publishCommand(deviceId, actuatorCache.get(deviceId))
       }, DEBOUNCE_MS))
     })
-  })
+  }, err => console.error('[MQTT bridge] devices listener stopped:', err.message))
 }
 
 // ─── Schedule-based automation ────────────────────────────────────────────────
@@ -391,7 +399,19 @@ const COOLDOWN_MS    = 30 * 60 * 1000  // 30 minutes
 
 // triggerActuator: reads current device state, merges one field, publishes.
 // Calls publishCommand directly (no debounce) — schedule/threshold should fire immediately.
-async function triggerActuator(zoneId, actuator, state) {
+// Runs one at a time per zone: same-minute schedules (e.g. light 06:00 + fertilizer MON 06:00)
+// would otherwise each read the old state and overwrite each other's change.
+// shortcut: in-process queue, fine while only one bridge runs (the MQTT client ID already forces that).
+const actuatorQueues = new Map()  // Map<zoneId, Promise>
+function triggerActuator(zoneId, actuator, state) {
+  const run = (actuatorQueues.get(zoneId) ?? Promise.resolve())
+    .catch(() => {})
+    .then(() => applyActuator(zoneId, actuator, state))
+  actuatorQueues.set(zoneId, run)
+  return run
+}
+
+async function applyActuator(zoneId, actuator, state) {
   // Use zones.deviceId (the relay node) — a camera in the same zone shares assignedZoneId.
   const z = (await db.collection('zones').doc(zoneId).get()).data() ?? {}
   if (!z.deviceId) return
@@ -433,15 +453,22 @@ async function triggerActuator(zoneId, actuator, state) {
   }
 }
 
+// For timers and cron callbacks, where nothing awaits the promise — an unhandled
+// rejection there would crash the whole bridge.
+function fireActuator(zoneId, actuator, state) {
+  return triggerActuator(zoneId, actuator, state).catch(e =>
+    console.error(`[MQTT bridge] ${actuator} ${state ? 'on' : 'off'} failed for zone ${zoneId}:`, e.message))
+}
+
 // Schedule string parsers
 // "07:00"        → "0 7 * * *"    (daily)
-function dailyCron(timeStr) {
+export function dailyCron(timeStr) {
   const [h, m] = timeStr.trim().split(':').map(Number)
   return `${m} ${h} * * *`
 }
 
 // "08:00–18:00"  → { onCron, offCron }  (daily on/off)
-function lightCron(schedStr) {
+export function lightCron(schedStr) {
   const [on, off] = schedStr.split(/[–-]/).map(s => s.trim())
   const [oh, om]  = on.split(':').map(Number)
   const [fh, fm]  = off.split(':').map(Number)
@@ -450,7 +477,7 @@ function lightCron(schedStr) {
 
 // "MON 06:00"    → "0 6 * * 1"    (weekly, specific day)
 const DAY_MAP = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 }
-function weeklyCron(schedStr) {
+export function weeklyCron(schedStr) {
   const [day, time] = schedStr.trim().split(' ')
   const [h, m]      = time.split(':').map(Number)
   return `${m} ${h} * * ${DAY_MAP[day.toUpperCase()] ?? 1}`
@@ -471,17 +498,17 @@ function scheduleCronJobsForZone(zoneId, config) {
       const waterDuration = (config.wateringDuration ?? 300) * 1000
       if (cron.validate(expr))
         jobs.push(cron.schedule(expr, async () => {
-          await triggerActuator(zoneId, 'irrigation', true)
-          setTimeout(() => triggerActuator(zoneId, 'irrigation', false), waterDuration)
+          await fireActuator(zoneId, 'irrigation', true)
+          setTimeout(() => fireActuator(zoneId, 'irrigation', false), waterDuration)
         }))
     }
 
     if (config.autoLightingEnabled && config.lightingSchedule) {
       const { onCron, offCron } = lightCron(config.lightingSchedule)
       if (cron.validate(onCron))
-        jobs.push(cron.schedule(onCron,  () => triggerActuator(zoneId, 'light', true)))
+        jobs.push(cron.schedule(onCron,  () => fireActuator(zoneId, 'light', true)))
       if (cron.validate(offCron))
-        jobs.push(cron.schedule(offCron, () => triggerActuator(zoneId, 'light', false)))
+        jobs.push(cron.schedule(offCron, () => fireActuator(zoneId, 'light', false)))
     }
 
     if (config.autoFertilizingEnabled && config.fertilizingSchedule) {
@@ -489,8 +516,8 @@ function scheduleCronJobsForZone(zoneId, config) {
       const fertDuration = (config.fertilizingDuration ?? 600) * 1000
       if (cron.validate(expr))
         jobs.push(cron.schedule(expr, async () => {
-          await triggerActuator(zoneId, 'fertilizer', true)
-          setTimeout(() => triggerActuator(zoneId, 'fertilizer', false), fertDuration)
+          await fireActuator(zoneId, 'fertilizer', true)
+          setTimeout(() => fireActuator(zoneId, 'fertilizer', false), fertDuration)
         }))
     }
   } catch (e) {
@@ -514,7 +541,7 @@ function watchAutomationConfig() {
       }
       scheduleCronJobsForZone(change.doc.id, change.doc.data())
     })
-  })
+  }, err => console.error('[MQTT bridge] automationConfig listener stopped:', err.message))
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

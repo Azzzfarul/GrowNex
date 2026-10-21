@@ -58,9 +58,13 @@ export async function uploadPlantPhoto(plantId, file) {
   }
 }
 
+// Storage object only — for when the plant doc is already gone
+export const removePlantPhotoFile = (plantId) =>
+  deleteObject(ref(storage, `plantPhotos/${plantId}.jpg`)).catch(() => {})
+
 export async function removePlantPhoto(plantId) {
   try {
-    await deleteObject(ref(storage, `plantPhotos/${plantId}.jpg`)).catch(() => {})
+    await removePlantPhotoFile(plantId)
     await updateDoc(doc(db, 'plants', plantId), { photoUrl: null })
     return {}
   } catch (err) {

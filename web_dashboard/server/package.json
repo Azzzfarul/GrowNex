@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "node --test test/unit.test.js",
+    "test:integration": "cd .. && npx -y firebase-tools@15.34.0 emulators:exec --project demo-grownex --only auth,firestore,storage 'cd server && node --test --test-concurrency=1 test/integration.test.js'"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -15,5 +17,8 @@
     "mqtt": "^5.15.1",
     "node-cron": "^4.2.1",
     "openai": "^4.77.0"
+  },
+  "devDependencies": {
+    "aedes": "^1.2.0"
   }
 }

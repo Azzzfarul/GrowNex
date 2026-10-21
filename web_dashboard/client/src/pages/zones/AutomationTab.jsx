@@ -4,6 +4,11 @@ import { db } from '../../firebase'
 import { useAuth } from '../../context/AuthContext'
 import { fetchAutomationPlan } from '../../lib/aiSummary'
 
+// Formats the bridge's schedule parsers accept (server/src/services/mqttBridge.js); "7:00" is fine there too
+const TIME_RE  = /^([01]?\d|2[0-3]):[0-5]\d$/
+const LIGHT_RE = /^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$/
+const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN)\s([01]?\d|2[0-3]):[0-5]\d$/
+
 function Toggle({ value, onChange }) {
   return (
     <button
@@ -52,6 +57,7 @@ export default function AutomationTab({ zone }) {
   const [fertDuration, setFertDuration] = useState('')
   const [loading,  setLoading]  = useState(true)
   const [device,   setDevice]   = useState(null)
+  const [configError, setConfigError] = useState(null)
 
   // Saved-value mirrors for dirty detection and Cancel revert
   const [waterThreshOrig, setWaterThreshOrig] = useState('')
@@ -118,12 +124,20 @@ export default function AutomationTab({ zone }) {
   }
 
   async function saveTextConfig() {
+    const ws = waterSched.trim(), ls = lightSched.trim(), fs = fertSched.trim().toUpperCase()
+    // Only check fields the user changed: a hidden field (e.g. lighting without a light
+    // module) holding an old value must not block saving the others.
+    const bad = (v, orig, re) => v && v !== orig.trim() && !re.test(v)
+    if (bad(ws, waterSchedOrig, TIME_RE))              return setConfigError('Watering time must look like 07:00 (24-hour).')
+    if (bad(ls, lightSchedOrig, LIGHT_RE))             return setConfigError('Lighting schedule must look like 08:00–18:00.')
+    if (bad(fs, fertSchedOrig.toUpperCase(), FERT_RE)) return setConfigError('Fertilizing schedule must look like MON 06:00.')
+    setConfigError(null)
     await setDoc(doc(db, 'automationConfig', zone.id), {
       wateringThreshold:   waterThresh    ? parseFloat(waterThresh)   : null,
-      wateringSchedule:    waterSched     || null,
+      wateringSchedule:    ws             || null,
       wateringDuration:    waterDuration  ? parseInt(waterDuration)   : null,
-      lightingSchedule:    lightSched     || null,
-      fertilizingSchedule: fertSched      || null,
+      lightingSchedule:    ls             || null,
+      fertilizingSchedule: fs             || null,
       fertilizingDuration: fertDuration   ? parseInt(fertDuration)    : null,
     }, { merge: true })
     setWaterThreshOrig(waterThresh); setWaterSchedOrig(waterSched)
@@ -132,6 +146,7 @@ export default function AutomationTab({ zone }) {
   }
 
   function cancelTextConfig() {
+    setConfigError(null)
     setWaterThresh(waterThreshOrig); setWaterSched(waterSchedOrig)
     setWaterDuration(waterDurOrig);  setLightSched(lightSchedOrig)
     setFertSched(fertSchedOrig);     setFertDuration(fertDurOrig)
@@ -360,6 +375,10 @@ export default function AutomationTab({ zone }) {
             </ToggleSetting>
           )}
         </div>
+
+        {configError && (
+          <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mt-4">{configError}</p>
+        )}
 
         {isDirty && (
           <div className="flex gap-3 mt-4">

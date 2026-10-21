@@ -23,12 +23,17 @@ class PhotoService {
     return photoUrl;
   }
 
-  Future<void> removePlantPhoto(String plantId) async {
+  // Storage object only — for when the plant doc is being deleted too.
+  Future<void> deletePlantPhotoFile(String plantId) async {
     try {
       await _storage.ref('plantPhotos/$plantId.jpg').delete();
     } on FirebaseException catch (e) {
       if (e.code != 'object-not-found') rethrow;
     }
+  }
+
+  Future<void> removePlantPhoto(String plantId) async {
+    await deletePlantPhotoFile(plantId);
     await _firestore.collection('plants').doc(plantId).update({'photoUrl': null});
   }
 

@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { initializeApp, cert } from 'firebase-admin/app'
+import './src/firebase-admin.js'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
 
 // ─── Usage ────────────────────────────────────────────────────────────────────
@@ -23,14 +23,6 @@ if (!USER_ID || USER_ID.startsWith('--')) {
   process.exit(1)
 }
 
-initializeApp({
-  credential: cert({
-    projectId:   process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey:  process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  }),
-})
-
 const db = getFirestore()
 
 function rand(min, max) {
@@ -39,22 +31,12 @@ function rand(min, max) {
 
 // ─── Clean ────────────────────────────────────────────────────────────────────
 
-async function deleteSubcollection(ref, name) {
-  const snap = await ref.collection(name).get()
-  if (snap.empty) return
-  const batch = db.batch()
-  snap.docs.forEach(d => batch.delete(d.ref))
-  await batch.commit()
-  console.log(`  Deleted ${snap.size} docs from ${name}`)
-}
-
 async function clean() {
   console.log(`Cleaning demo data for user: ${USER_ID}`)
 
   const UNCLAIMED_ID = 'GRX-DEMO-HUB02'
   const unclaimedRef = db.collection('devices').doc(UNCLAIMED_ID)
-  const unclaimedSnap = await unclaimedRef.get()
-  if (unclaimedSnap.exists) {
+  if ((await unclaimedRef.get()).exists) {
     await unclaimedRef.delete()
     console.log(`  Deleted unclaimed device: ${UNCLAIMED_ID}`)
   }
@@ -63,36 +45,22 @@ async function clean() {
     db.collection('devices').where('userId', '==', USER_ID).where('_demo', '==', true).get(),
     db.collection('zones').where('userId', '==', USER_ID).where('_demo', '==', true).get(),
   ])
+  if (devicesSnap.empty && zonesSnap.empty) {
+    console.log('  Nothing to delete.')
+    return
+  }
 
-  // Delete subcollections first
+  let plantCount = 0
   for (const zoneDoc of zonesSnap.docs) {
-    await deleteSubcollection(zoneDoc.ref, 'stats')
-    await deleteSubcollection(zoneDoc.ref, 'sensorReadings')
-    await deleteSubcollection(zoneDoc.ref, 'aiCache')
+    const plantsSnap = await db.collection('plants').where('zoneId', '==', zoneDoc.id).get()
+    await Promise.all(plantsSnap.docs.map(d => d.ref.delete()))
+    plantCount += plantsSnap.size
+    await db.collection('automationConfig').doc(zoneDoc.id).delete()
+    // Zone + all subcollections; a single batch would fail past 500 sensorReadings
+    await db.recursiveDelete(zoneDoc.ref)
   }
-
-  // Delete plants linked to seeded zones
-  const zoneIds = zonesSnap.docs.map(d => d.id)
-  if (zoneIds.length > 0) {
-    const plantsSnap = await db.collection('plants').where('zoneId', 'in', zoneIds).get()
-    const batch = db.batch()
-    plantsSnap.docs.forEach(d => batch.delete(d.ref))
-    zonesSnap.docs.forEach(d => batch.delete(d.ref))
-    devicesSnap.docs.forEach(d => batch.delete(d.ref))
-    // automationConfig lives in a top-level collection keyed by zoneId
-    zoneIds.forEach(id => batch.delete(db.collection('automationConfig').doc(id)))
-    await batch.commit()
-    console.log(`  Deleted ${plantsSnap.size} plants, ${zonesSnap.size} zones, ${devicesSnap.size} devices, automationConfig`)
-  } else {
-    const batch = db.batch()
-    devicesSnap.docs.forEach(d => batch.delete(d.ref))
-    if (!batch._ops?.length) {
-      console.log('  Nothing to delete.')
-      return
-    }
-    await batch.commit()
-  }
-
+  await Promise.all(devicesSnap.docs.map(d => d.ref.delete()))
+  console.log(`  Deleted ${plantCount} plants, ${zonesSnap.size} zones, ${devicesSnap.size} devices, automationConfig`)
   console.log('Done — demo data removed.')
 }
 

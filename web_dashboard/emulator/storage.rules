@@ -1,0 +1,10 @@
+// Emulator-only rules for local tests (the real rules live in the Firebase console).
+// Firestore has no rules file here, so the emulator allows all reads and writes.
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
