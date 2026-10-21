@@ -31,6 +31,15 @@ class Device {
     this.lastSync,
   });
 
+  /// ESP32-CAM node (firmware_cam/). A zone links it through `cameraDeviceId`, not `deviceId`.
+  bool get isCamera => deviceType == 'camera';
+
+  String get typeLabel => isCamera
+      ? 'Camera'
+      : deviceType.toLowerCase() == 'indoor'
+          ? 'Indoor'
+          : 'Outdoor';
+
   factory Device.fromDocument(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     return Device.fromMap(doc.id, data);

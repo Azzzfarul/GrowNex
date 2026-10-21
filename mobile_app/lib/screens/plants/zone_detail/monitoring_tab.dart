@@ -20,6 +20,7 @@ class MonitoringTab extends StatefulWidget {
 
 class _MonitoringTabState extends State<MonitoringTab> {
   Stream<Device?>? _deviceStream;
+  Stream<Device?>? _cameraStream;
   late final Stream<List<Plant>> _plantsStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _snapshotsStream;
   bool _uploadingSnapshot = false;
@@ -36,6 +37,7 @@ class _MonitoringTabState extends State<MonitoringTab> {
         .limit(12)
         .snapshots();
     _syncStream(widget.zone.deviceId);
+    _syncCameraStream(widget.zone.cameraDeviceId);
   }
 
   @override
@@ -44,6 +46,14 @@ class _MonitoringTabState extends State<MonitoringTab> {
     if (oldWidget.zone.deviceId != widget.zone.deviceId) {
       _syncStream(widget.zone.deviceId);
     }
+    if (oldWidget.zone.cameraDeviceId != widget.zone.cameraDeviceId) {
+      _syncCameraStream(widget.zone.cameraDeviceId);
+    }
+  }
+
+  // No setState needed: called from initState / didUpdateWidget, which are always followed by build.
+  void _syncCameraStream(String? cameraId) {
+    _cameraStream = cameraId != null ? DeviceService().watchDevice(cameraId) : null;
   }
 
   void _syncStream(String? deviceId) {
@@ -299,13 +309,37 @@ class _MonitoringTabState extends State<MonitoringTab> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Camera feed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 2),
-                    Text('Last 48 hours · one photo per 4-hour window', style: TextStyle(fontSize: 11)),
+                    const Text('Camera feed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 2),
+                    const Text('Last 48 hours · one photo per 4-hour window', style: TextStyle(fontSize: 11)),
+                    if (_cameraStream != null)
+                      StreamBuilder<Device?>(
+                        stream: _cameraStream,
+                        builder: (context, snapshot) {
+                          final camera = snapshot.data;
+                          if (camera == null) return const SizedBox.shrink();
+                          final isOnline = camera.status == 'online';
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text.rich(
+                              TextSpan(
+                                text: 'Auto-captured by ${camera.deviceName} · ',
+                                children: [
+                                  TextSpan(
+                                    text: isOnline ? 'Online' : 'Offline',
+                                    style: TextStyle(color: isOnline ? Colors.green[700] : Colors.red[400]),
+                                  ),
+                                ],
+                              ),
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),

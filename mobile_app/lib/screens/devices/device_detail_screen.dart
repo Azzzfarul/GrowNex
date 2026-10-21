@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/device_model.dart';
@@ -22,27 +24,56 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   late bool _hasFertilizerModule;
   bool _loading = false;
 
-  late final Future<({Zone? zone, List<Plant> plants})> _zoneFuture;
+  // Live copy of the device doc, so connection status, last sync/photo and the zone stay
+  // current while the screen is open. The editable fields above are only seeded once.
+  late Device _device;
+  StreamSubscription<Device?>? _deviceSub;
+  bool _deviceMissing = false;
+  bool _deleting = false;
+
+  late Future<({Zone? zone, List<Plant> plants})> _zoneFuture;
 
   @override
   void initState() {
     super.initState();
-    _nameCtrl = TextEditingController(text: widget.device.deviceName);
-    _hasLightingModule = widget.device.hasLightingModule;
-    _hasFertilizerModule = widget.device.hasFertilizerModule;
-    _zoneFuture = _loadZoneInfo();
+    _device = widget.device;
+    _nameCtrl = TextEditingController(text: _device.deviceName);
+    _hasLightingModule = _device.hasLightingModule;
+    _hasFertilizerModule = _device.hasFertilizerModule;
+    _zoneFuture = _loadZoneInfo(_device.assignedZoneId);
+    _deviceSub = DeviceService().watchDevice(_device.id).listen(
+      (device) {
+        if (!mounted || _deleting) return;
+        setState(() {
+          if (device == null) {
+            _deviceMissing = true;
+            return;
+          }
+          if (device.assignedZoneId != _device.assignedZoneId) {
+            _zoneFuture = _loadZoneInfo(device.assignedZoneId);
+          }
+          _device = device;
+          _deviceMissing = false;
+        });
+      },
+      onError: (Object e) => debugPrint('Device ${_device.id} listener failed: $e'),
+    );
   }
 
   @override
   void dispose() {
+    _deviceSub?.cancel();
     _nameCtrl.dispose();
     super.dispose();
   }
 
-  Future<({Zone? zone, List<Plant> plants})> _loadZoneInfo() async {
-    if (widget.device.assignedZoneId == null) return (zone: null, plants: <Plant>[]);
-    final zone = await ZoneService().getZone(widget.device.assignedZoneId!);
-    final plants = zone != null ? await PlantService().getPlantsByZone(zone.id) : <Plant>[];
+  Future<({Zone? zone, List<Plant> plants})> _loadZoneInfo(String? zoneId) async {
+    if (zoneId == null || zoneId.isEmpty) return (zone: null, plants: <Plant>[]);
+    final zone = await ZoneService().getZone(zoneId);
+    // Cameras don't use plant slots.
+    final plants = zone != null && !widget.device.isCamera
+        ? await PlantService().getPlantsByZone(zone.id)
+        : <Plant>[];
     return (zone: zone, plants: plants);
   }
 
@@ -52,7 +83,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Delete device?'),
         content: Text(
-          'This will permanently remove "${widget.device.deviceName}". '
+          'This will permanently remove "${_device.deviceName}". '
           'If it is assigned to a zone, it will be unassigned first.',
         ),
         actions: [
@@ -70,13 +101,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     );
     if (confirmed != true || !mounted) return;
 
+    // Stops the listener swapping in "Device not found." while this screen closes.
+    _deleting = true;
     try {
       await DeviceService().deleteDevice(
-        widget.device.id,
-        assignedZoneId: widget.device.assignedZoneId,
+        _device.id,
+        assignedZoneId: _device.assignedZoneId,
+        isCamera: _device.isCamera,
       );
       if (mounted) Navigator.pop(context);
     } catch (e) {
+      _deleting = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to delete device: $e')),
@@ -88,18 +123,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   Future<void> _save() async {
     setState(() => _loading = true);
     try {
-      final updated = Device(
-        id: widget.device.id,
-        userId: widget.device.userId,
-        assignedZoneId: widget.device.assignedZoneId,
+      await DeviceService().updateDeviceInfo(
+        _device.id,
         deviceName: _nameCtrl.text.trim(),
-        deviceType: widget.device.deviceType,
-        status: widget.device.status,
         hasLightingModule: _hasLightingModule,
         hasFertilizerModule: _hasFertilizerModule,
-        lastSync: widget.device.lastSync,
       );
-      await DeviceService().updateDevice(updated);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Device updated.')));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
@@ -109,16 +138,27 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   }
 
   bool get _sensorAvailable {
-    final lastSync = widget.device.lastSync;
+    final lastSync = _device.lastSync;
     if (lastSync == null) return false;
     return DateTime.now().difference(lastSync) <= const Duration(minutes: 10);
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_deviceMissing) {
+      return Scaffold(
+        appBar: AppBar(backgroundColor: Colors.green[700], foregroundColor: Colors.white),
+        body: const Center(child: Text('Device not found.')),
+      );
+    }
+
+    final device = _device;
+    final isCamera = device.isCamera;
+    final isOnline = device.status == 'online';
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.device.deviceName),
+        title: Text(device.deviceName),
         backgroundColor: Colors.green[700],
         foregroundColor: Colors.white,
         actions: [
@@ -138,25 +178,41 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
               children: [
                 _buildField('Device name', _nameCtrl),
                 const SizedBox(height: 14),
-                _buildModuleToggle(
-                  icon: Icons.wb_sunny_outlined,
-                  label: 'Light module',
-                  value: _hasLightingModule,
-                  onChanged: (v) => setState(() => _hasLightingModule = v),
-                ),
-                const SizedBox(height: 10),
-                _buildModuleToggle(
-                  icon: Icons.science_outlined,
-                  label: 'Fertilizer module',
-                  value: _hasFertilizerModule,
-                  onChanged: (v) => setState(() => _hasFertilizerModule = v),
-                ),
-                const SizedBox(height: 10),
-                _buildReadOnlyRow(
-                  icon: Icons.camera_alt_outlined,
-                  label: 'Camera module',
-                  trailing: const Text('Built-in', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
-                ),
+                if (isCamera)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.camera_alt_outlined, color: Colors.green[700], size: 20),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          "Camera node — uploads a photo to its zone's Camera feed every 4 hours.",
+                          style: TextStyle(color: Colors.black54),
+                        ),
+                      ),
+                    ],
+                  )
+                else ...[
+                  _buildModuleToggle(
+                    icon: Icons.wb_sunny_outlined,
+                    label: 'Light module',
+                    value: _hasLightingModule,
+                    onChanged: (v) => setState(() => _hasLightingModule = v),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildModuleToggle(
+                    icon: Icons.science_outlined,
+                    label: 'Fertilizer module',
+                    value: _hasFertilizerModule,
+                    onChanged: (v) => setState(() => _hasFertilizerModule = v),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildReadOnlyRow(
+                    icon: Icons.camera_alt_outlined,
+                    label: 'Camera module',
+                    trailing: const Text('Built-in', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
+                  ),
+                ],
               ],
             ),
           ),
@@ -166,20 +222,22 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
             builder: (context, snapshot) {
               final zone = snapshot.data?.zone;
               final plants = snapshot.data?.plants ?? [];
-              final slotsLeft = widget.device.totalSlots - plants.length;
+              final slotsLeft = device.totalSlots - plants.length;
 
               return _buildSection(
                 title: 'Zone assignment',
                 child: Column(
                   children: [
                     _buildInfoRow('Assigned zone', zone?.zoneName ?? 'Not assigned'),
-                    const SizedBox(height: 10),
-                    _buildInfoRow(
-                      'Plant slots',
-                      snapshot.connectionState == ConnectionState.waiting
-                          ? '...'
-                          : '${plants.length} used · ${slotsLeft.clamp(0, widget.device.totalSlots)} left (of ${widget.device.totalSlots})',
-                    ),
+                    if (!isCamera) ...[
+                      const SizedBox(height: 10),
+                      _buildInfoRow(
+                        'Plant slots',
+                        snapshot.connectionState == ConnectionState.waiting
+                            ? '...'
+                            : '${plants.length} used · ${slotsLeft.clamp(0, device.totalSlots)} left (of ${device.totalSlots})',
+                      ),
+                    ],
                   ],
                 ),
               );
@@ -187,19 +245,28 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
           ),
           const SizedBox(height: 16),
           _buildSection(
-            title: 'Sensor status',
+            title: isCamera ? 'Camera status' : 'Sensor status',
             child: Column(
               children: [
-                _buildInfoRow(
-                  'Availability',
-                  _sensorAvailable ? 'Available' : 'Unavailable',
-                  valueColor: _sensorAvailable ? Colors.green[700] : Colors.red[400],
-                ),
+                // A camera only syncs when it sends a photo (every 4 h), so show its
+                // connection instead of the 10-minute sensor availability.
+                if (isCamera)
+                  _buildInfoRow(
+                    'Connection',
+                    isOnline ? 'Online' : 'Offline',
+                    valueColor: isOnline ? Colors.green[700] : Colors.red[400],
+                  )
+                else
+                  _buildInfoRow(
+                    'Availability',
+                    _sensorAvailable ? 'Available' : 'Unavailable',
+                    valueColor: _sensorAvailable ? Colors.green[700] : Colors.red[400],
+                  ),
                 const SizedBox(height: 10),
                 _buildInfoRow(
-                  'Last sync',
-                  widget.device.lastSync != null
-                      ? _formatLastSync(widget.device.lastSync!)
+                  isCamera ? 'Last photo' : 'Last sync',
+                  device.lastSync != null
+                      ? _formatLastSync(device.lastSync!)
                       : 'Never',
                 ),
               ],

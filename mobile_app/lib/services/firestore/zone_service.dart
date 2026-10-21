@@ -50,6 +50,11 @@ class ZoneService {
     });
   }
 
+  // The zone's ESP32-CAM. Keep it in step with the camera's devices.assignedZoneId.
+  Future<void> updateZoneCamera(String zoneId, String? cameraDeviceId) async {
+    await _firestore.collection('zones').doc(zoneId).update({'cameraDeviceId': cameraDeviceId});
+  }
+
   Stream<Zone?> watchZone(String zoneId) {
     return _firestore
         .collection('zones')

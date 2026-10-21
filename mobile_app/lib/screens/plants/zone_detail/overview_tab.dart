@@ -24,6 +24,7 @@ class _OverviewTabState extends State<OverviewTab> {
   late final TextEditingController _zoneNameCtrl;
   bool _renameLoading = false;
   late final Stream<List<Plant>> _plantsStream;
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _latestSnapshotStream;
   late String? _photoUrl;
   bool _photoBusy = false;
 
@@ -40,6 +41,14 @@ class _OverviewTabState extends State<OverviewTab> {
     super.initState();
     _zoneNameCtrl = TextEditingController(text: widget.zone.zoneName);
     _plantsStream = PlantService().watchPlantsByZone(widget.zone.id);
+    // Newest camera-feed photo (ESP32-CAM or manual), shown in the banner when there's no zone photo
+    _latestSnapshotStream = FirebaseFirestore.instance
+        .collection('zones')
+        .doc(widget.zone.id)
+        .collection('snapshots')
+        .orderBy('capturedAt', descending: true)
+        .limit(1)
+        .snapshots();
     _photoUrl = widget.zone.zonePhotoUrl;
     _syncDeviceState(widget.zone);
   }
@@ -127,6 +136,8 @@ class _OverviewTabState extends State<OverviewTab> {
         _buildInfoCard(),
         const SizedBox(height: 20),
         _buildDeviceCard(),
+        const SizedBox(height: 20),
+        _CameraCard(zone: widget.zone),
       ],
     );
   }
@@ -148,7 +159,7 @@ class _OverviewTabState extends State<OverviewTab> {
               clipBehavior: Clip.antiAlias,
               child: _photoUrl != null
                   ? Image.network(_photoUrl!, fit: BoxFit.contain)
-                  : Center(child: Icon(Icons.photo, size: 48, color: cs.onSurface.withValues(alpha: 0.38))),
+                  : _buildLatestSnapshot(cs),
             ),
             if (_photoBusy)
               Positioned.fill(
@@ -179,6 +190,70 @@ class _OverviewTabState extends State<OverviewTab> {
         ),
       ],
     );
+  }
+
+  Widget _buildLatestSnapshot(ColorScheme cs) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _latestSnapshotStream,
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? [];
+        final data = docs.isEmpty ? null : docs.first.data();
+        final imageUrl = data?['imageUrl'] as String?;
+        if (imageUrl == null) {
+          return Center(child: Icon(Icons.photo, size: 48, color: cs.onSurface.withValues(alpha: 0.38)));
+        }
+
+        final capturedAtValue = data?['capturedAt'];
+        final capturedAt = capturedAtValue is Timestamp ? capturedAtValue.toDate() : null;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(imageUrl, fit: BoxFit.contain),
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: 8,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.camera_alt, size: 12, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          capturedAt != null
+                              ? 'Latest camera photo · ${_formatDateTime(context, capturedAt)}'
+                              : 'Latest camera photo',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _formatDateTime(BuildContext context, DateTime dt) {
+    final loc = MaterialLocalizations.of(context);
+    final time = loc.formatTimeOfDay(
+      TimeOfDay.fromDateTime(dt),
+      alwaysUse24HourFormat: MediaQuery.of(context).alwaysUse24HourFormat,
+    );
+    return '${loc.formatShortDate(dt)}, $time';
   }
 
   Future<void> _pickZonePhoto() async {
@@ -420,6 +495,212 @@ class _OverviewTabState extends State<OverviewTab> {
     );
   }
 
+}
+
+// ESP32-CAM node (firmware_cam/) that auto-uploads the zone's camera feed. Linked via
+// zones.cameraDeviceId ⇄ devices.assignedZoneId, separate from the sensor node's zones.deviceId.
+class _CameraCard extends StatefulWidget {
+  final Zone zone;
+
+  const _CameraCard({required this.zone});
+
+  @override
+  State<_CameraCard> createState() => _CameraCardState();
+}
+
+class _CameraCardState extends State<_CameraCard> {
+  Stream<Device?>? _cameraStream;
+  Future<List<Device>>? _availableCamerasFuture;
+  Device? _selectedCamera;
+  int _dropdownKey = 0;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncCameraState();
+  }
+
+  @override
+  void didUpdateWidget(_CameraCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.zone.cameraDeviceId != widget.zone.cameraDeviceId) {
+      _selectedCamera = null;
+      _syncCameraState();
+    }
+  }
+
+  void _syncCameraState() {
+    final cameraId = widget.zone.cameraDeviceId;
+    if (cameraId != null) {
+      _cameraStream = DeviceService().watchDevice(cameraId);
+      _availableCamerasFuture = null;
+    } else {
+      _cameraStream = null;
+      _dropdownKey++;
+      final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+      _availableCamerasFuture = DeviceService().getAvailableCameras(userId);
+    }
+  }
+
+  Future<void> _assign() async {
+    final camera = _selectedCamera;
+    if (camera == null) return;
+    setState(() => _busy = true);
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+      await ZoneService().updateZoneCamera(widget.zone.id, camera.id);
+      await DeviceService().assignDeviceToZone(camera.id, widget.zone.id, userId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign camera: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _remove() async {
+    final cameraId = widget.zone.cameraDeviceId;
+    if (cameraId == null) return;
+    setState(() => _busy = true);
+    try {
+      await DeviceService().unassignDevice(cameraId);
+      await ZoneService().updateZoneCamera(widget.zone.id, null);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove camera: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return _SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Camera', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(
+            'Uploads a photo to the Camera feed every 4 hours.',
+            style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.45)),
+          ),
+          const SizedBox(height: 14),
+          if (_cameraStream != null)
+            _buildAssignedCamera()
+          else
+            _buildAssignDropdown(cs),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssignedCamera() {
+    return StreamBuilder<Device?>(
+      stream: _cameraStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2));
+        }
+        final camera = snapshot.data;
+        if (camera == null) {
+          return Text('Camera not found.', style: TextStyle(color: Colors.red[400]));
+        }
+
+        final isOnline = camera.status == 'online';
+        final statusColor = isOnline ? Colors.green[700] : Colors.red[400];
+        return Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(camera.deviceName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      CircleAvatar(radius: 4, backgroundColor: statusColor),
+                      const SizedBox(width: 6),
+                      Text(
+                        isOnline ? 'Online' : 'Offline',
+                        style: TextStyle(fontSize: 12, color: statusColor),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            _busy
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : TextButton.icon(
+                    onPressed: _remove,
+                    icon: const Icon(Icons.link_off, size: 18),
+                    label: const Text('Remove'),
+                    style: TextButton.styleFrom(foregroundColor: Colors.red[400]),
+                  ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAssignDropdown(ColorScheme cs) {
+    return FutureBuilder<List<Device>>(
+      future: _availableCamerasFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final cameras = snapshot.data ?? [];
+        if (cameras.isEmpty) {
+          return Text(
+            'No available cameras. Register your ESP32-CAM (ID starts with ESP32CAM-) from the Devices screen.',
+            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45), fontSize: 13),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DropdownButtonFormField<Device>(
+              key: ValueKey(_dropdownKey),
+              initialValue: _selectedCamera,
+              decoration: const InputDecoration(
+                labelText: 'Select camera',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: cameras
+                  .map((d) => DropdownMenuItem(
+                        value: d,
+                        child: Text(d.deviceName),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedCamera = v),
+            ),
+            const SizedBox(height: 10),
+            ElevatedButton.icon(
+              onPressed: (_selectedCamera == null || _busy) ? null : _assign,
+              icon: _busy
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.link, size: 18),
+              label: const Text('Assign camera'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[700],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _ModuleChip extends StatelessWidget {
