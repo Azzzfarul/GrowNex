@@ -33,6 +33,8 @@ With the server running (`web_dashboard/server`, `npm run dev`):
 2. Open a zone and assign the sensor node in **Overview → Device**, and the camera in
    **Overview → Camera**.
 3. Readings appear within a minute. Manual controls and automation drive the simulated relays.
+   The camera's first photo goes out right after start, before it's assigned, so the server
+   ignores it: type `photo` once the camera is assigned to see it in the Camera feed.
 
 Options (after `npm start --`):
 
@@ -52,14 +54,15 @@ Type these while it runs:
 
 | Command | What happens | What to check |
 |---|---|---|
-| `dry` | soil moisture drops to 15% | threshold watering starts, an *Irrigation started* notification, moisture climbs while watering |
+| `dry` | soil moisture drops to 15% | threshold watering starts, an *Irrigation started* notification, moisture climbs while watering. Needs *Water automation* on with a moisture threshold; the server waters a device at most once every 30 minutes |
 | `wet` | soil moisture to 85% | zone status / alert for soil too wet |
-| `hot` / `cold` / `normal` | temperature ±12 °C | zone turns *attention* / *critical* with a threshold notification |
+| `hot` / `cold` / `normal` | temperature ±12 °C | zone turns *attention* / *critical* with a threshold notification. The zone needs plants with temperature ranges; alerts are sent at most every 30 minutes per zone, and not for the first status after a server restart |
 | `photo` | sends a camera photo now | Monitoring → Camera feed (replaces this 4-hour window's photo) |
-| `offline` / `online` | simulates a power cut / power back | device and zone show *Offline* (via the last-will), then recover |
+| `offline` / `online` | simulates a power cut / power back | device and zone show *Offline* (via the last-will), then recover. Relays switch off during the cut; on power-up the board takes the last command again and the camera sends a boot photo |
 | `reading` | sends a reading now | |
 | `state` | prints the simulated values | |
 | `quit` (or Ctrl+C) | marks both boards offline and exits | |
+| `forget` | clears the boards' retained messages from the broker and exits | use before deleting the simulated devices |
 
 The simulated soil dries about 0.6% a minute and gains about 15% a minute while the irrigation
 relay is on. Temperature and humidity follow the time of day. Light level is the firmware's fixed
@@ -71,5 +74,6 @@ placeholder (300), or 800 while the grow light is on.
 - The camera's `photo` command and image folder have no hardware equivalent.
 - The simulated boards don't drive any pins, so nothing physical switches on.
 
-Each simulated board shows up in Firestore like a real one. When you're done testing, delete
-it from the Devices page.
+Each simulated board shows up in Firestore like a real one. When you're done testing, type
+`forget`, then delete the devices from the Devices page. Without `forget`, the broker keeps the
+boards' last retained messages and the server recreates the devices the next time it starts.

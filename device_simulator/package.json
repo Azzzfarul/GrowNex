@@ -4,11 +4,17 @@
   "private": true,
   "description": "Simulated GrowNex ESP32 sensor/relay node and ESP32-CAM speaking the firmware's MQTT contract",
   "type": "module",
-  "engines": { "node": ">=18.11" },
+  "engines": {
+    "node": ">=18.11"
+  },
   "scripts": {
-    "start": "node simulator.js"
+    "start": "node simulator.js",
+    "test": "node --test --test-timeout=20000 test/"
   },
   "dependencies": {
     "mqtt": "^5.15.1"
+  },
+  "devDependencies": {
+    "aedes": "^1.2.0"
   }
 }

@@ -36,7 +36,9 @@ const COMMANDS = `Commands (type and press Enter):
   normal             clear hot/cold
   reading            publish a sensor reading now
   photo              publish a camera photo now (ignores the 4-hour window)
-  offline | online   simulate a power cut (last-will fires) / power back on
+  offline | online   simulate a power cut (last-will fires, relays off) / power back on
+  forget             clear this board's retained messages from the broker, then quit
+                     (do this before deleting the simulated devices in the app)
   state              show the current simulated values
   help | quit`
 
@@ -75,7 +77,9 @@ function brokerConfig() {
   const secretsPath = path.join(HERE, '..', 'firmware', 'include', 'secrets.h')
   const secrets = {}
   if (existsSync(secretsPath)) {
-    for (const [, key, value] of readFileSync(secretsPath, 'utf8').matchAll(/#define\s+(\w+)\s+"([^"]*)"/g)) {
+    // Only lines that are a #define, so `// #define …` and /* … */ blocks are skipped like the compiler does.
+    const text = readFileSync(secretsPath, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    for (const [, key, value] of text.matchAll(/^\s*#define\s+(\w+)\s+"([^"]*)"/gm)) {
       secrets[key] = value
     }
   }
@@ -103,6 +107,8 @@ function fakeMac(kind) {
 const broker = brokerConfig()
 const sensorId = opt.id || `ESP32-${fakeMac('sensor')}`
 const cameraId = opt['camera-id'] || `ESP32CAM-${fakeMac('camera')}`
+// The ID is a topic level (grownex/{id}/…) and a Firestore doc ID: no / + # or spaces.
+for (const id of [sensorId, cameraId]) if (/[/+#\s]/.test(id)) fail(`Invalid device ID "${id}": no / + # or spaces`)
 if (runCamera && !cameraId.startsWith('ESP32CAM-')) {
   fail('--camera-id must start with ESP32CAM- (the server uses the prefix to recognise cameras)')
 }
@@ -140,15 +146,28 @@ function connect(id, { keepalive }) {
   return client
 }
 
-// Power cut: drop the socket without a DISCONNECT so the broker fires the last-will.
+// Power cut: a forced close sends no DISCONNECT, so the broker fires the last-will; it also
+// stops any reconnect already in progress.
 function powerOff(client) {
-  client.options.reconnectPeriod = 0
-  client.stream?.destroy()
+  client.end(true)
 }
 
 function powerOn(client) {
-  client.options.reconnectPeriod = RECONNECT_MS
   if (!client.connected) client.reconnect()
+}
+
+// Empty retained publishes delete the retained status/state/command, so the bridge can't
+// recreate the device from them after it's deleted in the app.
+function forget(client, id) {
+  const topics = ['status', 'actuators/state', 'actuators/command'].map(t => `grownex/${id}/${t}`)
+  return new Promise(resolve => {
+    if (!client.connected) { log(id, 'not connected — nothing cleared'); resolve(); return }
+    let left = topics.length
+    for (const t of topics) {
+      client.publish(t, '', { retain: true }, () => { if (--left === 0) client.end(false, resolve) })
+    }
+    log(id, 'retained messages cleared')
+  })
 }
 
 // Clean shutdown (Ctrl+C): mark the board offline first, as the last-will would.
@@ -226,6 +245,7 @@ function startSensor() {
   sensorClient.on('message', (_topic, buf) => {
     let cmd
     try { cmd = JSON.parse(buf.toString()) } catch { return }
+    if (!cmd || typeof cmd !== 'object') return  // e.g. a retained `null`; the firmware ignores it too
     for (const key of ['lightState', 'fertilizerState', 'irrigationState']) {
       if (key in cmd) sim.actuators[key] = !!cmd[key]
     }
@@ -293,7 +313,9 @@ function startCamera() {
   }
   cameraClient.on('connect', () => setTimeout(tick, FIRST_SEND_DELAY_MS))  // see the sensor node
   setInterval(tick, 10_000)
-  return { publishPhoto, imageCount: images.length }
+  // After a power cut the board boots again and takes its boot photo, like firmware_cam.
+  const reboot = () => { lastUploadedBucket = null; lastAttempt = 0 }
+  return { publishPhoto, reboot, imageCount: images.length }
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────────
@@ -307,7 +329,11 @@ console.log('Claim them in the app: Devices → Add device (they show under "New
 
 const clients = () => [[sensorClient, sensorId], [cameraClient, cameraId]].filter(([c]) => c)
 
+let quitting = false
 async function quit() {
+  if (quitting) process.exit(1)  // second Ctrl+C: leave now
+  quitting = true
+  setTimeout(() => process.exit(0), 2000).unref()  // a dead link must not keep us waiting
   await Promise.all(clients().map(([c, id]) => shutdown(c, id)))
   process.exit(0)
 }
@@ -328,7 +354,16 @@ if (process.stdin.isTTY) console.log(`\n${COMMANDS}\n`)
       case 'normal': sim.tempOffset = 0; log('sim', 'temperature back to normal'); sensor?.publishReading(); break
       case 'reading': sensor ? sensor.publishReading() : log('sim', 'no sensor node running'); break
       case 'photo': camera ? await camera.publishPhoto() : log('sim', 'no camera node running'); break
-      case 'offline': clients().forEach(([c, id]) => { powerOff(c); log(id, 'power cut — broker sends the last-will "offline"') }); break
+      case 'offline':
+        // A board without power has every relay off, and boots again afterwards.
+        sim.actuators = { lightState: false, fertilizerState: false, irrigationState: false }
+        camera?.reboot()
+        clients().forEach(([c, id]) => { powerOff(c); log(id, 'power cut — broker sends the last-will "offline"') })
+        break
+      case 'forget':
+        await Promise.all(clients().map(([c, id]) => forget(c, id)))
+        process.exit(0)
+        break
       case 'online': clients().forEach(([c, id]) => { powerOn(c); log(id, 'power back on') }); break
       case 'state':
         console.log({ moisture: sim.moisture.map(round1), tempOffset: sim.tempOffset, ...sim.actuators,
