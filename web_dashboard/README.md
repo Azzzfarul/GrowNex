@@ -60,3 +60,33 @@ cd server && npm run dev
 ```
 
 Login uses the same Firebase Auth accounts created via the mobile app.
+
+## Tests
+
+No live Firebase project or hardware is touched by any of these.
+
+```bash
+cd client && npm test                 # analytics, plant-health and zone-fit logic
+cd server && npm test                 # AI output validation, schedule parsers, zone status
+cd server && npm run test:integration # real server + MQTT bridge + nightly job (~1-2 min)
+```
+
+The integration suite starts the Firebase emulators (Auth, Firestore, Storage, project
+`demo-grownex`; needs Java 21+) and an in-process MQTT broker, then drives fake devices
+and REST calls through the real server.
+
+### Local sandbox
+
+To click around the app safely, run it against the emulators instead of the live project:
+
+```bash
+npx firebase-tools emulators:start --project demo-grownex --only auth,firestore,storage
+# server: emulator hosts + a local MQTT broker (any broker on :1883, e.g. mosquitto)
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 FIREBASE_PROJECT_ID=demo-grownex \
+FIREBASE_STORAGE_BUCKET=demo-grownex.appspot.com MQTT_BROKER_HOST=127.0.0.1 MQTT_BROKER_PORT=1883 \
+MQTT_USER= MQTT_PASS= npm start
+# client
+VITE_USE_EMULATORS=true VITE_FIREBASE_PROJECT_ID=demo-grownex VITE_FIREBASE_API_KEY=fake \
+VITE_FIREBASE_STORAGE_BUCKET=demo-grownex.appspot.com npm run dev
+```

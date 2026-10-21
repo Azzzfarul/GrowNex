@@ -4,10 +4,10 @@ import { db } from '../../firebase'
 import { useAuth } from '../../context/AuthContext'
 import { fetchAutomationPlan } from '../../lib/aiSummary'
 
-// Same formats the bridge parses and validatePlan (server/src/services/aiAnalytics.js) accepts
-const TIME_RE  = /^([01]\d|2[0-3]):[0-5]\d$/
-const LIGHT_RE = /^([01]\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]\d|2[0-3]):[0-5]\d$/
-const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN)\s([01]\d|2[0-3]):[0-5]\d$/
+// Formats the bridge's schedule parsers accept (server/src/services/mqttBridge.js); "7:00" is fine there too
+const TIME_RE  = /^([01]?\d|2[0-3]):[0-5]\d$/
+const LIGHT_RE = /^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$/
+const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN)\s([01]?\d|2[0-3]):[0-5]\d$/
 
 function Toggle({ value, onChange }) {
   return (
@@ -125,9 +125,12 @@ export default function AutomationTab({ zone }) {
 
   async function saveTextConfig() {
     const ws = waterSched.trim(), ls = lightSched.trim(), fs = fertSched.trim().toUpperCase()
-    if (ws && !TIME_RE.test(ws))  return setConfigError('Watering time must look like 07:00 (24-hour).')
-    if (ls && !LIGHT_RE.test(ls)) return setConfigError('Lighting schedule must look like 08:00–18:00.')
-    if (fs && !FERT_RE.test(fs))  return setConfigError('Fertilizing schedule must look like MON 06:00.')
+    // Only check fields the user changed: a hidden field (e.g. lighting without a light
+    // module) holding an old value must not block saving the others.
+    const bad = (v, orig, re) => v && v !== orig.trim() && !re.test(v)
+    if (bad(ws, waterSchedOrig, TIME_RE))              return setConfigError('Watering time must look like 07:00 (24-hour).')
+    if (bad(ls, lightSchedOrig, LIGHT_RE))             return setConfigError('Lighting schedule must look like 08:00–18:00.')
+    if (bad(fs, fertSchedOrig.toUpperCase(), FERT_RE)) return setConfigError('Fertilizing schedule must look like MON 06:00.')
     setConfigError(null)
     await setDoc(doc(db, 'automationConfig', zone.id), {
       wateringThreshold:   waterThresh    ? parseFloat(waterThresh)   : null,

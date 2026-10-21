@@ -26,8 +26,9 @@ async function maybeNotifyStatus(zoneId, newStatus, alertSummary) {
   const prev = zoneStatusCache.get(zoneId)
   zoneStatusCache.set(zoneId, newStatus)
 
+  if (prev === undefined) return  // first status since restart — don't re-alert on every reboot
   if (!['attention', 'critical'].includes(newStatus)) return
-  if ((STATUS_RANK[newStatus] ?? 0) <= (STATUS_RANK[prev ?? 'unknown'] ?? 0)) return  // not worse (or first sighting)
+  if ((STATUS_RANK[newStatus] ?? 0) <= (STATUS_RANK[prev] ?? 0)) return  // not worse
 
   const last = lastAlertAt.get(zoneId) ?? 0
   if (Date.now() - last < ALERT_COOLDOWN_MS) return
@@ -314,7 +315,7 @@ function watchPlants() {
   }, err => console.error('[MQTT bridge] plants listener stopped:', err.message))
 }
 
-function computeZoneStatus(sensorFields, plants) {
+export function computeZoneStatus(sensorFields, plants) {
   if (!plants || plants.length === 0) return { status: 'unknown', alertSummary: null }
 
   const avg = field => {
@@ -394,7 +395,19 @@ const COOLDOWN_MS    = 30 * 60 * 1000  // 30 minutes
 
 // triggerActuator: reads current device state, merges one field, publishes.
 // Calls publishCommand directly (no debounce) — schedule/threshold should fire immediately.
-async function triggerActuator(zoneId, actuator, state) {
+// Runs one at a time per zone: same-minute schedules (e.g. light 06:00 + fertilizer MON 06:00)
+// would otherwise each read the old state and overwrite each other's change.
+// shortcut: in-process queue, fine while only one bridge runs (the MQTT client ID already forces that).
+const actuatorQueues = new Map()  // Map<zoneId, Promise>
+function triggerActuator(zoneId, actuator, state) {
+  const run = (actuatorQueues.get(zoneId) ?? Promise.resolve())
+    .catch(() => {})
+    .then(() => applyActuator(zoneId, actuator, state))
+  actuatorQueues.set(zoneId, run)
+  return run
+}
+
+async function applyActuator(zoneId, actuator, state) {
   // Use zones.deviceId (the relay node) — a camera in the same zone shares assignedZoneId.
   const z = (await db.collection('zones').doc(zoneId).get()).data() ?? {}
   if (!z.deviceId) return
@@ -445,13 +458,13 @@ function fireActuator(zoneId, actuator, state) {
 
 // Schedule string parsers
 // "07:00"        → "0 7 * * *"    (daily)
-function dailyCron(timeStr) {
+export function dailyCron(timeStr) {
   const [h, m] = timeStr.trim().split(':').map(Number)
   return `${m} ${h} * * *`
 }
 
 // "08:00–18:00"  → { onCron, offCron }  (daily on/off)
-function lightCron(schedStr) {
+export function lightCron(schedStr) {
   const [on, off] = schedStr.split(/[–-]/).map(s => s.trim())
   const [oh, om]  = on.split(':').map(Number)
   const [fh, fm]  = off.split(':').map(Number)
@@ -460,7 +473,7 @@ function lightCron(schedStr) {
 
 // "MON 06:00"    → "0 6 * * 1"    (weekly, specific day)
 const DAY_MAP = { SUN: 0, MON: 1, TUE: 2, WED: 3, THU: 4, FRI: 5, SAT: 6 }
-function weeklyCron(schedStr) {
+export function weeklyCron(schedStr) {
   const [day, time] = schedStr.trim().split(' ')
   const [h, m]      = time.split(':').map(Number)
   return `${m} ${h} * * ${DAY_MAP[day.toUpperCase()] ?? 1}`

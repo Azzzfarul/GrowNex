@@ -38,6 +38,9 @@ router.delete('/me', verifyToken, async (req, res) => {
     const db = getFirestore()
     const bucket = getStorage().bucket()
     const writer = db.bulkWriter()
+    // Each bulkWriter op returns its own promise; an unhandled rejection would crash the server.
+    const failed = []
+    const del = (ref) => writer.delete(ref).catch(e => failed.push(e))
     const delFile = (path) => bucket.file(path).delete({ ignoreNotFound: true }).catch(() => {})
 
     const zonesSnap = await db.collection('zones').where('userId', '==', uid).get()
@@ -46,11 +49,11 @@ router.delete('/me', verifyToken, async (req, res) => {
 
       const plantsSnap = await db.collection('plants').where('zoneId', '==', zoneId).get()
       for (const p of plantsSnap.docs) {
-        writer.delete(p.ref)
+        del(p.ref)
         await delFile(`plantPhotos/${p.id}.jpg`)
       }
 
-      writer.delete(db.collection('automationConfig').doc(zoneId))
+      del(db.collection('automationConfig').doc(zoneId))
       await delFile(`zonePhotos/${zoneId}.jpg`)
       await bucket.deleteFiles({ prefix: `zoneSnapshots/${zoneId}/` }).catch(() => {})
       // Zone doc plus every subcollection (sensorReadings, stats, aiCache, snapshots)
@@ -58,12 +61,14 @@ router.delete('/me', verifyToken, async (req, res) => {
     }
 
     const devicesSnap = await db.collection('devices').where('userId', '==', uid).get()
-    devicesSnap.docs.forEach(d => writer.delete(d.ref))
+    devicesSnap.docs.forEach(d => del(d.ref))
 
     const notifSnap = await db.collection('notifications').where('userId', '==', uid).get()
-    notifSnap.docs.forEach(d => writer.delete(d.ref))
+    notifSnap.docs.forEach(d => del(d.ref))
 
     await writer.close()
+    // Keep the login so the user can retry; every step above is safe to repeat.
+    if (failed.length) throw new Error(`${failed.length} document(s) could not be deleted`)
     await db.collection('users').doc(uid).delete()
     await getAuth().deleteUser(uid)
 

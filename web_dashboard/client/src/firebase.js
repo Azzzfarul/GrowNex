@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
-import { getStorage } from 'firebase/storage'
+import { getAuth, connectAuthEmulator } from 'firebase/auth'
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
+import { getStorage, connectStorageEmulator } from 'firebase/storage'
 import { getAnalytics } from 'firebase/analytics'
 
 const firebaseConfig = {
@@ -19,5 +19,13 @@ const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const storage = getStorage(app)
-export const analytics = getAnalytics(app)
+
+// VITE_USE_EMULATORS=true → local Firebase emulators (see README "Local test sandbox")
+const useEmulators = import.meta.env.VITE_USE_EMULATORS === 'true'
+if (useEmulators) {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+  connectFirestoreEmulator(db, '127.0.0.1', 8080)
+  connectStorageEmulator(storage, '127.0.0.1', 9199)
+}
+export const analytics = useEmulators ? null : getAnalytics(app)
 export default app
