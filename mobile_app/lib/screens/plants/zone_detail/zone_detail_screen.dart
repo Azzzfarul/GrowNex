@@ -71,9 +71,13 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
           .doc(zone.id)
           .delete()
           .catchError((_) {});
-      // Unassign connected device
-      if (zone.deviceId != null) {
-        await DeviceService().unassignDevice(zone.deviceId!);
+      // Unassign the sensor node and camera so they can be reassigned
+      for (final deviceId in [zone.deviceId, zone.cameraDeviceId].whereType<String>()) {
+        try {
+          await DeviceService().unassignDevice(deviceId);
+        } catch (_) {
+          // Best effort, as on the web: the device may already be deleted.
+        }
       }
       // Delete zone document
       await ZoneService().deleteZone(zone.id);

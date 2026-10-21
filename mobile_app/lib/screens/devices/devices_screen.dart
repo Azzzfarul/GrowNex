@@ -150,7 +150,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
               radius: 24,
               backgroundColor: chipBg,
               child: Icon(
-                Icons.developer_board,
+                device.isCamera ? Icons.camera_alt : Icons.developer_board,
                 color: online ? Colors.green[700] : cs.onSurface.withValues(alpha: 0.5),
                 size: 24,
               ),
@@ -164,7 +164,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   Text(
-                    device.deviceType == 'indoor' ? 'Indoor' : 'Outdoor',
+                    device.typeLabel,
                     style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.5), fontSize: 13),
                   ),

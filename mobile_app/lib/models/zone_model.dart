@@ -9,6 +9,7 @@ class Zone {
   final int totalPlantSlots;
   final String? zonePhotoUrl;
   final String? deviceId;
+  final String? cameraDeviceId;
   final num? latestTemp;
   final num? latestHumid;
   final num? latestLight;
@@ -33,6 +34,7 @@ class Zone {
     required this.totalPlantSlots,
     this.zonePhotoUrl,
     this.deviceId,
+    this.cameraDeviceId,
     this.latestTemp,
     this.latestHumid,
     this.latestLight,
@@ -71,6 +73,8 @@ class Zone {
       createdAt = createdAtValue;
     }
 
+    final cameraDeviceIdValue = map['cameraDeviceId'];
+
     final latestTimestampValue = map['latestTimestamp'];
     DateTime? latestTimestamp;
 
@@ -89,6 +93,10 @@ class Zone {
       totalPlantSlots: (map['totalPlantSlots'] as num?)?.toInt() ?? 0,
       zonePhotoUrl: map['zonePhotoUrl'] as String?,
       deviceId: map['deviceId'] as String?,
+      // Empty counts as "no camera", as on the web.
+      cameraDeviceId: cameraDeviceIdValue is String && cameraDeviceIdValue.isNotEmpty
+          ? cameraDeviceIdValue
+          : null,
       latestTemp: _n(map['latestTemp']),
       latestHumid: _n(map['latestHumid']),
       latestLight: _n(map['latestLight']),
@@ -106,6 +114,7 @@ class Zone {
     );
   }
 
+  // cameraDeviceId is left out on purpose: only the Camera card's assign/remove writes it.
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
