@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   collection, query, where, onSnapshot,
   getDocs, orderBy, Timestamp,
@@ -88,6 +88,8 @@ export default function AnalyticsPage() {
   const [loadingReadings, setLoadingReadings] = useState(false)
   const [aiSummaries,     setAiSummaries]     = useState({})
   const [loadedFor,       setLoadedFor]       = useState(null)  // { zoneId, timeRange } of readings/plants
+  // Bumped on every new selection; an AI answer for an older one is dropped (mobile: _fetchSeq).
+  const loadSeq = useRef(0)
 
   // Live zone subscription
   useEffect(() => {
@@ -107,6 +109,7 @@ export default function AnalyticsPage() {
   useEffect(() => {
     if (!zones.length) return
     let cancelled = false
+    loadSeq.current++
     setLoadingReadings(true)
     setAiSummaries({})  // don't show the previous zone's AI text while loading
 
@@ -158,6 +161,9 @@ export default function AnalyticsPage() {
     if (!zone) { setAiSummaries({}); return }
 
     let cancelled = false
+    const seq = loadSeq.current
+    const stale = () => cancelled || seq !== loadSeq.current
+    setAiSummaries({})
     const cd    = buildChartData(readings, timeRange)
     const tPref = avgPref(plants, 'preferredTemperatureMin', 'preferredTemperatureMax')
     const hPref = avgPref(plants, 'preferredHumidityMin',    'preferredHumidityMax')
@@ -196,8 +202,8 @@ export default function AnalyticsPage() {
 
     user.getIdToken()
       .then(tok => fetchAiSummary(tok, payload))
-      .then(r => { if (!cancelled) setAiSummaries(r) })
-      .catch(() => { if (!cancelled) setAiSummaries({}) })
+      .then(r => { if (!stale()) setAiSummaries(r) })
+      .catch(() => { if (!stale()) setAiSummaries({}) })
 
     return () => { cancelled = true }
   }, [loadedFor, user]) // eslint-disable-line react-hooks/exhaustive-deps

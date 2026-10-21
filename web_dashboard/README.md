@@ -105,4 +105,8 @@ cd mobile_app && flutter test                        # shared logic, same cases 
 # Full walkthrough on an Android emulator, with the sandbox above running (PROJECT=grownex-iot)
 # and ESP32-MOB01 unclaimed (restart test/sandbox.js against fresh emulators, or delete its doc):
 flutter test integration_test --dart-define=USE_FIREBASE_EMULATORS=true
+# Same, with the server unreachable: account deletion takes the direct-Firebase fallback
+flutter test integration_test --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=API_BASE_URL=http://10.0.2.2:5999
 ```
+The app calls the server at `API_BASE_URL` (default `http://10.0.2.2:5000`, the dev machine seen from
+the Android emulator). Point it at a sandbox server, never at a dev server using the live project.

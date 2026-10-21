@@ -33,6 +33,7 @@ class _AutomationTabState extends State<AutomationTab> {
   // Until the saved config arrives the form shows defaults; a toggle then would overwrite
   // the real config, so nothing is editable before this is true.
   bool _loaded = false;
+  String? _loadError;  // shown with a Retry button instead of an endless spinner
   bool _autoWater     = false;
   bool _autoLight     = false;
   bool _autoFertilizer = false;
@@ -84,11 +85,12 @@ class _AutomationTabState extends State<AutomationTab> {
   }
 
   Future<void> _loadConfig() async {
+    if (_loadError != null) setState(() => _loadError = null);
     final AutomationConfig? config;
     try {
       config = await _configService.getConfig(widget.zone.id);
     } catch (e) {
-      if (mounted) _snack('Could not load automation settings: $e');
+      if (mounted) setState(() => _loadError = 'Could not load automation settings.\n$e');
       return;
     }
     if (!mounted) return;
@@ -348,7 +350,20 @@ class _AutomationTabState extends State<AutomationTab> {
       );
     }
 
-    if (!_loaded) return const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()));
+    if (!_loaded) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: _loadError == null
+              ? const CircularProgressIndicator()
+              : Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_loadError!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  OutlinedButton(onPressed: _loadConfig, child: const Text('Retry')),
+                ]),
+        ),
+      );
+    }
 
     final isDirty = _wateringThresholdCtrl.text != _savedWaterThreshold ||
         _wateringScheduleCtrl.text    != _savedWaterSchedule  ||

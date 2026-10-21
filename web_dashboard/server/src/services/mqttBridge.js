@@ -167,7 +167,9 @@ async function handleSensors(deviceId, payload) {
       const last = lastIrrTrigger.get(deviceId) ?? 0
       if (Date.now() - last > COOLDOWN_MS) {
         lastIrrTrigger.set(deviceId, Date.now())
-        await triggerActuator(assignedZoneId, 'irrigation', true)
+        // Like the cron jobs: the auto-off is scheduled even if the "on" reports an error — the
+        // write may have committed anyway, and nothing else would ever switch the pump off.
+        await fireActuator(assignedZoneId, 'irrigation', true)
         const waterDuration = (cfg.wateringDuration ?? 300) * 1000
         setTimeout(() => fireActuator(assignedZoneId, 'irrigation', false), waterDuration)
         console.log(`[MQTT bridge] threshold trigger → ${deviceId} (moisture ${moisture}% < ${cfg.wateringThreshold}%), auto-off in ${waterDuration / 1000}s`)

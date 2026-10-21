@@ -43,6 +43,13 @@ router.delete('/me', verifyToken, async (req, res) => {
     const del = (ref) => writer.delete(ref).catch(e => failed.push(e))
     const delFile = (path) => bucket.file(path).delete({ ignoreNotFound: true }).catch(() => {})
 
+    // Devices first: while a device doc still points at a zone, its next reading would recreate
+    // sensorReadings/stats under the deleted zone, which nothing ever cleans up. Without the doc,
+    // the bridge re-registers the device as unclaimed and writes nothing.
+    const devicesSnap = await db.collection('devices').where('userId', '==', uid).get()
+    const deviceDeletes = await Promise.allSettled(devicesSnap.docs.map(d => d.ref.delete()))
+    if (deviceDeletes.some(r => r.status === 'rejected')) throw new Error('devices could not be deleted')
+
     const zonesSnap = await db.collection('zones').where('userId', '==', uid).get()
     for (const zoneDoc of zonesSnap.docs) {
       const zoneId = zoneDoc.id
@@ -59,9 +66,6 @@ router.delete('/me', verifyToken, async (req, res) => {
       // Zone doc plus every subcollection (sensorReadings, stats, aiCache, snapshots)
       await db.recursiveDelete(zoneDoc.ref)
     }
-
-    const devicesSnap = await db.collection('devices').where('userId', '==', uid).get()
-    devicesSnap.docs.forEach(d => del(d.ref))
 
     const notifSnap = await db.collection('notifications').where('userId', '==', uid).get()
     notifSnap.docs.forEach(d => del(d.ref))

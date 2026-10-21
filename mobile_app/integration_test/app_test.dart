@@ -185,5 +185,7 @@ void main() {
     expect((await db.collection('zones').where('userId', isEqualTo: uid).get()).docs, isEmpty);
     expect((await db.doc('users/$uid').get()).exists, isFalse);
     expect((await db.collection('zones/$zoneId/stats').get()).docs, isEmpty);
+    expect((await db.collection('devices').where('userId', isEqualTo: uid).get()).docs, isEmpty);
+    expect((await db.collection('plants').where('zoneId', isEqualTo: zoneId).get()).docs, isEmpty);
   });
 }
