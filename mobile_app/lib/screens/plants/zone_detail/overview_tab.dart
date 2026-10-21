@@ -89,18 +89,21 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   Future<void> _assign() async {
-    if (_selectedDevice == null) return;
+    // Local copy: the zone write below fires the zone listener at once, and didUpdateWidget
+    // then clears _selectedDevice before the device write runs.
+    final device = _selectedDevice;
+    if (device == null) return;
     setState(() => _assignLoading = true);
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
       await ZoneService().updateZoneDevice(
         widget.zone.id,
-        _selectedDevice!.id,
-        hasFertilizer: _selectedDevice!.hasFertilizerModule,
-        hasLight: _selectedDevice!.hasLightingModule,
-        totalPlantSlots: _selectedDevice!.totalSlots,
+        device.id,
+        hasFertilizer: device.hasFertilizerModule,
+        hasLight: device.hasLightingModule,
+        totalPlantSlots: device.totalSlots,
       );
-      await DeviceService().assignDeviceToZone(_selectedDevice!.id, widget.zone.id, userId);
+      await DeviceService().assignDeviceToZone(device.id, widget.zone.id, userId);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign device: $e')));

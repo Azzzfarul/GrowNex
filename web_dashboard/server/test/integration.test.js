@@ -148,6 +148,21 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await waitFor(() => docData('devices/ESP32-LONER'), 'loner created')
   })
 
+  test('a burst of first messages registers a device once and never undoes a claim', async () => {
+    const id = 'ESP32-BURST'
+    await Promise.all([
+      publish(`grownex/${id}/status`, 'online', { retain: true }),
+      publish(`grownex/${id}/actuators/state`, { deviceId: id, irrigationState: false, fertilizerState: false, lightState: false }),
+      sensors(id, { temperature: 20, humidity: 50, lightLevel: 0, soilMoisture1: 50 }),
+      sensors(id, { temperature: 20, humidity: 50, lightLevel: 0, soilMoisture1: 50 }),
+    ])
+    await waitFor(() => docData(`devices/${id}`), 'burst device created')
+    await db.doc(`devices/${id}`).update({ userId: users.bob.uid })  // claimed right away
+    await sleep(1500)
+    assert.equal(logs.filter(l => l.includes(`new device registered: ${id}`)).length, 1)
+    assert.equal((await docData(`devices/${id}`)).userId, users.bob.uid, 'claim survived')
+  })
+
   test('a claimed, assigned device writes readings, hourly stats and zone status', async () => {
     const uid = users.alice.uid
     // What the web client does on claim + assign + add plants

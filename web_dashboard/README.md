@@ -77,16 +77,32 @@ and REST calls through the real server.
 
 ### Local sandbox
 
-To click around the app safely, run it against the emulators instead of the live project:
+To click around the apps safely, run them against the emulators instead of the live project.
+`PROJECT` is any ID: use `demo-grownex` for the web app alone, or `grownex-iot` (the ID in the
+mobile app's `google-services.json`) when the phone app is involved.
 
 ```bash
-npx firebase-tools emulators:start --project demo-grownex --only auth,firestore,storage
-# server: emulator hosts + a local MQTT broker (any broker on :1883, e.g. mosquitto)
+# 1. Firebase emulators (Auth, Firestore, Storage)
+npx firebase-tools emulators:start --project $PROJECT --only auth,firestore,storage
+# 2. MQTT broker on :1883 + a fake sensor node ESP32-MOB01 (readings every 3 s)
+cd server && node test/sandbox.js
+# 3. Server against the emulators and the local broker
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
-FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 FIREBASE_PROJECT_ID=demo-grownex \
-FIREBASE_STORAGE_BUCKET=demo-grownex.appspot.com MQTT_BROKER_HOST=127.0.0.1 MQTT_BROKER_PORT=1883 \
+FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 FIREBASE_PROJECT_ID=$PROJECT \
+FIREBASE_STORAGE_BUCKET=$PROJECT.appspot.com MQTT_BROKER_HOST=127.0.0.1 MQTT_BROKER_PORT=1883 \
 MQTT_USER= MQTT_PASS= npm start
-# client
-VITE_USE_EMULATORS=true VITE_FIREBASE_PROJECT_ID=demo-grownex VITE_FIREBASE_API_KEY=fake \
-VITE_FIREBASE_STORAGE_BUCKET=demo-grownex.appspot.com npm run dev
+# 4a. Web client
+VITE_USE_EMULATORS=true VITE_FIREBASE_PROJECT_ID=$PROJECT VITE_FIREBASE_API_KEY=fake \
+VITE_FIREBASE_STORAGE_BUCKET=$PROJECT.appspot.com npm run dev
+# 4b. Mobile app on an Android emulator (debug builds only)
+cd ../mobile_app && flutter run --dart-define=USE_FIREBASE_EMULATORS=true
+```
+
+### Mobile tests
+
+```bash
+cd mobile_app && flutter test                        # shared logic, same cases as client/test
+# Full walkthrough on an Android emulator, with the sandbox above running (PROJECT=grownex-iot)
+# and ESP32-MOB01 unclaimed (restart test/sandbox.js against fresh emulators, or delete its doc):
+flutter test integration_test --dart-define=USE_FIREBASE_EMULATORS=true
 ```

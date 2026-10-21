@@ -59,7 +59,9 @@ async function getOrCreateDevice(deviceId) {
   const snap = await ref.get()
   if (!snap.exists) {
     const camera = isCameraId(deviceId)
-    await ref.set({
+    // create(), not set(): a device's first messages (status, state, sensors) arrive together,
+    // and a late set() would overwrite the doc — un-claiming it if the user claimed it meanwhile.
+    const created = await ref.create({
       deviceName:          deviceId,
       deviceType:          camera ? 'camera' : 'indoor',
       status:              'online',
@@ -69,8 +71,8 @@ async function getOrCreateDevice(deviceId) {
       totalSlots:          camera ? 0 : 4,
       userId:              '',
       lastSync:            FieldValue.serverTimestamp(),
-    })
-    console.log(`[MQTT bridge] new device registered: ${deviceId}`)
+    }).then(() => true, e => { if (e.code === 6) return false; throw e })  // 6 = ALREADY_EXISTS
+    if (created) console.log(`[MQTT bridge] new device registered: ${deviceId}`)
   }
   return (await ref.get()).data()
 }

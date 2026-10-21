@@ -411,12 +411,13 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   }
 
   Widget _buildPreferredConditions(ColorScheme cs) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
-      ),
+    // Material (not a decorated Container) so the tile's tap ripple shows.
+    return Material(
+      color: cs.surfaceContainer,
+      elevation: 2,
+      shadowColor: cs.shadow.withValues(alpha: 0.3),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
