@@ -349,6 +349,7 @@ export default function AnalyticsPage() {
   const [loadingZones,    setLoadingZones]    = useState(true)
   const [loadingReadings, setLoadingReadings] = useState(false)
   const [aiSummaries,     setAiSummaries]     = useState({})
+  const [loadedFor,       setLoadedFor]       = useState(null)  // { zoneId, timeRange } of readings/plants
 
   // Live zone subscription
   useEffect(() => {
@@ -362,10 +363,14 @@ export default function AnalyticsPage() {
     )
   }, [user])
 
-  // Fetch readings + plants when zone selection or time range changes
+  // Fetch readings + plants when zone selection or time range changes. Keyed on zone IDs, not
+  // `zones`: the bridge rewrites every zone doc each minute, which would refetch (and re-call AI).
+  const zoneIdsKey = zones.map(z => z.id).join(',')
   useEffect(() => {
     if (!zones.length) return
+    let cancelled = false
     setLoadingReadings(true)
+    setAiSummaries({})  // don't show the previous zone's AI text while loading
 
     const cutoff = new Date()
     if (timeRange === 'today') cutoff.setHours(cutoff.getHours() - 24)
@@ -392,16 +397,24 @@ export default function AnalyticsPage() {
         )
       ).then(arr => arr.flat()),
     ]).then(([r, p]) => {
+      if (cancelled) return
       setReadings(r)
       setPlants(p)
-      setLoadingReadings(false)
+      setLoadedFor({ zoneId: selectedZoneId, timeRange })
+    }).catch(err => {
+      console.error('Failed to load analytics:', err)
+    }).finally(() => {
+      if (!cancelled) setLoadingReadings(false)
     })
-  }, [zones, selectedZoneId, timeRange])
+    return () => { cancelled = true }
+  }, [zoneIdsKey, selectedZoneId, timeRange]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch the AI analytics summary — one server call per zone/time-range; any
+  // Fetch the AI analytics summary — one server call per loaded zone/time-range; any
   // failure leaves aiSummaries empty and the UI shows the rule-based text.
+  // Runs off `loadedFor` so the payload never mixes one zone's ID with another's readings.
   useEffect(() => {
-    if (selectedZoneId === 'all' || !user) { setAiSummaries({}); return }
+    if (!loadedFor || loadedFor.zoneId === 'all' || !user) { setAiSummaries({}); return }
+    const { zoneId: selectedZoneId, timeRange } = loadedFor
     const zone = zones.find(z => z.id === selectedZoneId)
     if (!zone) { setAiSummaries({}); return }
 
@@ -448,7 +461,7 @@ export default function AnalyticsPage() {
       .catch(() => { if (!cancelled) setAiSummaries({}) })
 
     return () => { cancelled = true }
-  }, [zones, selectedZoneId, timeRange, readings, plants, user])
+  }, [loadedFor, user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loadingZones) return <p className="text-sm text-gray-400 mt-8 text-center">Loading…</p>
 

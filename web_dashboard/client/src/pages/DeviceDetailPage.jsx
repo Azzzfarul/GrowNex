@@ -37,6 +37,8 @@ export default function DeviceDetailPage() {
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
+    // Fill the form once — the bridge rewrites lastSync every minute, which would wipe edits.
+    let formFilled = false
     const unsub = onSnapshot(doc(db, 'devices', deviceId), (snap) => {
       if (!snap.exists()) {
         setDevice(null)
@@ -45,9 +47,12 @@ export default function DeviceDetailPage() {
       }
       const d = { id: snap.id, ...snap.data() }
       setDevice(d)
-      setDeviceName(d.deviceName || '')
-      setHasLightingModule(d.hasLightingModule || false)
-      setHasFertilizerModule(d.hasFertilizerModule || false)
+      if (!formFilled) {
+        formFilled = true
+        setDeviceName(d.deviceName || '')
+        setHasLightingModule(d.hasLightingModule || false)
+        setHasFertilizerModule(d.hasFertilizerModule || false)
+      }
       setLoading(false)
     })
     return unsub
@@ -114,8 +119,18 @@ export default function DeviceDetailPage() {
         hasLightingModule,
         hasFertilizerModule,
       })
+      // Keep the zone's copied module flags in sync (OverviewTab copies them on assign)
+      if (device.assignedZoneId && device.deviceType !== 'camera') {
+        await updateDoc(doc(db, 'zones', device.assignedZoneId), {
+          hasLight: hasLightingModule,
+          hasFertilizer: hasFertilizerModule,
+        })
+      }
       setSaveLabel('Saved!')
       setTimeout(() => setSaveLabel('Save changes'), 2000)
+    } catch (e) {
+      console.error('Failed to save device:', e)
+      setSaveLabel('Save failed — retry')
     } finally {
       setSaving(false)
     }

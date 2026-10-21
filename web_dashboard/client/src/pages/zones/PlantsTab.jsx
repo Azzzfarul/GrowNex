@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
 import {
   collection, query, where, onSnapshot, getDocs, orderBy, Timestamp,
-  addDoc, setDoc, updateDoc, deleteDoc, doc, serverTimestamp,
+  setDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { useAuth } from '../../context/AuthContext'
 import { fetchPlantProfile } from '../../lib/aiSummary'
 import { zoneFitHint } from '../../lib/zoneFit'
 import { plantHealth, plantHealthSummary } from '../../lib/plantHealth'
-import { uploadPlantPhoto, removePlantPhoto } from '../../lib/photoUpload'
+import { uploadPlantPhoto, removePlantPhoto, removePlantPhotoFile } from '../../lib/photoUpload'
 
 const MAX_PLANTS = 4
 const LIGHT_OPTIONS = ['', 'low', 'medium', 'high']
@@ -191,13 +191,11 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
     let cancelled = false
     getDocs(query(collection(db, 'zones'), where('userId', '==', zone.userId))).then(async (zs) => {
       const zones = zs.docs.map((d) => ({ id: d.id, ...d.data() }))
-      const ids = zones.map((z) => z.id).slice(0, 10)
       const map = {}
       await Promise.all(zones.map(async (z) => {
         const ps = await getDocs(query(collection(db, 'plants'), where('zoneId', '==', z.id)))
         map[z.id] = { zone: z, plants: ps.docs.map((d) => d.data()) }
       }))
-      void ids
       if (!cancelled) setZonesById(map)
     })
     return () => { cancelled = true }
@@ -220,7 +218,6 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
           confidence: profile.confidence ?? 'high',
           careNotes: profile.careNotes ?? null,
         })
-        if (profile.careNotes && !name.trim()) { /* leave nickname alone */ }
       } else {
         setAiMeta({ source: 'fallback' })
       }
@@ -532,6 +529,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
     setDeleting(true)
     try {
       await deleteDoc(doc(db, 'plants', plant.id))
+      if (photoUrl) await removePlantPhotoFile(plant.id)
       onClose()
     } catch (e) {
       console.error('Failed to delete plant:', e)

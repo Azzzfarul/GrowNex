@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
 import {
   updateProfile,
   updatePassword,
@@ -85,7 +85,7 @@ function EditProfileModal({ user, initialUsername, onClose, onSaved }) {
     setError('')
     try {
       if (usernameChanged) {
-        await updateDoc(doc(db, 'users', user.uid), { username: username.trim() })
+        await setDoc(doc(db, 'users', user.uid), { username: username.trim() }, { merge: true })
         await updateProfile(user, { displayName: username.trim() })
       }
       if (passwordChanging) {
@@ -294,7 +294,7 @@ function NotificationSettingsDialog({ user, onClose }) {
     const enabled = prefs[key] !== false          // absent = enabled
     const next = { ...prefs, [key]: !enabled }
     setPrefs(next)
-    await updateDoc(doc(db, 'users', user.uid), { notificationPrefs: next }).catch(() => {})
+    await setDoc(doc(db, 'users', user.uid), { notificationPrefs: next }, { merge: true }).catch(() => {})
   }
 
   return (

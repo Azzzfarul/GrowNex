@@ -12,6 +12,7 @@ import {
 import { auth } from '../firebase'
 
 const AuthContext = createContext(null)
+const API = import.meta.env.VITE_API_URL || ''
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -32,11 +33,12 @@ export function AuthProvider({ children }) {
     const credential = await createUserWithEmailAndPassword(auth, email, password)
     await updateProfile(credential.user, { displayName: username })
     const token = await credential.user.getIdToken()
-    await fetch(`${import.meta.env.VITE_API_URL}/api/auth/register`, {
+    // Not fatal: the Auth account already exists, and profile writes use setDoc merge.
+    await fetch(`${API}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ username, email }),
-    })
+    }).catch((err) => console.warn('User profile setup failed:', err.message))
     return credential
   }
 
@@ -48,10 +50,11 @@ export function AuthProvider({ children }) {
     const cred = EmailAuthProvider.credential(user.email, password)
     await reauthenticateWithCredential(user, cred)
     const token = await user.getIdToken(true)
-    await fetch(`${import.meta.env.VITE_API_URL}/api/auth/me`, {
+    const res = await fetch(`${API}/api/auth/me`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     })
+    if (!res.ok) throw new Error(`Account deletion failed (${res.status})`)
     await signOut(auth)
   }
 
