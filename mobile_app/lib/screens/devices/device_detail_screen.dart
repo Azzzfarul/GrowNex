@@ -128,6 +128,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
         deviceName: _nameCtrl.text.trim(),
         hasLightingModule: _hasLightingModule,
         hasFertilizerModule: _hasFertilizerModule,
+        assignedZoneId: _device.assignedZoneId,
+        isCamera: _device.isCamera,
       );
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Device updated.')));
     } catch (e) {

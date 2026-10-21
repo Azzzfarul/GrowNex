@@ -42,7 +42,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await _authService.register(
         username: _nameController.text.trim(),
         email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+        password: _passwordController.text,  // not trimmed: the web app doesn't trim either
       );
 
       if (!mounted) return;

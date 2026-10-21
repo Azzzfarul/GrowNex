@@ -268,7 +268,7 @@ class _MonitoringTabState extends State<MonitoringTab> {
   double? _avg(Iterable<num?> values) {
     final valid = values.whereType<num>().toList();
     if (valid.isEmpty) return null;
-    return valid.fold<double>(0, (sum, v) => sum + v.toDouble()) / valid.length;
+    return valid.fold<double>(0, (total, v) => total + v.toDouble()) / valid.length;
   }
 
   String _rangeStr(double? min, double? max, String unit) {

@@ -300,7 +300,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       } catch (_) {
                         setState(() {
                           deleting = false;
-                          error = 'An error occurred. Please try again.';
+                          error = 'Could not delete the account. Check that the GrowNex server is reachable, then try again.';
                         });
                       }
                     },

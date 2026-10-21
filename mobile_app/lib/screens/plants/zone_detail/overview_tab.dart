@@ -28,7 +28,7 @@ class _OverviewTabState extends State<OverviewTab> {
   late String? _photoUrl;
   bool _photoBusy = false;
 
-  Future<Device?>? _assignedDeviceFuture;
+  Stream<Device?>? _assignedDeviceStream;  // live, so Online/Offline stays current
   bool _removeLoading = false;
 
   Device? _selectedDevice;
@@ -78,10 +78,10 @@ class _OverviewTabState extends State<OverviewTab> {
 
   void _syncDeviceState(Zone zone) {
     if (zone.deviceId != null) {
-      _assignedDeviceFuture = DeviceService().getDevice(zone.deviceId!);
+      _assignedDeviceStream = DeviceService().watchDevice(zone.deviceId!);
       _availableDevicesFuture = null;
     } else {
-      _assignedDeviceFuture = null;
+      _assignedDeviceStream = null;
       _dropdownKey++;
       final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
       _availableDevicesFuture = DeviceService().getAvailableDevices(userId);
@@ -386,8 +386,8 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   Widget _buildAssignedDevice() {
-    return FutureBuilder<Device?>(
-      future: _assignedDeviceFuture,
+    return StreamBuilder<Device?>(
+      stream: _assignedDeviceStream,
       builder: (context, snapshot) {
         final deviceName = snapshot.data?.deviceName ?? widget.zone.deviceId ?? '...';
         final isOnline = snapshot.data?.status == 'online';

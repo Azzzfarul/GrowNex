@@ -89,6 +89,12 @@ test('plantHealth uses the plant’s own slot and weights moisture double', () =
   assert.match(plantHealthSummary(dry), /^Soil moisture below range — 20% vs 40–60%/)
 })
 
+test('a slot without its own probe falls back to the zone average', () => {
+  const slot2 = { ...basil, slotNumber: 2 }
+  const h = plantHealth(slot2, { latestMoisture: 50 }, [{ moisture: 50 }, { moisture: 10 }])
+  assert.equal(h.metrics.moisture.compliance, 50)
+})
+
 test('plantHealth with no readings says it is waiting', () => {
   const h = plantHealth(basil, {}, [])
   assert.equal(h.score, null)

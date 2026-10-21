@@ -102,7 +102,8 @@ String plantHealthSummary(PlantHealthResult h) {
   if (problems.isEmpty) return 'All conditions in range.';
   final parts = problems.take(2).map((m) {
     final dir = m.state == 'low' ? 'below' : 'above';
-    final now = ((m.latest ?? 0) * 10).round() / 10;
+    final r = ((m.latest ?? 0) * 10).round() / 10;
+    final now = r == r.truncateToDouble() ? r.toInt() : r;  // "20%", not "20.0%" (matches web)
     final comp = m.compliance != null ? ', in range ${m.compliance}% of the period' : '';
     return '${m.label} $dir range — $now${m.unit} vs '
         '${m.min!.toStringAsFixed(0)}–${m.max!.toStringAsFixed(0)}${m.unit}$comp';

@@ -5,11 +5,6 @@ import '../../models/plant_model.dart';
 class PlantService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<String> createPlant(Plant plant) async {
-    final docRef = await _firestore.collection('plants').add(plant.toMap());
-    return docRef.id;
-  }
-
   DocumentReference<Map<String, dynamic>> newPlantRef() => _firestore.collection('plants').doc();
 
   Future<void> createPlantWithId(Plant plant) async {

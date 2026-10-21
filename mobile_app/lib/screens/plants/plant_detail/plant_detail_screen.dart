@@ -75,7 +75,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       final updated = Plant(
         id: widget.plant.id,
         zoneId: widget.plant.zoneId,
-        plantName: _nameCtrl.text.trim(),
+        // Same fallback as add-plant (and the web): an empty name shows the species
+        plantName: _nameCtrl.text.trim().isEmpty ? _speciesCtrl.text.trim() : _nameCtrl.text.trim(),
         species: _speciesCtrl.text.trim(),
         status: widget.plant.status,
         slotNumber: widget.plant.slotNumber,
@@ -154,6 +155,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
 
     try {
       await PlantService().deletePlant(widget.plant.id);
+      if (_photoUrl != null) await PhotoService().deletePlantPhotoFile(widget.plant.id).catchError((_) {});
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {

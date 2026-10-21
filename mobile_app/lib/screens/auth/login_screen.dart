@@ -117,7 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _authService.login(
         email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+        password: _passwordController.text,  // not trimmed: the web app doesn't trim either
       );
 
       if (!mounted) return;
@@ -131,7 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
         ),
       );
     } finally {

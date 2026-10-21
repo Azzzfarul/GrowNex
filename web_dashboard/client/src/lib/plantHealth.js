@@ -26,7 +26,9 @@ function metricNowScore(value, min, max) {
 export function plantHealth(plant, zone, readings) {
   const slot = plant.slotNumber
   const defs = [
-    { key: 'moisture', field: `soilMoisture${slot}`, weight: 2, label: 'Soil moisture', unit: '%',
+    // Falls back to the zone average when the slot has no reading (firmware sends slot 1 only),
+    // same as `latest` below and the mobile port (mobile_app/lib/utils/plant_health.dart).
+    { key: 'moisture', field: `soilMoisture${slot}`, fallback: 'moisture', weight: 2, label: 'Soil moisture', unit: '%',
       latest: zone[`latestMoisture${slot}`] ?? zone.latestMoisture ?? null,
       min: plant.preferredMoistureMin, max: plant.preferredMoistureMax },
     { key: 'temperature', field: 'temperature', weight: 1, label: 'Temperature', unit: '°C',
@@ -41,7 +43,8 @@ export function plantHealth(plant, zone, readings) {
   let wsum = 0, wtot = 0
   for (const d of defs) {
     if (d.min == null || d.max == null) { metrics[d.key] = { state: 'no-range', label: d.label }; continue }
-    const compliance = compliancePercent(readings, d.field, d.min, d.max)
+    const rs = d.fallback ? readings.map(r => ({ [d.field]: r[d.field] ?? r[d.fallback] })) : readings
+    const compliance = compliancePercent(rs, d.field, d.min, d.max)
     const now = metricNowScore(d.latest, d.min, d.max)
     if (compliance == null && now == null) {
       metrics[d.key] = { state: 'no-data', label: d.label, min: d.min, max: d.max, unit: d.unit }

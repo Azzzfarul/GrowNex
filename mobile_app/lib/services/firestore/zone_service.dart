@@ -5,21 +5,11 @@ import '../../models/zone_model.dart';
 class ZoneService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<String> createZone(Zone zone) async {
-    final docRef = await _firestore.collection('zones').add(zone.toMap());
-    return docRef.id;
-  }
-
   DocumentReference<Map<String, dynamic>> newZoneRef() => _firestore.collection('zones').doc();
 
   Future<void> createZoneWithId(Zone zone) async {
     if (zone.id.isEmpty) throw ArgumentError('Zone id is required');
     await _firestore.collection('zones').doc(zone.id).set(zone.toMap());
-  }
-
-  Future<void> updateZone(Zone zone) async {
-    if (zone.id.isEmpty) throw ArgumentError('Zone id is required');
-    await _firestore.collection('zones').doc(zone.id).update(zone.toMap());
   }
 
   Future<void> deleteZone(String zoneId) async {
@@ -61,23 +51,5 @@ class ZoneService {
         .doc(zoneId)
         .snapshots()
         .map((doc) => doc.exists ? Zone.fromDocument(doc) : null);
-  }
-
-  Future<void> updateLatestSensor(String zoneId,
-      {num? latestTemp,
-      num? latestHumid,
-      num? latestLight,
-      num? latestMoisture,
-      DateTime? latestTimestamp}) async {
-    final data = <String, dynamic>{};
-    if (latestTemp != null) data['latestTemp'] = latestTemp;
-    if (latestHumid != null) data['latestHumid'] = latestHumid;
-    if (latestLight != null) data['latestLight'] = latestLight;
-    if (latestMoisture != null) data['latestMoisture'] = latestMoisture;
-    if (latestTimestamp != null) data['latestTimestamp'] = Timestamp.fromDate(latestTimestamp);
-
-    if (data.isEmpty) return;
-
-    await _firestore.collection('zones').doc(zoneId).set(data, SetOptions(merge: true));
   }
 }

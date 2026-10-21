@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/auth/login_screen.dart';
@@ -45,7 +46,8 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
         ),
         themeMode: mode,
-        initialRoute: LoginScreen.routeName,
+        // Firebase keeps the session across launches; don't make the user log in every time.
+        initialRoute: FirebaseAuth.instance.currentUser != null ? RootScreen.routeName : LoginScreen.routeName,
         routes: {
           LoginScreen.routeName:    (_) => const LoginScreen(),
           RegisterScreen.routeName: (_) => const RegisterScreen(),

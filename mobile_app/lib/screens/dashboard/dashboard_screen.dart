@@ -61,7 +61,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         final zones = snapshot.data ?? [];
         final activeZones = zones.where((z) => z.status.toLowerCase().contains('healthy')).length;
-        final attentionZones = zones.length - activeZones;
+        // Zones with no plants yet are 'unknown' — not healthy, but not needing attention either.
+        final attentionZones = zones.where((z) => z.status == 'attention' || z.status == 'critical').length;
 
         return SingleChildScrollView(
           padding: _contentPadding,

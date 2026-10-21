@@ -1,5 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
+
+import '../config.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -77,10 +80,13 @@ class AuthService {
     await user.reauthenticateWithCredential(cred);
   }
 
+  // Also the Auth display name: the web dashboard greets the user with it.
+  // set+merge so it works when users/{uid} was never created.
   Future<void> updateUsername(String username) async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return;
-    await _firestore.collection('users').doc(uid).update({'username': username});
+    final user = _auth.currentUser;
+    if (user == null) return;
+    await _firestore.collection('users').doc(user.uid).set({'username': username}, SetOptions(merge: true));
+    await user.updateDisplayName(username);
   }
 
   Future<void> updatePassword(String newPassword) async {
@@ -91,48 +97,16 @@ class AuthService {
     await _auth.sendPasswordResetEmail(email: email);
   }
 
+  // Done by the server (DELETE /api/auth/me), same as the web app: it removes every zone
+  // subcollection, notifications and Storage photos, which the client SDK can't do in bulk.
+  // Throws if the server can't be reached; nothing is deleted then.
   Future<void> deleteAccount(String password) async {
     await reauthenticate(password);
-    final uid = _auth.currentUser!.uid;
-
-    final zonesSnap = await _firestore
-        .collection('zones')
-        .where('userId', isEqualTo: uid)
-        .get();
-
-    for (final zoneDoc in zonesSnap.docs) {
-      final zoneId = zoneDoc.id;
-
-      final readingsSnap = await _firestore
-          .collection('zones')
-          .doc(zoneId)
-          .collection('sensorReadings')
-          .get();
-      for (final r in readingsSnap.docs) {
-        await r.reference.delete();
-      }
-
-      final plantsSnap = await _firestore
-          .collection('plants')
-          .where('zoneId', isEqualTo: zoneId)
-          .get();
-      for (final p in plantsSnap.docs) {
-        await p.reference.delete();
-      }
-
-      await _firestore.collection('automationConfig').doc(zoneId).delete();
-      await zoneDoc.reference.delete();
-    }
-
-    final devicesSnap = await _firestore
-        .collection('devices')
-        .where('userId', isEqualTo: uid)
-        .get();
-    for (final d in devicesSnap.docs) {
-      await d.reference.delete();
-    }
-
-    await _firestore.collection('users').doc(uid).delete();
-    await _auth.currentUser!.delete();
+    final token = await _auth.currentUser!.getIdToken(true);
+    final res = await http
+        .delete(Uri.parse('$apiBaseUrl/api/auth/me'), headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 60));
+    if (res.statusCode != 200) throw Exception('Account deletion failed (${res.statusCode})');
+    await _auth.signOut();
   }
 }
