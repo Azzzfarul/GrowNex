@@ -6,6 +6,7 @@ Full-stack IoT smart plant / farming monitoring and automation system.
 |------|-------|----------|
 | Firmware | C++ / Arduino (ESP32), PlatformIO | [`firmware/`](firmware/) |
 | Camera firmware | C++ / Arduino (ESP32-CAM), PlatformIO | [`firmware_cam/`](firmware_cam/) |
+| Device simulator | Node.js (MQTT), stands in for both boards | [`device_simulator/`](device_simulator/) |
 | Backend | Express.js + MQTT bridge, Firebase Admin | [`web_dashboard/server/`](web_dashboard/server/) |
 | Web dashboard | React + Vite + Tailwind CSS | [`web_dashboard/client/`](web_dashboard/client/) |
 | Mobile app | Flutter / Dart | [`mobile_app/`](mobile_app/) |
@@ -192,6 +193,18 @@ pio device monitor       # serial monitor @ 115200 baud — note the "Device ID:
 
 If the board keeps resetting ("Brownout detector was triggered"), power it from a solid 5V/2A supply —
 the camera plus WiFi peaks above what many USB ports deliver.
+
+### No hardware? Use the simulator
+
+[`device_simulator/`](device_simulator/) runs a fake sensor/relay node and a fake camera on your computer,
+using the same broker credentials (`firmware/include/secrets.h`) and the same MQTT messages as the boards:
+
+```bash
+cd device_simulator && npm install && npm start
+```
+
+Claim and assign the two simulated devices like real ones, then type `dry`, `hot`, `photo` or `offline`
+to trigger watering, alerts, the camera feed or a power cut. See its README for details.
 
 ---
 
