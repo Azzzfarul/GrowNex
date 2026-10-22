@@ -28,7 +28,7 @@ const HELP = `Usage: npm start -- [options]
   -h, --help
 
 Broker: MQTT_HOST / MQTT_USERNAME / MQTT_PASSWORD (and MQTT_PORT, default 8883) from the
-environment, else read from ../firmware/include/secrets.h.`
+environment, else read from ../firmware/include/secrets.h. With MQTT_HOST set, secrets.h is ignored.`
 
 const COMMANDS = `Commands (type and press Enter):
   dry | wet          set soil moisture to 15% / 85%
@@ -84,7 +84,9 @@ function brokerConfig() {
       secrets[key] = value
     }
   }
-  const pick = key => process.env[key] ?? secrets[key]
+  // Another broker gets only the credentials given with it, never the firmware broker's.
+  const fromEnv = process.env.MQTT_HOST !== undefined
+  const pick = key => process.env[key] ?? (fromEnv ? undefined : secrets[key])
   const host = pick('MQTT_HOST')
   if (!host || host.includes('your-cluster-id')) {
     fail('No broker configured. Set MQTT_HOST, MQTT_USERNAME and MQTT_PASSWORD, or fill in\n' +
@@ -95,7 +97,7 @@ function brokerConfig() {
     port: Number(process.env.MQTT_PORT || 8883),  // firmware MQTT_PORT
     username: pick('MQTT_USERNAME') || undefined,
     password: pick('MQTT_PASSWORD') || undefined,
-    source: process.env.MQTT_HOST ? 'environment' : 'firmware/include/secrets.h',
+    source: fromEnv ? 'environment' : 'firmware/include/secrets.h',
   }
 }
 

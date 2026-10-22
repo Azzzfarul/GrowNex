@@ -26,7 +26,7 @@ npm start
 It reads the broker credentials from `firmware/include/secrets.h` (the same file the real board
 uses, so set that up first by copying `secrets.example.h`). To use other credentials, set
 `MQTT_HOST`, `MQTT_USERNAME`, `MQTT_PASSWORD` (and `MQTT_PORT`, default 8883 = TLS; anything else
-is plain MQTT, e.g. `1883` for a local broker).
+is plain MQTT, e.g. `1883` for a local broker). With `MQTT_HOST` set, nothing is read from `secrets.h`.
 
 With the server running (`web_dashboard/server`, `npm run dev`):
 
