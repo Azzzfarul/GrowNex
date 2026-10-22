@@ -65,7 +65,8 @@ const runCamera = opt.node === 'camera' || opt.node === 'both'
 const intervalMs = Number(opt.interval) * 1000
 const slots = Number(opt.slots)
 if (!runSensor && !runCamera) fail(`--node must be sensor, camera or both\n\n${HELP}`)
-if (!(intervalMs >= 1000)) fail('--interval must be at least 1 second')
+// setInterval treats anything over 2^31-1 ms as 1 ms, which would flood the broker.
+if (!(intervalMs >= 1000 && intervalMs <= 2147483647)) fail('--interval must be 1 to 2147483 seconds')
 if (![1, 2, 3, 4].includes(slots)) fail('--slots must be 1, 2, 3 or 4')
 
 function fail(msg) {
