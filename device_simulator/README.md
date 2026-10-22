@@ -15,6 +15,8 @@ real board keeps its MAC address.
 
 ## Run it
 
+Needs Node.js 20.11 or newer (`npm test` uses `--test-timeout`).
+
 ```bash
 cd device_simulator
 npm install

@@ -5,7 +5,7 @@
   "description": "Simulated GrowNex ESP32 sensor/relay node and ESP32-CAM speaking the firmware's MQTT contract",
   "type": "module",
   "engines": {
-    "node": ">=18.11"
+    "node": ">=20.11"
   },
   "scripts": {
     "start": "node simulator.js",
