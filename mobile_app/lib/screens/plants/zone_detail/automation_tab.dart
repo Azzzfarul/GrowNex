@@ -37,6 +37,7 @@ class _AutomationTabState extends State<AutomationTab> {
   bool _autoWater     = false;
   bool _autoLight     = false;
   bool _autoFertilizer = false;
+  final _savingToggles = <String>{};  // config fields with a toggle save in flight
 
   final _wateringThresholdCtrl   = TextEditingController();
   final _wateringScheduleCtrl    = TextEditingController();
@@ -121,11 +122,18 @@ class _AutomationTabState extends State<AutomationTab> {
   void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
   // A toggle writes only its own flag — never the (possibly unsaved) text fields.
-  Future<void> _saveToggle(String field, bool value) async {
+  // On failure the switch flips back, so it never shows a setting that wasn't saved.
+  // The switch is disabled until its save settles, so a failed save can't undo a newer flip.
+  Future<void> _saveToggle(String field, bool value, VoidCallback revert) async {
+    setState(() => _savingToggles.add(field));
     try {
       await _configService.saveFields(widget.zone.id, {field: value});
     } catch (e) {
-      if (mounted) _snack('Failed to save: $e');
+      if (!mounted) return;
+      setState(revert);
+      _snack('Failed to save: $e');
+    } finally {
+      if (mounted) setState(() => _savingToggles.remove(field));
     }
   }
 
@@ -432,9 +440,10 @@ class _AutomationTabState extends State<AutomationTab> {
               title: 'Water automation',
               subtitle: 'Trigger at moisture threshold or schedule',
               value: _autoWater,
+              busy: _savingToggles.contains('autoWateringEnabled'),
               onChanged: (v) {
                 setState(() => _autoWater = v);
-                _saveToggle('autoWateringEnabled', v);
+                _saveToggle('autoWateringEnabled', v, () => _autoWater = !v);
               },
               expandedContent: Column(
                 children: [
@@ -469,9 +478,10 @@ class _AutomationTabState extends State<AutomationTab> {
                 title: 'Light automation',
                 subtitle: 'Schedule lighting times',
                 value: _autoLight,
+                busy: _savingToggles.contains('autoLightingEnabled'),
                 onChanged: (v) {
                   setState(() => _autoLight = v);
-                  _saveToggle('autoLightingEnabled', v);
+                  _saveToggle('autoLightingEnabled', v, () => _autoLight = !v);
                 },
                 expandedContent: TextField(
                   controller: _lightingScheduleCtrl,
@@ -486,9 +496,10 @@ class _AutomationTabState extends State<AutomationTab> {
                 title: 'Fertilizer automation',
                 subtitle: 'Trigger on schedule',
                 value: _autoFertilizer,
+                busy: _savingToggles.contains('autoFertilizingEnabled'),
                 onChanged: (v) {
                   setState(() => _autoFertilizer = v);
-                  _saveToggle('autoFertilizingEnabled', v);
+                  _saveToggle('autoFertilizingEnabled', v, () => _autoFertilizer = !v);
                 },
                 expandedContent: Column(
                   children: [
@@ -568,6 +579,7 @@ class _AutomationTabState extends State<AutomationTab> {
     required String subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
+    required bool busy,
     required Widget expandedContent,
   }) {
     final cs = Theme.of(context).colorScheme;
@@ -584,7 +596,7 @@ class _AutomationTabState extends State<AutomationTab> {
           Row(
             children: [
               Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold))),
-              Switch(value: value, onChanged: onChanged, activeThumbColor: Colors.green[700]),
+              Switch(value: value, onChanged: busy ? null : onChanged, activeThumbColor: Colors.green[700]),
             ],
           ),
           Text(subtitle, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
