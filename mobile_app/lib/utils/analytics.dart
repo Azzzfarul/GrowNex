@@ -61,7 +61,7 @@ int? healthScoreForPlant(Zone zone, Plant plant) {
         _ => null,
       } ??
       zone.latestMoisture;
-  if (plant.preferredMoistureMin != null && moisture != null) {
+  if (plant.preferredMoistureMin != null && plant.preferredMoistureMax != null && moisture != null) {
     scores.add(
       moisture >= plant.preferredMoistureMin! &&
               moisture <= plant.preferredMoistureMax!
@@ -69,7 +69,7 @@ int? healthScoreForPlant(Zone zone, Plant plant) {
           : 0,
     );
   }
-  if (plant.preferredTemperatureMin != null && zone.latestTemp != null) {
+  if (plant.preferredTemperatureMin != null && plant.preferredTemperatureMax != null && zone.latestTemp != null) {
     scores.add(
       zone.latestTemp! >= plant.preferredTemperatureMin! &&
               zone.latestTemp! <= plant.preferredTemperatureMax!
@@ -77,7 +77,7 @@ int? healthScoreForPlant(Zone zone, Plant plant) {
           : 0,
     );
   }
-  if (plant.preferredHumidityMin != null && zone.latestHumid != null) {
+  if (plant.preferredHumidityMin != null && plant.preferredHumidityMax != null && zone.latestHumid != null) {
     scores.add(
       zone.latestHumid! >= plant.preferredHumidityMin! &&
               zone.latestHumid! <= plant.preferredHumidityMax!
@@ -168,7 +168,7 @@ List<({bool? ok, String text})> generateInsights(
   );
   final out = <({bool? ok, String text})>[];
 
-  if (moist.min != null && zone.latestMoisture != null) {
+  if (moist.min != null && moist.max != null && zone.latestMoisture != null) {
     if (zone.latestMoisture! < moist.min!) {
       out.add((
         ok: false,
@@ -183,7 +183,7 @@ List<({bool? ok, String text})> generateInsights(
       ));
     }
   }
-  if (temp.min != null && zone.latestTemp != null) {
+  if (temp.min != null && temp.max != null && zone.latestTemp != null) {
     if (zone.latestTemp! < temp.min! || zone.latestTemp! > temp.max!) {
       out.add((
         ok: false,
@@ -192,7 +192,7 @@ List<({bool? ok, String text})> generateInsights(
       ));
     }
   }
-  if (humid.min != null && zone.latestHumid != null) {
+  if (humid.min != null && humid.max != null && zone.latestHumid != null) {
     if (zone.latestHumid! < humid.min! || zone.latestHumid! > humid.max!) {
       out.add((
         ok: false,

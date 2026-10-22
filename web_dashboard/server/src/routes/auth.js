@@ -41,7 +41,8 @@ router.delete('/me', verifyToken, async (req, res) => {
     // Each bulkWriter op returns its own promise; an unhandled rejection would crash the server.
     const failed = []
     const del = (ref) => writer.delete(ref).catch(e => failed.push(e))
-    const delFile = (path) => bucket.file(path).delete({ ignoreNotFound: true }).catch(() => {})
+    // Storage errors propagate: the route stops before deleting the login, so the user can retry.
+    const delFile = (path) => bucket.file(path).delete({ ignoreNotFound: true })
 
     // Devices first: while a device doc still points at a zone, its next reading would recreate
     // sensorReadings/stats under the deleted zone, which nothing ever cleans up. Without the doc,
@@ -56,13 +57,13 @@ router.delete('/me', verifyToken, async (req, res) => {
 
       const plantsSnap = await db.collection('plants').where('zoneId', '==', zoneId).get()
       for (const p of plantsSnap.docs) {
+        await delFile(`plantPhotos/${p.id}.jpg`)  // before the doc, so a retry still finds the plant
         del(p.ref)
-        await delFile(`plantPhotos/${p.id}.jpg`)
       }
 
-      del(db.collection('automationConfig').doc(zoneId))
       await delFile(`zonePhotos/${zoneId}.jpg`)
-      await bucket.deleteFiles({ prefix: `zoneSnapshots/${zoneId}/` }).catch(() => {})
+      await bucket.deleteFiles({ prefix: `zoneSnapshots/${zoneId}/` })
+      del(db.collection('automationConfig').doc(zoneId))
       // Zone doc plus every subcollection (sensorReadings, stats, aiCache, snapshots)
       await db.recursiveDelete(zoneDoc.ref)
     }

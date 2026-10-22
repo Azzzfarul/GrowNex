@@ -297,10 +297,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             _                    => e.message ?? 'An error occurred',
                           };
                         });
-                      } catch (_) {
+                      } catch (e) {
                         setState(() {
                           deleting = false;
-                          error = 'Could not delete the account. Check that the GrowNex server is reachable, then try again.';
+                          // An Exception carries its own reason (e.g. the server's status code).
+                          error = e is Exception
+                              ? e.toString().replaceFirst('Exception: ', '')
+                              : 'Could not delete the account. Check that the GrowNex server is reachable, then try again.';
                         });
                       }
                     },

@@ -2,7 +2,7 @@
 // These modules are hand-ported to the mobile app — keep both sides passing the same cases.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildChartData, describeTrend, buildOverviewSummary, moistureBucketSeries } from '../src/lib/analytics.js'
+import { buildChartData, describeTrend, buildOverviewSummary, moistureBucketSeries, healthScoreForPlant, generateInsights } from '../src/lib/analytics.js'
 import { plantHealth, plantHealthSummary, compliancePercent } from '../src/lib/plantHealth.js'
 import { plantZoneFit, zoneFitHint } from '../src/lib/zoneFit.js'
 
@@ -19,8 +19,9 @@ test('24h chart: the hour from yesterday and the current hour are separate point
 })
 
 test('7-day chart: last week’s weekday and today are separate points, oldest first', () => {
-  const now = Date.now()
-  const chart = buildChartData([reading(now - 6.9 * DAY, 10), reading(now - 3 * DAY, 20), reading(now, 30)], '7days')
+  // Fixed local middays exactly one calendar week apart, so the weekdays never depend on run time.
+  const day = (d) => new Date(2026, 0, d, 12).getTime()
+  const chart = buildChartData([reading(day(7), 10), reading(day(11), 20), reading(day(14), 30)], '7days')
   assert.deepEqual(chart.map(p => p.temp), [10, 20, 30])
   assert.equal(chart[0].label, chart[2].label)  // same weekday name, different points
 })
@@ -57,6 +58,13 @@ test('overview summary leads with the worst metric', () => {
   assert.equal(buildOverviewSummary({ selectedZone: {}, plants, results: { temperature: ok, humidity: ok, moisture: bad } }).text, 'Soil too dry')
   assert.equal(buildOverviewSummary({ selectedZone: {}, plants, results: { temperature: ok, humidity: ok, moisture: ok } }).level, 'ok')
   assert.equal(buildOverviewSummary({ selectedZone: null, plants, results: {} }).level, 'none')
+})
+
+test('a range missing its max is skipped, not scored or crashed on', () => {
+  const p = { slotNumber: 1, preferredMoistureMin: 40, preferredMoistureMax: 60, preferredTemperatureMin: 20 }
+  const z = { latestMoisture1: 50, latestMoisture: 50, latestTemp: 25 }
+  assert.equal(healthScoreForPlant(z, p), 100)
+  assert.deepEqual(generateInsights(z, [p], []).map(i => i.ok), [true])
 })
 
 // ── plantHealth ──────────────────────────────────────────────────────────────

@@ -528,8 +528,8 @@ function PlantDetailModal({ plant, zone, onClose }) {
   async function handleDelete() {
     setDeleting(true)
     try {
-      await deleteDoc(doc(db, 'plants', plant.id))
       if (photoUrl) await removePlantPhotoFile(plant.id)
+      await deleteDoc(doc(db, 'plants', plant.id))
       onClose()
     } catch (e) {
       console.error('Failed to delete plant:', e)

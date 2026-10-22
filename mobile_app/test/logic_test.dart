@@ -49,7 +49,9 @@ Plant plant({
     );
 
 void main() {
-  final now = DateTime.now();
+  // Local midday, so "6 days 22 hours ago" never crosses midnight onto a different weekday.
+  final today = DateTime.now();
+  final now = DateTime(today.year, today.month, today.day, 12);
 
   group('groupByTime', () {
     test('24h: the hour from yesterday and the current hour are separate points, oldest first', () {
@@ -115,6 +117,13 @@ void main() {
           'ok');
       expect(buildOverviewSummary(selectedZone: null, plants: plants, temperature: ok, humidity: ok, moisture: ok).level,
           'none');
+    });
+
+    test('a range missing its max is skipped, not scored or crashed on', () {
+      final p = plant(mMin: 40, mMax: 60, tMin: 20);
+      final z = zone(m1: 50, m: 50, temp: 25);
+      expect(healthScoreForPlant(z, p), 100);
+      expect(generateInsights(z, [p], []).map((i) => i.ok), [true]);
     });
   });
 

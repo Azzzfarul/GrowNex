@@ -455,9 +455,19 @@ async function applyActuator(zoneId, actuator, state) {
 
 // For timers and cron callbacks, where nothing awaits the promise — an unhandled
 // rejection there would crash the whole bridge.
-function fireActuator(zoneId, actuator, state) {
-  return triggerActuator(zoneId, actuator, state).catch(e =>
-    console.error(`[MQTT bridge] ${actuator} ${state ? 'on' : 'off'} failed for zone ${zoneId}:`, e.message))
+// A failed "off" is retried: the last retained command is "on", so nothing else would stop it.
+const OFF_RETRIES = 3
+const OFF_RETRY_MS = 5000
+async function fireActuator(zoneId, actuator, state, attempt = 1) {
+  try {
+    await triggerActuator(zoneId, actuator, state)
+  } catch (e) {
+    console.error(`[MQTT bridge] ${actuator} ${state ? 'on' : 'off'} failed for zone ${zoneId}:`, e.message)
+    if (state || attempt > OFF_RETRIES) return
+    await new Promise(r => setTimeout(r, OFF_RETRY_MS))
+    console.log(`[MQTT bridge] retrying ${actuator} off for zone ${zoneId} (${attempt}/${OFF_RETRIES})`)
+    return fireActuator(zoneId, actuator, state, attempt + 1)
+  }
 }
 
 // Schedule string parsers

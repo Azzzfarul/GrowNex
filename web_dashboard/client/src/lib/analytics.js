@@ -199,11 +199,11 @@ export function getMoistureLines(plants, readings, isAllZones) {
 export function healthScoreForPlant(zone, plant) {
   const scores = []
   const moisture = zone[`latestMoisture${plant.slotNumber}`] ?? zone.latestMoisture
-  if (plant.preferredMoistureMin != null && moisture != null)
+  if (plant.preferredMoistureMin != null && plant.preferredMoistureMax != null && moisture != null)
     scores.push(moisture >= plant.preferredMoistureMin && moisture <= plant.preferredMoistureMax ? 1 : 0)
-  if (plant.preferredTemperatureMin != null && zone.latestTemp != null)
+  if (plant.preferredTemperatureMin != null && plant.preferredTemperatureMax != null && zone.latestTemp != null)
     scores.push(zone.latestTemp >= plant.preferredTemperatureMin && zone.latestTemp <= plant.preferredTemperatureMax ? 1 : 0)
-  if (plant.preferredHumidityMin != null && zone.latestHumid != null)
+  if (plant.preferredHumidityMin != null && plant.preferredHumidityMax != null && zone.latestHumid != null)
     scores.push(zone.latestHumid >= plant.preferredHumidityMin && zone.latestHumid <= plant.preferredHumidityMax ? 1 : 0)
   if (!scores.length) return null
   return Math.round(scores.reduce((a, b) => a + b) / scores.length * 100)
@@ -229,17 +229,17 @@ export function generateInsights(zone, plants, readings) {
   const humid = avgPref(plants, 'preferredHumidityMin', 'preferredHumidityMax')
   const insights = []
 
-  if (moist.min != null && zone.latestMoisture != null) {
+  if (moist.min != null && moist.max != null && zone.latestMoisture != null) {
     if (zone.latestMoisture < moist.min)
       insights.push({ ok: false, text: `Soil moisture (${zone.latestMoisture}%) is below the preferred minimum of ${moist.min.toFixed(0)}%. Consider increasing watering frequency.` })
     else if (zone.latestMoisture > moist.max)
       insights.push({ ok: false, text: `Soil moisture (${zone.latestMoisture}%) exceeds the preferred maximum of ${moist.max.toFixed(0)}%. Reduce watering frequency.` })
   }
-  if (temp.min != null && zone.latestTemp != null) {
+  if (temp.min != null && temp.max != null && zone.latestTemp != null) {
     if (zone.latestTemp < temp.min || zone.latestTemp > temp.max)
       insights.push({ ok: false, text: `Temperature (${zone.latestTemp}°C) is outside the preferred range of ${temp.min.toFixed(0)}–${temp.max.toFixed(0)}°C.` })
   }
-  if (humid.min != null && zone.latestHumid != null) {
+  if (humid.min != null && humid.max != null && zone.latestHumid != null) {
     if (zone.latestHumid < humid.min || zone.latestHumid > humid.max)
       insights.push({ ok: false, text: `Humidity (${zone.latestHumid}%) is outside the preferred range of ${humid.min.toFixed(0)}–${humid.max.toFixed(0)}%.` })
   }

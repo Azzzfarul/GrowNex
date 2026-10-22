@@ -161,16 +161,16 @@ function powerOn(client) {
 
 // Empty retained publishes delete the retained status/state/command, so the bridge can't
 // recreate the device from them after it's deleted in the app.
-function forget(client, id) {
+// Resolves false if anything was left on the broker, so the caller doesn't quit as if it worked.
+async function forget(client, id) {
+  if (!client.connected) { log(id, 'not connected — retained messages NOT cleared'); return false }
   const topics = ['status', 'actuators/state', 'actuators/command'].map(t => `grownex/${id}/${t}`)
-  return new Promise(resolve => {
-    if (!client.connected) { log(id, 'not connected — nothing cleared'); resolve(); return }
-    let left = topics.length
-    for (const t of topics) {
-      client.publish(t, '', { retain: true }, () => { if (--left === 0) client.end(false, resolve) })
-    }
-    log(id, 'retained messages cleared')
-  })
+  const oks = await Promise.all(topics.map(t =>
+    new Promise(resolve => client.publish(t, '', { retain: true }, err => resolve(!err)))))
+  const ok = oks.every(Boolean)
+  log(id, ok ? 'retained messages cleared' : 'clearing retained messages failed')
+  await new Promise(resolve => client.end(false, resolve))
+  return ok
 }
 
 // Clean shutdown (Ctrl+C): mark the board offline first, as the last-will would.
@@ -364,8 +364,8 @@ if (process.stdin.isTTY) console.log(`\n${COMMANDS}\n`)
         clients().forEach(([c, id]) => { powerOff(c); log(id, 'power cut — broker sends the last-will "offline"') })
         break
       case 'forget':
-        await Promise.all(clients().map(([c, id]) => forget(c, id)))
-        process.exit(0)
+        if ((await Promise.all(clients().map(([c, id]) => forget(c, id)))).every(Boolean)) process.exit(0)
+        log('sim', 'forget incomplete — type online, wait for "MQTT OK", then forget again')
         break
       case 'online': clients().forEach(([c, id]) => { powerOn(c); log(id, 'power back on') }); break
       case 'state':

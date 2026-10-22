@@ -11,7 +11,7 @@ import '../../../services/firestore/device_service.dart';
 // Same rules as the web Automation tab.
 final _timeRe  = RegExp(r'^([01]?\d|2[0-3]):[0-5]\d$');
 final _lightRe = RegExp(r'^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$');
-final _fertRe  = RegExp(r'^(MON|TUE|WED|THU|FRI|SAT|SUN)\s([01]?\d|2[0-3]):[0-5]\d$');
+final _fertRe  = RegExp(r'^(MON|TUE|WED|THU|FRI|SAT|SUN) ([01]?\d|2[0-3]):[0-5]\d$');
 
 class AutomationTab extends StatefulWidget {
   final Zone zone;

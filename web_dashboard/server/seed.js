@@ -50,6 +50,10 @@ async function clean() {
     return
   }
 
+  // Devices first, like account deletion: a device still pointing at a zone could write
+  // readings under it after the zone is deleted.
+  await Promise.all(devicesSnap.docs.map(d => d.ref.delete()))
+
   let plantCount = 0
   for (const zoneDoc of zonesSnap.docs) {
     const plantsSnap = await db.collection('plants').where('zoneId', '==', zoneDoc.id).get()
@@ -59,7 +63,6 @@ async function clean() {
     // Zone + all subcollections; a single batch would fail past 500 sensorReadings
     await db.recursiveDelete(zoneDoc.ref)
   }
-  await Promise.all(devicesSnap.docs.map(d => d.ref.delete()))
   console.log(`  Deleted ${plantCount} plants, ${zonesSnap.size} zones, ${devicesSnap.size} devices, automationConfig`)
   console.log('Done — demo data removed.')
 }

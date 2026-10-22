@@ -179,7 +179,8 @@ class AuthService {
     try {
       await FirebaseStorage.instance.ref(path).delete();
     } on FirebaseException catch (e) {
-      if (e.code != 'object-not-found') debugPrint('Account deletion: $path not deleted ($e)');
+      // Stop before the login is deleted, so the user can retry (same as the server route).
+      if (e.code != 'object-not-found') rethrow;
     }
   }
 }

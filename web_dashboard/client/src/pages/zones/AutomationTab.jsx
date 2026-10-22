@@ -7,7 +7,7 @@ import { fetchAutomationPlan } from '../../lib/aiSummary'
 // Formats the bridge's schedule parsers accept (server/src/services/mqttBridge.js); "7:00" is fine there too
 const TIME_RE  = /^([01]?\d|2[0-3]):[0-5]\d$/
 const LIGHT_RE = /^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$/
-const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN)\s([01]?\d|2[0-3]):[0-5]\d$/
+const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN) ([01]?\d|2[0-3]):[0-5]\d$/
 
 function Toggle({ value, onChange, disabled }) {
   return (

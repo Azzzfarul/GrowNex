@@ -22,7 +22,7 @@ function avg(arr) {
 
 const TIME_RE  = /^([01]\d|2[0-3]):[0-5]\d$/
 const LIGHT_RE = /^([01]\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]\d|2[0-3]):[0-5]\d$/
-const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN)\s([01]\d|2[0-3]):[0-5]\d$/
+const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN) ([01]\d|2[0-3]):[0-5]\d$/
 
 function lightScheduleFor(condition) {
   switch (condition) {
