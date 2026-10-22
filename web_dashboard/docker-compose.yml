@@ -8,6 +8,6 @@ services:
     restart: unless-stopped
   client:
     build: ./client
-    ports: ["3000:80"]
+    ports: ["127.0.0.1:3000:80"]   # local only; :5000 stays open for the mobile app on the LAN
     depends_on: [server]
     restart: unless-stopped
