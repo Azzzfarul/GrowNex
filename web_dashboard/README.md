@@ -61,6 +61,21 @@ cd server && npm run dev
 
 Login uses the same Firebase Auth accounts created via the mobile app.
 
+### Docker
+
+With both `.env` files in place (step 1), from `web_dashboard/`:
+
+```bash
+docker compose up -d --build   # dashboard http://localhost:3000, API http://localhost:5000
+docker compose logs -f server
+docker compose down
+```
+
+The client is built with `client/.env` baked in (rebuild after changing it) and served by nginx,
+which proxies `/api` to the server container, so `VITE_API_URL` is ignored. The server reads
+`server/.env` at runtime. Like `npm start`, this connects to the live project and broker: stop any
+other server instance first.
+
 ## Tests
 
 No live Firebase project or hardware is touched by any of these.
