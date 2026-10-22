@@ -109,7 +109,7 @@ export default function DashboardPage() {
   }, [user])
 
   const activeZones = zones.filter((z) => z.status?.toLowerCase().includes('healthy')).length
-  const attentionZones = zones.length - activeZones
+  const attentionZones = zones.filter((z) => ['attention', 'critical'].includes(z.status)).length
 
   if (loading) {
     return <p className="text-sm text-gray-400 mt-8 text-center">Loading…</p>

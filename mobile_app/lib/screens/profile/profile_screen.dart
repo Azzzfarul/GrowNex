@@ -297,10 +297,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             _                    => e.message ?? 'An error occurred',
                           };
                         });
-                      } catch (_) {
+                      } catch (e) {
                         setState(() {
                           deleting = false;
-                          error = 'An error occurred. Please try again.';
+                          // An Exception carries its own reason (e.g. the server's status code).
+                          error = e is Exception
+                              ? e.toString().replaceFirst('Exception: ', '')
+                              : 'Could not delete the account. Check that the GrowNex server is reachable, then try again.';
                         });
                       }
                     },
@@ -333,12 +336,15 @@ class _ProfileListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
+    // Material (not a decorated Container) so the tile's tap ripple shows.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Material(
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).dividerColor),
+        side: BorderSide(color: Theme.of(context).dividerColor),
       ),
       child: ListTile(
         onTap: onTap,
@@ -353,6 +359,7 @@ class _ProfileListItem extends StatelessWidget {
         trailing: Icon(Icons.arrow_forward_ios,
             size: 16,
             color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)),
+      ),
       ),
     );
   }

@@ -14,11 +14,6 @@ class DeviceClaimException implements Exception {
 class DeviceService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<String> createDevice(Device device) async {
-    final docRef = await _firestore.collection('devices').add(device.toMap());
-    return docRef.id;
-  }
-
   Future<Device?> getDevice(String deviceId) async {
     final doc = await _firestore.collection('devices').doc(deviceId).get();
     if (!doc.exists) return null;
@@ -79,17 +74,27 @@ class DeviceService {
 
   // Writes only the fields the user edits. status, lastSync and totalSlots come from the bridge,
   // and the *Active fields are actuator intents, so they must not be overwritten here.
+  // Also refreshes the zone's copy of the module flags (copied there on assign), so a module
+  // added after assignment shows up in the zone.
   Future<void> updateDeviceInfo(
     String deviceId, {
     required String deviceName,
     required bool hasLightingModule,
     required bool hasFertilizerModule,
+    String? assignedZoneId,
+    bool isCamera = false,
   }) async {
     await _firestore.collection('devices').doc(deviceId).update({
       'deviceName': deviceName,
       'hasLightingModule': hasLightingModule,
       'hasFertilizerModule': hasFertilizerModule,
     });
+    if (assignedZoneId != null && assignedZoneId.isNotEmpty && !isCamera) {
+      await _firestore.collection('zones').doc(assignedZoneId).update({
+        'hasLight': hasLightingModule,
+        'hasFertilizer': hasFertilizerModule,
+      });
+    }
   }
 
   Future<void> deleteDevice(String deviceId, {String? assignedZoneId, bool isCamera = false}) async {
@@ -130,10 +135,6 @@ class DeviceService {
       {'assignedZoneId': zoneId, 'userId': userId},
       SetOptions(merge: true),
     );
-  }
-
-  Future<void> updateDeviceStatus(String deviceId, String status) async {
-    await _firestore.collection('devices').doc(deviceId).set({'status': status, 'lastSync': Timestamp.now()}, SetOptions(merge: true));
   }
 
   Future<void> updateIrrigationState(String deviceId, bool state) async {

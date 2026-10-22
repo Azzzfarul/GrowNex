@@ -11,13 +11,9 @@ class AutomationConfigService {
     return AutomationConfig.fromDocument(doc);
   }
 
-  Stream<AutomationConfig> watchConfig(String zoneId) {
-    return _firestore
-        .collection('automationConfig')
-        .doc(zoneId)
-        .snapshots()
-        .map((doc) => doc.exists ? AutomationConfig.fromDocument(doc) : AutomationConfig());
-  }
+  // Merges only [fields] — a toggle must not rewrite the whole config.
+  Future<void> saveFields(String zoneId, Map<String, dynamic> fields) =>
+      _firestore.collection('automationConfig').doc(zoneId).set(fields, SetOptions(merge: true));
 
   Future<void> saveConfig(String zoneId, AutomationConfig config) async {
     await _firestore

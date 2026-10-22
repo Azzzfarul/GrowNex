@@ -27,9 +27,9 @@ export default function DeviceDetailPage() {
 
   const [device, setDevice] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [deviceName, setDeviceName] = useState('')
-  const [hasLightingModule, setHasLightingModule] = useState(false)
-  const [hasFertilizerModule, setHasFertilizerModule] = useState(false)
+  // Only the fields the user changed; the rest show (and save) the live device values, so a
+  // change from another client isn't overwritten by a stale copy.
+  const [edits, setEdits] = useState({})
   const [saving, setSaving] = useState(false)
   const [saveLabel, setSaveLabel] = useState('Save changes')
   const [zoneInfo, setZoneInfo] = useState({ zone: null, plantsUsed: 0, loaded: false })
@@ -37,17 +37,14 @@ export default function DeviceDetailPage() {
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
+    setEdits({})  // edits belong to one device; never carry them over to another
     const unsub = onSnapshot(doc(db, 'devices', deviceId), (snap) => {
       if (!snap.exists()) {
         setDevice(null)
         setLoading(false)
         return
       }
-      const d = { id: snap.id, ...snap.data() }
-      setDevice(d)
-      setDeviceName(d.deviceName || '')
-      setHasLightingModule(d.hasLightingModule || false)
-      setHasFertilizerModule(d.hasFertilizerModule || false)
+      setDevice({ id: snap.id, ...snap.data() })
       setLoading(false)
     })
     return unsub
@@ -105,17 +102,36 @@ export default function DeviceDetailPage() {
     }
   }
 
+  const form = device && {
+    deviceName: device.deviceName || '',
+    hasLightingModule: !!device.hasLightingModule,
+    hasFertilizerModule: !!device.hasFertilizerModule,
+    ...edits,
+  }
+  const edit = (field, value) => setEdits((e) => ({ ...e, [field]: value }))
+
   async function handleSave() {
     if (!device) return
     setSaving(true)
+    const sent = { ...edits }
     try {
-      await updateDoc(doc(db, 'devices', deviceId), {
-        deviceName: deviceName.trim(),
-        hasLightingModule,
-        hasFertilizerModule,
-      })
+      const patch = { ...sent }
+      if ('deviceName' in patch) patch.deviceName = patch.deviceName.trim()
+      if (Object.keys(patch).length) await updateDoc(doc(db, 'devices', deviceId), patch)
+      // Keep the zone's copied module flags in sync (OverviewTab copies them on assign)
+      if (device.assignedZoneId && device.deviceType !== 'camera') {
+        await updateDoc(doc(db, 'zones', device.assignedZoneId), {
+          hasLight: form.hasLightingModule,
+          hasFertilizer: form.hasFertilizerModule,
+        })
+      }
+      // Keep anything typed while the save was in flight; it hasn't been saved yet.
+      setEdits((cur) => Object.fromEntries(Object.entries(cur).filter(([k, v]) => v !== sent[k])))
       setSaveLabel('Saved!')
       setTimeout(() => setSaveLabel('Save changes'), 2000)
+    } catch (e) {
+      console.error('Failed to save device:', e)
+      setSaveLabel('Save failed — retry')
     } finally {
       setSaving(false)
     }
@@ -185,8 +201,8 @@ export default function DeviceDetailPage() {
               <label className="block text-xs text-gray-400 mb-1">Device name</label>
               <input
                 className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                value={deviceName}
-                onChange={(e) => setDeviceName(e.target.value)}
+                value={form.deviceName}
+                onChange={(e) => edit('deviceName', e.target.value)}
               />
             </div>
             {isCamera ? (
@@ -200,8 +216,8 @@ export default function DeviceDetailPage() {
                 <span className="flex-1 text-sm text-gray-800">Light module</span>
                 <input
                   type="checkbox"
-                  checked={hasLightingModule}
-                  onChange={(e) => setHasLightingModule(e.target.checked)}
+                  checked={form.hasLightingModule}
+                  onChange={(e) => edit('hasLightingModule', e.target.checked)}
                   className="w-4 h-4 accent-green-600"
                 />
               </label>
@@ -210,8 +226,8 @@ export default function DeviceDetailPage() {
                 <span className="flex-1 text-sm text-gray-800">Fertilizer module</span>
                 <input
                   type="checkbox"
-                  checked={hasFertilizerModule}
-                  onChange={(e) => setHasFertilizerModule(e.target.checked)}
+                  checked={form.hasFertilizerModule}
+                  onChange={(e) => edit('hasFertilizerModule', e.target.checked)}
                   className="w-4 h-4 accent-green-600"
                 />
               </label>

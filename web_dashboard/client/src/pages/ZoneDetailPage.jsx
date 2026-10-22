@@ -12,7 +12,9 @@ const TABS = ['Overview', 'Plants', 'Automation', 'Monitoring']
 function statusColor(status) {
   switch (status?.toLowerCase()) {
     case 'healthy': return 'bg-green-100 text-green-700'
+    case 'attention':
     case 'needs attention': return 'bg-orange-100 text-orange-700'
+    case 'critical': return 'bg-red-100 text-red-700'
     case 'stable': return 'bg-teal-100 text-teal-700'
     default: return 'bg-gray-100 text-gray-600'
   }

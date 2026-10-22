@@ -58,9 +58,16 @@ export async function uploadPlantPhoto(plantId, file) {
   }
 }
 
+// A missing file is already the goal; any other Storage error is thrown so the caller can retry.
+const deleteFile = (path) =>
+  deleteObject(ref(storage, path)).catch((e) => { if (e.code !== 'storage/object-not-found') throw e })
+
+// Storage object only — delete it before the plant doc, so a failure leaves something to retry
+export const removePlantPhotoFile = (plantId) => deleteFile(`plantPhotos/${plantId}.jpg`)
+
 export async function removePlantPhoto(plantId) {
   try {
-    await deleteObject(ref(storage, `plantPhotos/${plantId}.jpg`)).catch(() => {})
+    await removePlantPhotoFile(plantId)
     await updateDoc(doc(db, 'plants', plantId), { photoUrl: null })
     return {}
   } catch (err) {
@@ -83,7 +90,7 @@ export async function uploadZonePhoto(zoneId, file) {
 
 export async function removeZonePhoto(zoneId) {
   try {
-    await deleteObject(ref(storage, `zonePhotos/${zoneId}.jpg`)).catch(() => {})
+    await deleteFile(`zonePhotos/${zoneId}.jpg`)
     await updateDoc(doc(db, 'zones', zoneId), { zonePhotoUrl: null })
     return {}
   } catch (err) {

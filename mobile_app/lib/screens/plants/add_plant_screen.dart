@@ -485,11 +485,14 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   }
 
   Widget _buildPreferredConditions() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+    // Material (not a decorated Container) so the tile's tap ripple shows, and the theme
+    // surface colour so the card isn't white in dark mode.
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey[200]!),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),

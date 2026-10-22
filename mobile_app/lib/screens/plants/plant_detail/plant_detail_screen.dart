@@ -75,7 +75,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       final updated = Plant(
         id: widget.plant.id,
         zoneId: widget.plant.zoneId,
-        plantName: _nameCtrl.text.trim(),
+        // Same fallback as add-plant (and the web): an empty name shows the species
+        plantName: _nameCtrl.text.trim().isEmpty ? _speciesCtrl.text.trim() : _nameCtrl.text.trim(),
         species: _speciesCtrl.text.trim(),
         status: widget.plant.status,
         slotNumber: widget.plant.slotNumber,
@@ -154,6 +155,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
 
     try {
       await PlantService().deletePlant(widget.plant.id);
+      if (_photoUrl != null) await PhotoService().deletePlantPhotoFile(widget.plant.id).catchError((_) {});
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
@@ -409,12 +411,13 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   }
 
   Widget _buildPreferredConditions(ColorScheme cs) {
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
-      ),
+    // Material (not a decorated Container) so the tile's tap ripple shows.
+    return Material(
+      color: cs.surfaceContainer,
+      elevation: 2,
+      shadowColor: cs.shadow.withValues(alpha: 0.3),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
