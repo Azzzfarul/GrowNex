@@ -22,6 +22,7 @@ Auth and data are shared across all clients through **Firebase Auth + Cloud Fire
 - A **Firebase project** with Auth (Email/Password), Firestore and Storage enabled
 - A Firebase **service account** JSON (for the server) — *Project settings → Service accounts → Generate new private key*
 - A **HiveMQ Cloud** cluster (or any MQTT broker) for device traffic — needed for real firmware or the device simulator
+- Optional: **Docker** with Compose, to run the website in containers instead (section 1.5)
 - Optional: an **OpenRouter** API key for the AI features (without one, the apps use built-in rule-based output)
 
 You can run the mobile app and the website against the same Firebase project so they share accounts and data.
@@ -123,6 +124,18 @@ npm run preview                            # serve the build locally (:4173 — 
 
 cd ../server && npm start                  # run the API without --watch
 ```
+
+### 1.5 Run with Docker (optional)
+
+Instead of 1.2–1.4, after configuring both `.env` files (1.1), from `web_dashboard/`:
+
+```bash
+docker compose up -d --build                      # dashboard :3000 (nginx), API :5000
+docker compose exec server node seed.js <FIREBASE_UID>   # optional demo data
+docker compose down
+```
+
+The same live-system warning applies. Details are in [`web_dashboard/README.md`](web_dashboard/README.md#docker).
 
 ---
 
@@ -253,7 +266,7 @@ The firmware has no tests.
 
 | Service | URL |
 |---------|-----|
-| React dashboard (Vite dev) | http://localhost:3000 |
+| React dashboard (Vite dev, or nginx under Docker) | http://localhost:3000 |
 | Express API | http://localhost:5000 |
 | API health check | http://localhost:5000/api/health |
 | MQTT broker (HiveMQ, TLS) | your_cluster.s1.eu.hivemq.cloud:8883 |

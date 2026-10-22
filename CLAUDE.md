@@ -27,6 +27,9 @@ node seed.js <FIREBASE_UID> --clean    # remove the demo data
 npm run dev                            # :3000
 npm run build                          # → dist/
 
+# web_dashboard   (Docker alternative to the two above; same .env files, same live side effects)
+docker compose up -d --build           # client built with client/.env, served by nginx on :3000 (proxies /api); server on :5000
+
 # mobile_app
 flutter pub get
 flutter run --dart-define=API_BASE_URL=http://<host-ip>:5000   # default 10.0.2.2:5000 (Android emulator → host); only AI calls and account deletion use it

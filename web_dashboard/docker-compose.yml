@@ -1,0 +1,13 @@
+# Runs the API + MQTT bridge (:5000) and the built dashboard (:3000).
+# Reads server/.env at runtime and client/.env at build time (see README "Docker").
+services:
+  server:
+    build: ./server
+    env_file: ./server/.env
+    ports: ["5000:5000"]
+    restart: unless-stopped
+  client:
+    build: ./client
+    ports: ["127.0.0.1:3000:80"]   # local only; :5000 stays open for the mobile app on the LAN
+    depends_on: [server]
+    restart: unless-stopped
