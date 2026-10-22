@@ -11,7 +11,7 @@ Full-stack IoT smart plant / farming monitoring and automation system.
 | Web dashboard | React + Vite + Tailwind CSS | [`web_dashboard/client/`](web_dashboard/client/) |
 | Mobile app | Flutter / Dart | [`mobile_app/`](mobile_app/) |
 
-Auth and data are shared across all clients through **Firebase Auth + Cloud Firestore**. Devices talk to the backend over **MQTT (HiveMQ, TLS 8883)**; the server's MQTT bridge mirrors that traffic into Firestore.
+Auth and data are shared across all clients through **Firebase Auth + Cloud Firestore** (photos in **Firebase Storage**). Devices talk to the backend over **MQTT (HiveMQ, TLS 8883)**; the server's MQTT bridge mirrors that traffic into Firestore.
 
 ---
 
@@ -19,9 +19,10 @@ Auth and data are shared across all clients through **Firebase Auth + Cloud Fire
 
 - **Node.js** v18+ and npm
 - **Flutter SDK** (Dart >= 3.12) — run `flutter doctor` to verify your toolchain
-- A **Firebase project** with Auth (Email/Password) and Firestore enabled
+- A **Firebase project** with Auth (Email/Password), Firestore and Storage enabled
 - A Firebase **service account** JSON (for the server) — *Project settings → Service accounts → Generate new private key*
-- A **HiveMQ Cloud** cluster (or any MQTT broker) for device traffic — only needed if you run real firmware
+- A **HiveMQ Cloud** cluster (or any MQTT broker) for device traffic — needed for real firmware or the device simulator
+- Optional: an **OpenRouter** API key for the AI features (without one, the apps use built-in rule-based output)
 
 You can run the mobile app and the website against the same Firebase project so they share accounts and data.
 
@@ -60,12 +61,24 @@ PORT=5000
 FIREBASE_PROJECT_ID=your_project_id
 FIREBASE_CLIENT_EMAIL=your_service_account_email
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
 MQTT_BROKER_HOST=your_cluster.s1.eu.hivemq.cloud
 MQTT_BROKER_PORT=8883
 MQTT_USER=your_mqtt_username
 MQTT_PASS=your_mqtt_password
+
+# Optional — leave OPENROUTER_API_KEY blank to disable AI (rule-based fallback is used)
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+AI_CACHE_TTL_MS=1800000
+
+# Nightly summary notification + data cleanup (cron expression + IANA timezone)
+DAILY_SUMMARY_CRON=0 20 * * *
+DAILY_SUMMARY_TZ=Asia/Kuala_Lumpur
 ```
 
+> `FIREBASE_STORAGE_BUCKET` is required — the server won't start the MQTT bridge without it.
 > Keep `FIREBASE_PRIVATE_KEY` on one line with literal `\n` sequences, wrapped in double quotes.
 
 ### 1.2 Install dependencies
@@ -87,8 +100,12 @@ cd server && npm run dev
 cd client && npm run dev
 ```
 
-Open <http://localhost:3000>. The Vite dev server proxies `/api/*` to the server on port 5000.
-Health check: <http://localhost:5000/api/health>.
+Open <http://localhost:3000>. Health check: <http://localhost:5000/api/health>.
+
+> **Starting the server touches real things.** It listens to the live Firestore project, runs automation
+> schedules, sends notifications, and can switch pumps/lights on connected hardware. Run only one server
+> per Firebase project/broker — two instances fight over the same MQTT client ID and fire every schedule twice.
+> To experiment safely, use the local sandbox in [`web_dashboard/README.md`](web_dashboard/README.md#local-sandbox).
 
 Register an account from the app's Register page (or the mobile app). To load demo zones/plants/devices for that account:
 
@@ -102,7 +119,7 @@ node seed.js <FIREBASE_UID> --clean  # remove it
 
 ```bash
 cd web_dashboard/client && npm run build   # outputs dist/
-npm run preview                            # serve the build locally
+npm run preview                            # serve the build locally (:4173 — add it to the CORS origin in server/src/index.js)
 
 cd ../server && npm start                  # run the API without --watch
 ```
@@ -115,9 +132,10 @@ A Flutter app that uses the same Firebase project as the website.
 
 ### 2.1 Configure Firebase
 
-The repo already contains generated config (`mobile_app/lib/firebase_options.dart`,
-`mobile_app/android/app/google-services.json`). To point the app at **your own** Firebase project,
-regenerate them with the FlutterFire CLI:
+The repo contains Android config only (`mobile_app/android/app/google-services.json`); `main.dart` calls
+`Firebase.initializeApp()` with no options. iOS, web and desktop are **not configured** —
+`lib/firebase_options.dart` throws on them. To use your own Firebase project or another platform,
+run the FlutterFire CLI:
 
 ```bash
 dart pub global activate flutterfire_cli
@@ -126,7 +144,8 @@ flutterfire configure
 ```
 
 This rewrites `lib/firebase_options.dart` and drops the platform config files
-(`google-services.json` for Android, `GoogleService-Info.plist` for iOS).
+(`google-services.json` for Android, `GoogleService-Info.plist` for iOS). For non-Android platforms, also change
+`main.dart` to `Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)`.
 
 ### 2.2 Install dependencies
 
@@ -139,9 +158,12 @@ flutter pub get
 
 ```bash
 flutter devices          # list connected devices / emulators
-flutter run              # run on the default device
-flutter run -d chrome    # or run in a browser
+flutter run --dart-define=API_BASE_URL=http://<your-computer-ip>:5000
 ```
+
+The app reads and writes Firestore directly; only the AI features and account deletion call the server.
+`API_BASE_URL` defaults to `http://10.0.2.2:5000` (your computer, as seen from an Android emulator), so
+on an emulator a plain `flutter run` works. On a real phone, use your computer's LAN IP.
 
 Common targets: `flutter run -d <deviceId>`, `flutter emulators --launch <id>` to start an Android emulator first.
 
@@ -208,6 +230,25 @@ to trigger watering, alerts, the camera feed or a power cut. See its README for 
 
 ---
 
+## Tests
+
+None of these touch the live Firebase project or real hardware.
+
+```bash
+cd web_dashboard/client && npm test            # analytics, plant-health, zone-fit logic
+cd web_dashboard/server && npm test            # AI output validation, schedule parsers, zone status
+cd web_dashboard/server && npm run test:integration   # real server vs Firebase emulators + local MQTT (needs Java 21+)
+cd device_simulator && npm test                # simulator's MQTT contract
+cd mobile_app && flutter test                  # same logic cases as the web client
+cd mobile_app && flutter analyze
+```
+
+The mobile on-device walkthrough (`flutter test integration_test …`) and a local sandbox for clicking
+around both apps safely are described in [`web_dashboard/README.md`](web_dashboard/README.md#tests).
+The firmware has no tests.
+
+---
+
 ## Ports
 
 | Service | URL |
@@ -221,4 +262,9 @@ to trigger watering, alerts, the camera feed or a power cut. See its README for 
 
 - `.env` files and Firebase service-account keys are secrets — they are git-ignored; never commit them.
 - All clients must target the **same Firebase project** to share accounts and data.
+- Firestore/Storage security rules and composite indexes live in the Firebase console, not in this repo.
+  The notifications list needs a composite index on `notifications` (`userId` + `createdAt` desc) —
+  the first query logs a link that creates it. (`web_dashboard/emulator/storage.rules` is only for the local emulators.)
+- Automation timers live in the server's memory. Restarting it mid-watering (including a `--watch` reload)
+  can leave an actuator on until you switch it off.
 - See [`web_dashboard/README.md`](web_dashboard/README.md) for more detail on the dashboard's structure.
