@@ -242,12 +242,25 @@ List<({bool? ok, String text})> generateInsights(
     ));
   }
 
+  // "All fine" only if at least one complete range was actually compared.
+  final checked = [
+        (moist, zone.latestMoisture),
+        (temp, zone.latestTemp),
+        (humid, zone.latestHumid),
+      ].any((e) => e.$1.min != null && e.$1.max != null && e.$2 != null) ||
+      [tC, mC, hC].any((c) => c != null);
   if (out.isEmpty) {
-    out.add((
-      ok: true,
-      text:
-          'All conditions are within preferred ranges. Your plants are doing well.',
-    ));
+    out.add(checked
+        ? (
+            ok: true,
+            text:
+                'All conditions are within preferred ranges. Your plants are doing well.',
+          )
+        : (
+            ok: null,
+            text:
+                'Set a minimum and maximum preferred range on your plants to see insights.',
+          ));
   }
   return out;
 }

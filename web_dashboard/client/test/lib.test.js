@@ -65,6 +65,9 @@ test('a range missing its max is skipped, not scored or crashed on', () => {
   const z = { latestMoisture1: 50, latestMoisture: 50, latestTemp: 25 }
   assert.equal(healthScoreForPlant(z, p), 100)
   assert.deepEqual(generateInsights(z, [p], []).map(i => i.ok), [true])
+  // Only half ranges: nothing was checked, so it must not claim everything is fine.
+  const half = { slotNumber: 1, preferredMoistureMin: 40, preferredTemperatureMin: 20 }
+  assert.deepEqual(generateInsights(z, [half], [{ temperature: 25, moisture: 50 }]).map(i => i.ok), [null])
 })
 
 // ── plantHealth ──────────────────────────────────────────────────────────────

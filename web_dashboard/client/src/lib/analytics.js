@@ -252,8 +252,14 @@ export function generateInsights(zone, plants, readings) {
   if (moistComp != null && moistComp < 70) insights.push({ ok: false, text: `Soil moisture was outside the preferred range ${100 - moistComp}% of the time.` })
   if (humidComp != null && humidComp < 70) insights.push({ ok: false, text: `Humidity was outside the preferred range ${100 - humidComp}% of the time.` })
 
+  // "All fine" only if at least one complete range was actually compared.
+  const checked = [[moist, zone.latestMoisture], [temp, zone.latestTemp], [humid, zone.latestHumid]]
+    .some(([r, v]) => r.min != null && r.max != null && v != null) ||
+    [tempComp, moistComp, humidComp].some(c => c != null)
   if (!insights.length)
-    insights.push({ ok: true, text: 'All conditions are within preferred ranges. Your plants are doing well.' })
+    insights.push(checked
+      ? { ok: true, text: 'All conditions are within preferred ranges. Your plants are doing well.' }
+      : { ok: null, text: 'Set a minimum and maximum preferred range on your plants to see insights.' })
 
   return insights
 }

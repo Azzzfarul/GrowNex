@@ -51,27 +51,31 @@ router.delete('/me', verifyToken, async (req, res) => {
     const deviceDeletes = await Promise.allSettled(devicesSnap.docs.map(d => d.ref.delete()))
     if (deviceDeletes.some(r => r.status === 'rejected')) throw new Error('devices could not be deleted')
 
-    const zonesSnap = await db.collection('zones').where('userId', '==', uid).get()
-    for (const zoneDoc of zonesSnap.docs) {
-      const zoneId = zoneDoc.id
+    // try/finally: if a Storage delete fails partway, the deletes already queued still finish
+    // before the route responds.
+    try {
+      const zonesSnap = await db.collection('zones').where('userId', '==', uid).get()
+      for (const zoneDoc of zonesSnap.docs) {
+        const zoneId = zoneDoc.id
 
-      const plantsSnap = await db.collection('plants').where('zoneId', '==', zoneId).get()
-      for (const p of plantsSnap.docs) {
-        await delFile(`plantPhotos/${p.id}.jpg`)  // before the doc, so a retry still finds the plant
-        del(p.ref)
+        const plantsSnap = await db.collection('plants').where('zoneId', '==', zoneId).get()
+        for (const p of plantsSnap.docs) {
+          await delFile(`plantPhotos/${p.id}.jpg`)  // before the doc, so a retry still finds the plant
+          del(p.ref)
+        }
+
+        await delFile(`zonePhotos/${zoneId}.jpg`)
+        await bucket.deleteFiles({ prefix: `zoneSnapshots/${zoneId}/` })
+        del(db.collection('automationConfig').doc(zoneId))
+        // Zone doc plus every subcollection (sensorReadings, stats, aiCache, snapshots)
+        await db.recursiveDelete(zoneDoc.ref)
       }
 
-      await delFile(`zonePhotos/${zoneId}.jpg`)
-      await bucket.deleteFiles({ prefix: `zoneSnapshots/${zoneId}/` })
-      del(db.collection('automationConfig').doc(zoneId))
-      // Zone doc plus every subcollection (sensorReadings, stats, aiCache, snapshots)
-      await db.recursiveDelete(zoneDoc.ref)
+      const notifSnap = await db.collection('notifications').where('userId', '==', uid).get()
+      notifSnap.docs.forEach(d => del(d.ref))
+    } finally {
+      await writer.close()
     }
-
-    const notifSnap = await db.collection('notifications').where('userId', '==', uid).get()
-    notifSnap.docs.forEach(d => del(d.ref))
-
-    await writer.close()
     // Keep the login so the user can retry; every step above is safe to repeat.
     if (failed.length) throw new Error(`${failed.length} document(s) could not be deleted`)
     await db.collection('users').doc(uid).delete()

@@ -124,6 +124,9 @@ void main() {
       final z = zone(m1: 50, m: 50, temp: 25);
       expect(healthScoreForPlant(z, p), 100);
       expect(generateInsights(z, [p], []).map((i) => i.ok), [true]);
+      // Only half ranges: nothing was checked, so it must not claim everything is fine.
+      final half = plant(mMin: 40, tMin: 20);
+      expect(generateInsights(z, [half], [reading(now, temperature: 25, moisture: 50)]).map((i) => i.ok), [null]);
     });
   });
 

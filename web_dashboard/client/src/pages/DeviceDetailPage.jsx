@@ -112,8 +112,9 @@ export default function DeviceDetailPage() {
   async function handleSave() {
     if (!device) return
     setSaving(true)
+    const sent = { ...edits }
     try {
-      const patch = { ...edits }
+      const patch = { ...sent }
       if ('deviceName' in patch) patch.deviceName = patch.deviceName.trim()
       if (Object.keys(patch).length) await updateDoc(doc(db, 'devices', deviceId), patch)
       // Keep the zone's copied module flags in sync (OverviewTab copies them on assign)
@@ -123,7 +124,8 @@ export default function DeviceDetailPage() {
           hasFertilizer: form.hasFertilizerModule,
         })
       }
-      setEdits({})
+      // Keep anything typed while the save was in flight; it hasn't been saved yet.
+      setEdits((cur) => Object.fromEntries(Object.entries(cur).filter(([k, v]) => v !== sent[k])))
       setSaveLabel('Saved!')
       setTimeout(() => setSaveLabel('Save changes'), 2000)
     } catch (e) {
