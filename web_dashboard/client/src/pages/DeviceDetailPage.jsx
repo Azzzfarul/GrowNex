@@ -37,6 +37,7 @@ export default function DeviceDetailPage() {
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
+    setEdits({})  // edits belong to one device; never carry them over to another
     const unsub = onSnapshot(doc(db, 'devices', deviceId), (snap) => {
       if (!snap.exists()) {
         setDevice(null)

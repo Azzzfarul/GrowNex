@@ -67,6 +67,9 @@ router.delete('/me', verifyToken, async (req, res) => {
         await delFile(`zonePhotos/${zoneId}.jpg`)
         await bucket.deleteFiles({ prefix: `zoneSnapshots/${zoneId}/` })
         del(db.collection('automationConfig').doc(zoneId))
+        // Keep the zone until its plant/config deletes have landed: a retry finds plants via the zone.
+        await writer.flush()
+        if (failed.length) throw new Error(`${failed.length} document(s) could not be deleted`)
         // Zone doc plus every subcollection (sensorReadings, stats, aiCache, snapshots)
         await db.recursiveDelete(zoneDoc.ref)
       }

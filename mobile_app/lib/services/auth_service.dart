@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -112,7 +114,11 @@ class AuthService {
       res = await http
           .delete(Uri.parse('$apiBaseUrl/api/auth/me'), headers: {'Authorization': 'Bearer $token'})
           .timeout(const Duration(seconds: 60));
-    } on Exception catch (e) {  // no connection, DNS failure or timeout
+    } on TimeoutException {
+      // The server was reached and may still be deleting: cleaning up here too (and deleting the
+      // login) could race it and leave nothing to retry from.
+      throw Exception('Account deletion is taking too long. Wait a minute, then try again.');
+    } on Exception catch (e) {  // no connection or DNS failure
       debugPrint('Account deletion: server unreachable ($e), deleting directly');
       await _deleteAccountDirectly(user);
       return;
