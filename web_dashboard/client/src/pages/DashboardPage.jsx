@@ -108,7 +108,7 @@ export default function DashboardPage() {
     return unsub
   }, [user])
 
-  const activeZones = zones.filter((z) => z.status?.toLowerCase().includes('healthy')).length
+  const healthyZones = zones.filter((z) => z.status?.toLowerCase().includes('healthy')).length
   const attentionZones = zones.filter((z) => ['attention', 'critical'].includes(z.status)).length
 
   if (loading) {
@@ -122,9 +122,9 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <p className="text-sm font-bold text-green-600 mb-3">Active zones</p>
+          <p className="text-sm font-bold text-green-600 mb-3">Healthy zones</p>
           <p className="text-2xl font-bold text-gray-900">
-            {activeZones} active zone{activeZones !== 1 ? 's' : ''}
+            {healthyZones} healthy zone{healthyZones !== 1 ? 's' : ''}
           </p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
