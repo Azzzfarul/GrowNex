@@ -23,14 +23,17 @@ class PhotoService {
     return photoUrl;
   }
 
-  // Storage object only — for when the plant doc is being deleted too.
-  Future<void> deletePlantPhotoFile(String plantId) async {
+  // A missing file is already the goal; any other Storage error is rethrown so the caller can retry.
+  Future<void> deleteFile(String path) async {
     try {
-      await _storage.ref('plantPhotos/$plantId.jpg').delete();
+      await _storage.ref(path).delete();
     } on FirebaseException catch (e) {
       if (e.code != 'object-not-found') rethrow;
     }
   }
+
+  // Storage object only — for when the plant doc is being deleted too.
+  Future<void> deletePlantPhotoFile(String plantId) => deleteFile('plantPhotos/$plantId.jpg');
 
   Future<void> removePlantPhoto(String plantId) async {
     await deletePlantPhotoFile(plantId);

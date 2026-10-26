@@ -94,7 +94,7 @@ Use `mqttBridge.js` and `server/seed.js` as the schema reference — `mobile_app
 
 Nothing enforces cross-document integrity server-side; client code maintains it:
 - `zones.deviceId` ⇄ `devices.assignedZoneId` must change together, and assigning copies `hasLight` / `hasFertilizer` / `totalPlantSlots` from the device onto the zone. Same for `zones.cameraDeviceId` ⇄ the camera's `assignedZoneId` (nothing copied). Camera `status` is not mirrored to `zones.deviceOnline`.
-- Cascading deletes are hand-written in web `pages/ZoneDetailPage.jsx`, mobile `zone_detail_screen.dart`, and `server/src/routes/auth.js` (account deletion, used by both clients). Firestore doesn't delete subcollections for you, so update every cascade when adding a collection. Account deletion covers every subcollection, notifications and Storage photos; the client-side zone deletes still leave the zone's subcollections and photos behind.
+- Cascading deletes are hand-written in web `pages/ZoneDetailPage.jsx`, mobile `zone_detail_screen.dart`, and `server/src/routes/auth.js` (account deletion, used by both clients). Firestore doesn't delete subcollections for you, so update every cascade when adding a collection. Account deletion covers every subcollection, notifications and Storage photos. The client-side zone deletes can't list subcollections, so they delete a named list (`ZONE_SUBCOLLECTIONS` in `ZoneDetailPage.jsx`, `ZoneService.zoneSubcollections` in mobile, which the mobile account-deletion fallback also uses): add any new subcollection there.
 
 ### Actuators and automation (`mqttBridge.js`)
 

@@ -59,7 +59,7 @@ export async function uploadPlantPhoto(plantId, file) {
 }
 
 // A missing file is already the goal; any other Storage error is thrown so the caller can retry.
-const deleteFile = (path) =>
+export const deleteFile = (path) =>
   deleteObject(ref(storage, path)).catch((e) => { if (e.code !== 'storage/object-not-found') throw e })
 
 // Storage object only — delete it before the plant doc, so a failure leaves something to retry

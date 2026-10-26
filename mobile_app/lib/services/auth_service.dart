@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
+import 'firestore/zone_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -142,7 +143,7 @@ class AuthService {
         final path = snap.data()['storagePath'];
         if (path is String) await _deleteFile(path);
       }
-      for (final sub in ['sensorReadings', 'stats', 'aiCache', 'snapshots']) {
+      for (final sub in ZoneService.zoneSubcollections) {
         await _deleteAll(zoneRef.collection(sub));
       }
       for (final plant in (await _firestore.collection('plants').where('zoneId', isEqualTo: zone.id).get()).docs) {

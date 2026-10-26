@@ -60,7 +60,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
 
         final zones = snapshot.data ?? [];
-        final activeZones = zones.where((z) => z.status.toLowerCase().contains('healthy')).length;
+        final healthyZones = zones.where((z) => z.status.toLowerCase().contains('healthy')).length;
         // Zones with no plants yet are 'unknown' — not healthy, but not needing attention either.
         final attentionZones = zones.where((z) => z.status == 'attention' || z.status == 'critical').length;
 
@@ -76,7 +76,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 24),
               Row(
                 children: [
-                  Expanded(child: _buildSummaryCard(cs, 'Active zones', '$activeZones active zone${activeZones == 1 ? '' : 's'}', Colors.green)),
+                  Expanded(child: _buildSummaryCard(cs, 'Healthy zones', '$healthyZones healthy zone${healthyZones == 1 ? '' : 's'}', Colors.green)),
                   const SizedBox(width: 16),
                   Expanded(child: _buildSummaryCard(cs, 'Attention', '$attentionZones zone${attentionZones == 1 ? '' : 's'} require attention', Colors.orange)),
                 ],

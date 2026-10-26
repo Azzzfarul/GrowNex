@@ -5,6 +5,7 @@ import '../../../models/zone_model.dart';
 import '../../../services/firestore/device_service.dart';
 import '../../../services/firestore/plant_service.dart';
 import '../../../services/firestore/zone_service.dart';
+import '../../../services/photo_service.dart';
 import 'automation_tab.dart';
 import 'monitoring_tab.dart';
 import 'overview_tab.dart';
@@ -60,18 +61,8 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
     if (confirmed != true || !mounted) return;
 
     try {
-      // Delete plants in this zone
-      final plants = await PlantService().getPlantsByZone(zone.id);
-      for (final plant in plants) {
-        await PlantService().deletePlant(plant.id);
-      }
-      // Delete automationConfig
-      await FirebaseFirestore.instance
-          .collection('automationConfig')
-          .doc(zone.id)
-          .delete()
-          .catchError((_) {});
-      // Unassign the sensor node and camera so they can be reassigned
+      // Unassign the sensor node and camera first: while assigned, their next reading/photo
+      // would recreate data under the zone being deleted
       for (final deviceId in [zone.deviceId, zone.cameraDeviceId].whereType<String>()) {
         try {
           await DeviceService().unassignDevice(deviceId);
@@ -79,7 +70,26 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
           // Best effort, as on the web: the device may already be deleted.
         }
       }
-      // Delete zone document
+      // Storage files before their docs, so a failure leaves something to retry from
+      final photos = PhotoService();
+      final snapshots = await FirebaseFirestore.instance
+          .collection('zones').doc(zone.id).collection('snapshots').get();
+      for (final s in snapshots.docs) {
+        final path = s.data()['storagePath'];
+        if (path is String) await photos.deleteFile(path);
+      }
+      final plants = await PlantService().getPlantsByZone(zone.id);
+      for (final plant in plants) {
+        await photos.deletePlantPhotoFile(plant.id);
+        await PlantService().deletePlant(plant.id);
+      }
+      await photos.deleteFile('zonePhotos/${zone.id}.jpg');
+      await FirebaseFirestore.instance
+          .collection('automationConfig')
+          .doc(zone.id)
+          .delete()
+          .catchError((_) {});
+      // Subcollections, then the zone doc last: it's how a retry finds everything above
       await ZoneService().deleteZone(zone.id);
 
       if (mounted) Navigator.pop(context);
