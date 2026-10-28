@@ -197,7 +197,7 @@ class _MonitoringTabState extends State<MonitoringTab> {
               const SizedBox(height: 10),
               _sensorValue(cs, 'Humidity',    widget.zone.latestHumid   != null ? '${widget.zone.latestHumid}%'   : '--', min: humidMin, max: humidMax),
               const SizedBox(height: 10),
-              _sensorValue(cs, 'Light',       widget.zone.latestLight   != null ? '${widget.zone.latestLight} lx' : '--'),
+              _sensorValue(cs, 'Light',       widget.zone.latestLight   != null ? '${widget.zone.latestLight}%' : '--'),
               const SizedBox(height: 10),
               _sensorValue(cs, 'Moisture',    widget.zone.latestMoisture != null ? '${widget.zone.latestMoisture}%' : '--', min: moistMin, max: moistMax),
             ],

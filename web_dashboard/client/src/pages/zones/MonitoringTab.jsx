@@ -153,7 +153,7 @@ export default function MonitoringTab({ zone }) {
         )}
         <SensorRow label="Temperature" value={zone.latestTemp     != null ? `${zone.latestTemp}°C`     : null} min={idealTemp[0]}     max={idealTemp[1]} />
         <SensorRow label="Humidity"    value={zone.latestHumid    != null ? `${zone.latestHumid}%`    : null} min={idealHumidity[0]} max={idealHumidity[1]} />
-        <SensorRow label="Light"       value={zone.latestLight    != null ? `${zone.latestLight} lx`  : null} />
+        <SensorRow label="Light"       value={zone.latestLight    != null ? `${zone.latestLight}%`  : null} />
         <SensorRow label="Moisture"    value={zone.latestMoisture != null ? `${zone.latestMoisture}%` : null} min={idealMoisture[0]} max={idealMoisture[1]} />
         {lastUpdated && <p className="text-xs text-gray-400 mt-3">Last updated {lastUpdated}</p>}
       </div>
