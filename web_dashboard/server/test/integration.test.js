@@ -215,6 +215,24 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal((await notifs(users.alice.uid, 'threshold')).length, 1)
   })
 
+  test('a failed DHT11 read keeps the worse status and the hour’s last temperature', async () => {
+    const before = await docData(`zones/${ids.zoneA}`)  // critical: temperature 35 + low moisture
+    const hour = new Date().toISOString().slice(0, 13)
+    await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture1: 60, soilMoisture2: 64 })
+    await waitFor(async () => (await docData(`zones/${ids.zoneA}`)).latestMoisture === 62, 'zone updated')
+    const stats = await waitFor(async () => {
+      const s = await docData(`zones/${ids.zoneA}/stats/${hour}`)
+      return s.moisture === 62 && s
+    }, 'stats updated')
+    assert.equal(stats.temperature, 35, 'a null reading does not blank the hour')
+    const z = await docData(`zones/${ids.zoneA}`)
+    assert.equal(z.latestTemp, null)
+    assert.equal(z.status, 'critical', 'moisture alone must not make the zone healthy')
+    assert.equal(z.alertSummary, before.alertSummary)
+    await sleep(500)
+    assert.equal((await notifs(users.alice.uid, 'threshold')).length, 1)
+  })
+
   test('manual toggles publish one debounced command and ignore the device echo', async () => {
     const t0 = Date.now()
     const dev = db.doc('devices/ESP32-T1')

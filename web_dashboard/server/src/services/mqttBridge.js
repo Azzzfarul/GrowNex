@@ -125,13 +125,14 @@ async function handleSensors(deviceId, payload) {
     db.collection('zones').doc(assignedZoneId)
       .collection('sensorReadings').add(reading),
 
-    // Hourly stats: overwrite the current-hour bucket with the latest reading.
+    // Hourly stats: the current-hour bucket holds each metric's latest value. Merging without
+    // nulls keeps the hour's last good temperature/humidity when a DHT11 read fails.
     // Analytics queries this instead of sensorReadings (168 docs/zone/7d vs 10,080).
     db.collection('zones').doc(assignedZoneId)
       .collection('stats').doc(statsDocId).set({
-        ...sensorFields,
+        ...Object.fromEntries(Object.entries(sensorFields).filter(([, v]) => v != null)),
         timestamp: FieldValue.serverTimestamp(),
-      }),
+      }, { merge: true }),
 
     db.collection('zones').doc(assignedZoneId).update({
       latestMoisture:  moisture,
