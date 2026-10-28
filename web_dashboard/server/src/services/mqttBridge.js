@@ -119,7 +119,7 @@ async function handleSensors(deviceId, payload) {
     expiresAt: Timestamp.fromDate(new Date(Date.now() + READING_TTL_MS)),
   }
 
-  const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(assignedZoneId))
+  const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(assignedZoneId), zoneStatusCache.get(assignedZoneId))
 
   await Promise.all([
     db.collection('zones').doc(assignedZoneId)
@@ -306,7 +306,7 @@ function watchPlants() {
           humidity:    zone.latestHumid   ?? null,
           moisture:    zone.latestMoisture ?? null,
         }
-        const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(zoneId))
+        const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(zoneId), zoneStatusCache.get(zoneId))
         await db.collection('zones').doc(zoneId).update(
           alertSummary != null ? { status, alertSummary } : { status }
         )
@@ -319,7 +319,8 @@ function watchPlants() {
   }, err => console.error('[MQTT bridge] plants listener stopped:', err.message))
 }
 
-export function computeZoneStatus(sensorFields, plants) {
+// prevStatus: the zone's last computed status, used when a reading is incomplete (see below).
+export function computeZoneStatus(sensorFields, plants, prevStatus) {
   if (!plants || plants.length === 0) return { status: 'unknown', alertSummary: null }
 
   const avg = field => {
@@ -329,9 +330,11 @@ export function computeZoneStatus(sensorFields, plants) {
 
   const { temperature, humidity, moisture } = sensorFields
   const issues = []
+  let missing = false  // a metric the plants have a range for has no reading (e.g. a failed DHT11 read)
 
   const check = (val, min, max, label, unit) => {
-    if (val == null || min == null || max == null) return
+    if (min == null || max == null) return
+    if (val == null) { missing = true; return }
     const v = Math.round(val * 10) / 10  // moisture is an average, e.g. 41.666…
     if (val < min) issues.push(`${label} too low (${v}${unit}, ideal ≥ ${min.toFixed(1)}${unit})`)
     else if (val > max) issues.push(`${label} too high (${v}${unit}, ideal ≤ ${max.toFixed(1)}${unit})`)
@@ -341,9 +344,15 @@ export function computeZoneStatus(sensorFields, plants) {
   check(humidity,    avg('preferredHumidityMin'),    avg('preferredHumidityMax'),    'Humidity',    '%')
   check(moisture,    avg('preferredMoistureMin'),    avg('preferredMoistureMax'),    'Moisture',    '%')
 
-  if (issues.length === 0) return { status: 'healthy',   alertSummary: 'All conditions are within preferred range.' }
-  if (issues.length === 1) return { status: 'attention', alertSummary: issues[0] }
-  return { status: 'critical', alertSummary: `${issues.length} conditions out of range: ${issues.join('; ')}` }
+  let result
+  if (issues.length === 0)      result = { status: 'healthy',   alertSummary: 'All conditions are within preferred range.' }
+  else if (issues.length === 1) result = { status: 'attention', alertSummary: issues[0] }
+  else                          result = { status: 'critical',  alertSummary: `${issues.length} conditions out of range: ${issues.join('; ')}` }
+
+  // An incomplete reading can't show the zone recovered: keep a worse previous status (a null
+  // alertSummary leaves the stored one), so each missed DHT11 read doesn't flip it and re-alert.
+  if (missing && (STATUS_RANK[prevStatus] ?? 0) > STATUS_RANK[result.status]) return { status: prevStatus, alertSummary: null }
+  return result
 }
 
 function watchDeviceActuators() {

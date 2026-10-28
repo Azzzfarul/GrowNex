@@ -89,6 +89,12 @@ test('commands: junk is ignored, present keys are applied and confirmed (retaine
   const state = await waitFor(() => find(t, `grownex/${SENSOR}/actuators/state`, m => json(m).irrigationState), 'confirmed state')
   assert.deepEqual(json(state), { deviceId: SENSOR, lightState: false, fertilizerState: false, irrigationState: true })
   assert.deepEqual(await retained(`grownex/${SENSOR}/actuators/state`).then(x => x.map(s => JSON.parse(s).irrigationState)), [true])
+
+  // Like the firmware (ArduinoJson is<bool>()), non-boolean values leave the state unchanged
+  const t2 = Date.now()
+  await watcher.publishAsync(`grownex/${SENSOR}/actuators/command`, JSON.stringify({ irrigationState: 'false', lightState: 1 }))  // not retained: the reboot test re-applies the retained one
+  const unchanged = await waitFor(() => find(t2, `grownex/${SENSOR}/actuators/state`), 'state after a non-boolean command')
+  assert.deepEqual(json(unchanged), { deviceId: SENSOR, lightState: false, fertilizerState: false, irrigationState: true })
 })
 
 test('camera sends a raw JPEG, not retained, at boot and on "photo"', async () => {

@@ -244,13 +244,13 @@ function startSensor() {
     setTimeout(publishReading, FIRST_SEND_DELAY_MS)
   })
 
-  // Same as the firmware's onMessage: apply only the keys present, then confirm the new state.
+  // Same as the firmware's onMessage: apply only the boolean keys present, then confirm the new state.
   sensorClient.on('message', (_topic, buf) => {
     let cmd
     try { cmd = JSON.parse(buf.toString()) } catch { return }
     if (!cmd || typeof cmd !== 'object') return  // e.g. a retained `null`; the firmware ignores it too
     for (const key of ['lightState', 'fertilizerState', 'irrigationState']) {
-      if (key in cmd) sim.actuators[key] = !!cmd[key]
+      if (typeof cmd[key] === 'boolean') sim.actuators[key] = cmd[key]
     }
     publishState()
     const a = sim.actuators

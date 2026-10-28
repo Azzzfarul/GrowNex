@@ -73,7 +73,7 @@ Device ID = `ESP32-` + uppercase MAC hex (`ESP32CAM-` for camera nodes; the brid
 
 Camera nodes also publish `status` (same retained/LWT contract). The camera firmware streams the JPEG with PubSubClient `beginPublish`/`write`/`endPublish`, so its 64 KB buffer limit doesn't apply. `services/cameraSnapshots.js` stores the image exactly like a manual camera-feed upload (same Storage path + `snapshots` doc, plus `source: 'camera'`, `deviceId`), using an admin-set download token for `imageUrl`.
 
-The firmware sends only `soilMoisture1`; `lightLevel` is an LDR module's 0–100 % brightness (not lux), and `temperature`/`humidity` are `null` when the DHT11 read fails. Relay polarity is `RELAY_ON` (HIGH, matching the module's H trigger jumper), and the analog calibration constants are at the top of `firmware/src/main.cpp`. WiFi/MQTT credentials (SSID, password, broker host, MQTT user/pass) live in each project's gitignored `include/secrets.h`; copy `include/secrets.example.h` to create it. The `src/*.bak` files are old versions and aren't compiled.
+The firmware sends only `soilMoisture1`; `lightLevel` is an LDR module's 0–100 % brightness (not lux), and `temperature`/`humidity` are `null` when the DHT11 read fails (`computeZoneStatus` then won't let the zone's status improve until a full reading arrives). Relay polarity is `RELAY_ON` (HIGH, matching the module's H trigger jumper), and the analog calibration constants are at the top of `firmware/src/main.cpp`. WiFi/MQTT credentials (SSID, password, broker host, MQTT user/pass) live in each project's gitignored `include/secrets.h`; copy `include/secrets.example.h` to create it. The `src/*.bak` files are old versions and aren't compiled.
 
 ### Firestore data model
 
