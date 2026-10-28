@@ -209,8 +209,8 @@ function readSensors() {
     deviceId: sensorId,
     temperature: round1(26 + 4 * day + sim.tempOffset + noise(0.3)),
     humidity: round1(clamp(65 - 10 * day + noise(1), 0, 100)),
-    // The firmware sends a fixed placeholder (300) until an LDR is fitted; here the grow light adds to it.
-    lightLevel: sim.actuators.lightState ? 800 : 300,
+    // Like the firmware's LDR reading: 0–100 % brightness, high under the grow light.
+    lightLevel: sim.actuators.lightState ? 85 : 30,
   }
   sim.moisture.forEach((m, i) => { reading[`soilMoisture${i + 1}`] = round1(clamp(m + noise(0.5), 0, 100)) })
   return reading
