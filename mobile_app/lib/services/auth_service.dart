@@ -69,7 +69,10 @@ class AuthService {
 
   Future<void> logout() async {
     final user = _auth.currentUser;
-    if (user != null) await PushService.unregister(user.uid);
+    // main.dart never starts push in the sandbox; don't make logout wait on FCM there either.
+    if (user != null && !const bool.fromEnvironment('USE_FIREBASE_EMULATORS')) {
+      await PushService.unregister(user.uid);
+    }
     await _auth.signOut();
   }
 
