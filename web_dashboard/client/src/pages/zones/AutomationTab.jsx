@@ -110,6 +110,7 @@ export default function AutomationTab({ zone }) {
     const field = Object.keys(patch)[0]
     setSavingToggle((s) => ({ ...s, [field]: true }))
     setDoc(doc(db, 'automationConfig', zone.id), patch, { merge: true })
+      .then(() => setConfigError(null))
       .catch((e) => { console.error('Automation save failed:', e); revert(); setConfigError(SAVE_FAILED) })
       .finally(() => setSavingToggle((s) => ({ ...s, [field]: false })))
   }
@@ -387,7 +388,7 @@ export default function AutomationTab({ zone }) {
           )}
         </div>
 
-        {configError && !aiPlan && (
+        {configError && !aiPlan?.plan && (
           <p role="alert" className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mt-4">{configError}</p>
         )}
 

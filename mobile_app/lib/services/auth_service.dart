@@ -29,7 +29,10 @@ class AuthService {
       throw Exception(switch (e.code) {  // web LoginPage wording
         'network-request-failed' => "Can't reach the server. Check your connection and try again.",
         'too-many-requests' => 'Too many attempts. Wait a moment and try again.',
-        _ => 'Invalid email or password.',
+        'user-disabled' => 'This account has been disabled.',
+        'invalid-credential' || 'wrong-password' || 'user-not-found' || 'invalid-email' =>
+          'Invalid email or password.',
+        _ => 'Sign-in failed. Please try again.',
       });
     }
   }

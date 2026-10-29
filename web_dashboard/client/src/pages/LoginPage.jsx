@@ -112,7 +112,10 @@ export default function LoginPage() {
       setAuthError(
         err.code === 'auth/network-request-failed' ? "Can't reach the server. Check your connection and try again."
         : err.code === 'auth/too-many-requests' ? 'Too many attempts. Wait a moment and try again.'
-        : 'Invalid email or password.')
+        : err.code === 'auth/user-disabled' ? 'This account has been disabled.'
+        : ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'].includes(err.code)
+          ? 'Invalid email or password.'
+          : 'Sign-in failed. Please try again.')
     } finally {
       setLoading(false)
     }
