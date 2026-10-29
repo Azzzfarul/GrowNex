@@ -8,14 +8,16 @@ import {
   EmailAuthProvider,
 } from 'firebase/auth'
 import { db } from '../firebase'
+import Icon from '../components/ui/Icon'
+import Switch from '../components/ui/Switch'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 
 function ThemeDialog({ currentTheme, onSelect, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-4">App Theme</h2>
+    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
+      <div className="dialog w-full max-w-xs p-6">
+        <h2 className="text-headline-sm text-on-surface mb-4">App Theme</h2>
         <div className="space-y-2 mb-5">
           {[
             { value: 'light', label: 'Light Mode' },
@@ -24,27 +26,24 @@ function ThemeDialog({ currentTheme, onSelect, onClose }) {
             <label
               key={value}
               onClick={() => { onSelect(value); onClose() }}
-              className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-3 p-3 rounded-xl cursor-pointer state-layer"
             >
               <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                 currentTheme === value
-                  ? 'border-green-600'
-                  : 'border-gray-300'
+                  ? 'border-primary'
+                  : 'border-outline'
               }`}>
                 {currentTheme === value && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-600" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-primary" />
                 )}
               </span>
-              <span className="text-sm font-medium text-gray-800">{label}</span>
+              <span className="text-body-lg text-on-surface">{label}</span>
             </label>
           ))}
         </div>
-        <button
-          onClick={onClose}
-          className="w-full py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-        >
-          Cancel
-        </button>
+        <div className="flex justify-end">
+          <button onClick={onClose} className="btn-text">Cancel</button>
+        </div>
       </div>
     </div>
   )
@@ -110,89 +109,89 @@ function EditProfileModal({ user, initialUsername, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold text-gray-900 mb-5">Edit Profile</h2>
+    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
+      <div className="dialog w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-headline-sm text-on-surface mb-4">Edit Profile</h2>
         <form onSubmit={handleSave} className="space-y-5">
 
           {/* Account Info */}
           <div>
-            <p className="text-xs font-bold text-brand-600 uppercase tracking-wide mb-3">Account Info</p>
+            <p className="text-xs font-medium text-primary uppercase tracking-wide mb-3">Account Info</p>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm text-gray-500 mb-1">Username</label>
+                <label className="block text-label-lg text-on-surface-variant mb-1">Username</label>
                 <input
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="field w-full"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-500 mb-1">Email</label>
+                <label className="block text-label-lg text-on-surface-variant mb-1">Email</label>
                 <input
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+                  className="w-full border border-outline-variant rounded-xl px-3 py-2.5 text-sm bg-surface-container text-on-surface-variant cursor-not-allowed"
                   value={user.email}
                   readOnly
                 />
-                <p className="text-xs text-gray-400 mt-1">Email cannot be changed.</p>
+                <p className="text-xs text-on-surface-variant mt-1">Email cannot be changed.</p>
               </div>
             </div>
           </div>
 
           {/* Change Password */}
           <div>
-            <p className="text-xs font-bold text-brand-600 uppercase tracking-wide mb-1">Change Password</p>
-            <p className="text-xs text-gray-400 mb-3">Leave blank to keep your current password.</p>
+            <p className="text-xs font-medium text-primary uppercase tracking-wide mb-1">Change Password</p>
+            <p className="text-xs text-on-surface-variant mb-3">Leave blank to keep your current password.</p>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm text-gray-500 mb-1">New password</label>
+                <label className="block text-label-lg text-on-surface-variant mb-1">New password</label>
                 <input
                   type="password"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="field w-full"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-500 mb-1">Confirm password</label>
+                <label className="block text-label-lg text-on-surface-variant mb-1">Confirm password</label>
                 <input
                   type="password"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  className="field w-full"
                   value={confirmPw}
                   onChange={(e) => setConfirmPw(e.target.value)}
                 />
               </div>
               {passwordChanging && (
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">Current password</label>
+                  <label className="block text-label-lg text-on-surface-variant mb-1">Current password</label>
                   <input
                     type="password"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="field w-full"
                     value={currentPw}
                     onChange={(e) => setCurrentPw(e.target.value)}
                   />
-                  <p className="text-xs text-gray-400 mt-1">Required to confirm password change.</p>
+                  <p className="text-xs text-on-surface-variant mt-1">Required to confirm password change.</p>
                 </div>
               )}
             </div>
           </div>
 
           {error && (
-            <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+            <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2">{error}</p>
           )}
 
-          <div className="flex gap-3 pt-1">
+          <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              className="btn-text"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
+              className="btn-filled"
             >
               {saving ? 'Saving…' : 'Save changes'}
             </button>
@@ -232,39 +231,39 @@ function DeleteAccountModal({ onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Delete account</h2>
-        <p className="text-sm text-gray-500 mb-5">
+    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
+      <div className="dialog w-full max-w-sm p-6">
+        <h2 className="text-headline-sm text-on-surface mb-4">Delete account</h2>
+        <p className="text-sm text-on-surface-variant mb-5">
           This action is permanent and cannot be undone. All your data will be deleted.
         </p>
         <form onSubmit={handleDelete} className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-500 mb-1">Your password</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Your password</label>
             <input
               type="password"
               autoFocus
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+              className="field w-full"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           {error && (
-            <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+            <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2">{error}</p>
           )}
-          <div className="flex gap-3 pt-1">
+          <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
               disabled={deleting}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="btn-text"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={deleting}
-              className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
+              className="btn-error"
             >
               {deleting ? 'Deleting…' : 'Delete account'}
             </button>
@@ -298,13 +297,13 @@ function NotificationSettingsDialog({ user, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-1">Notifications</h2>
-        <p className="text-sm text-gray-500 mb-5">Choose what you get notified about.</p>
+    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
+      <div className="dialog w-full max-w-sm p-6">
+        <h2 className="text-headline-sm text-on-surface mb-4">Notifications</h2>
+        <p className="text-sm text-on-surface-variant mb-5">Choose what you get notified about.</p>
 
         {prefs == null ? (
-          <p className="text-sm text-gray-400 py-6 text-center">Loading…</p>
+          <p className="text-sm text-on-surface-variant py-6 text-center">Loading…</p>
         ) : (
           <div className="space-y-3 mb-5">
             {NOTIF_TYPES.map(({ key, label, hint }) => {
@@ -312,28 +311,21 @@ function NotificationSettingsDialog({ user, onClose }) {
               return (
                 <div key={key} className="flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-800">{label}</p>
-                    <p className="text-xs text-gray-400">{hint}</p>
+                    <p className="text-body-lg text-on-surface">{label}</p>
+                    <p className="text-body-md text-on-surface-variant">{hint}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => toggle(key)}
-                    className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${on ? 'bg-brand-500' : 'bg-gray-200'}`}
-                  >
-                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${on ? 'translate-x-5' : 'translate-x-0'}`} />
-                  </button>
+                  <Switch checked={on} onChange={() => toggle(key)} label={label} />
                 </div>
               )
             })}
           </div>
         )}
 
-        <button
-          onClick={onClose}
-          className="w-full py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-        >
-          Done
-        </button>
+        <div className="flex justify-end">
+
+          <button onClick={onClose} className="btn-text">Done</button>
+
+        </div>
       </div>
     </div>
   )
@@ -344,21 +336,21 @@ const MENU_ITEMS = [
     id: 'account',
     label: 'Account details',
     subtitle: 'Update your username and password',
-    icon: '⚙️',
+    icon: 'manage_accounts',
     active: true,
   },
   {
     id: 'notifications',
     label: 'Notifications',
     subtitle: 'Manage alerts and reminders',
-    icon: '🔔',
+    icon: 'notifications',
     active: true,
   },
   {
     id: 'theme',
     label: 'App theme',
     subtitle: 'Switch between light and dark mode',
-    icon: '🎨',
+    icon: 'palette',
     active: true,
   },
 ]
@@ -401,55 +393,54 @@ export default function ProfilePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900">Profile</h1>
-      <p className="text-sm text-gray-500 mt-1 mb-6">Manage your account and app settings.</p>
+      <h1 className="text-headline-sm text-on-surface">Profile</h1>
+      <p className="text-body-lg text-on-surface-variant mt-1 mb-6">Manage your account and app settings.</p>
 
       {/* Profile card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex items-center gap-4 mb-6">
-        <div className="w-14 h-14 rounded-full bg-green-700 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
+      <div className="card p-6 flex items-center gap-4 mb-6">
+        <div className="w-14 h-14 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-title-lg flex-shrink-0">
           {initials}
         </div>
         <div>
-          <p className="font-bold text-gray-900 text-lg">{displayName}</p>
-          <p className="text-sm text-gray-500 mt-0.5">{user?.email}</p>
+          <p className="text-on-surface text-title-md">{displayName}</p>
+          <p className="text-body-md text-on-surface-variant">{user?.email}</p>
         </div>
       </div>
 
       {/* Menu items */}
-      <div className="space-y-3 mb-6">
+      <div className="card py-2 mb-6">
         {MENU_ITEMS.map(({ id, label, subtitle, icon, active }) => (
-          <div
+          <button
             key={id}
-            onClick={active ? () => handleMenuClick(id) : undefined}
-            className={`bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 px-5 py-4 transition-colors ${
-              active ? 'cursor-pointer hover:bg-gray-50' : 'opacity-50 cursor-default'
-            }`}
+            type="button"
+            disabled={!active}
+            onClick={() => handleMenuClick(id)}
+            className="state-layer w-full text-left flex items-center gap-4 px-4 py-3 disabled:opacity-50"
           >
-            <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-lg flex-shrink-0">
-              {icon}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-gray-900">{label}</p>
-              <p className="text-sm text-gray-400">{subtitle}</p>
-            </div>
-            {active && <span className="text-gray-300 flex-shrink-0">›</span>}
-          </div>
+            <span className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container grid place-items-center flex-shrink-0">
+              <Icon name={icon} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-body-lg text-on-surface">{label}</span>
+              <span className="block text-body-md text-on-surface-variant">{subtitle}</span>
+            </span>
+            {active && <Icon name="chevron_right" className="text-on-surface-variant" />}
+          </button>
         ))}
       </div>
 
-      <button
-        onClick={handleLogout}
-        className="w-full bg-green-700 hover:bg-green-800 text-white font-medium py-3 rounded-xl text-sm transition-colors"
-      >
+      <button onClick={handleLogout} className="btn-tonal w-full">
+        <Icon name="logout" />
         Logout
       </button>
 
       <div className="mt-8">
-        <p className="text-xs font-bold text-red-600 uppercase tracking-widest mb-3">Danger zone</p>
+        <p className="text-title-sm text-error mb-3">Danger zone</p>
         <button
           onClick={() => setShowDeleteAcct(true)}
-          className="w-full border border-red-300 text-red-600 hover:bg-red-50 font-medium py-3 rounded-xl text-sm transition-colors"
+          className="btn-outlined w-full text-error border-error"
         >
+          <Icon name="delete_forever" />
           Delete account
         </button>
       </div>

@@ -4,6 +4,7 @@ import {
   getDocs, orderBy, Timestamp,
 } from 'firebase/firestore'
 import { db } from '../firebase'
+import Icon from '../components/ui/Icon'
 import { useAuth } from '../context/AuthContext'
 import { fetchAiSummary } from '../lib/aiSummary'
 import { compliancePercent, plantHealth, plantHealthSummary } from '../lib/plantHealth'
@@ -18,22 +19,33 @@ import {
   scoreColor, scoreBadge, scoreLabel,
 } from '../lib/analytics'
 
+// Recharts styling from the M3 tokens, so charts follow light/dark mode
+const GRID = { strokeDasharray: '3 3', stroke: 'rgb(var(--md-outline-variant))', vertical: false }
+const AXIS = { tick: { fontSize: 11, fill: 'rgb(var(--md-on-surface-variant))' }, stroke: 'rgb(var(--md-outline-variant))' }
+const TIP_TEXT = { color: 'rgb(var(--md-inverse-on-surface))' }
+const TOOLTIP = {
+  contentStyle: { background: 'rgb(var(--md-inverse-surface))', border: 'none', borderRadius: 4, fontSize: 12 },
+  labelStyle: TIP_TEXT,
+  itemStyle: TIP_TEXT,
+}
+const legendText = (v) => <span className="text-body-sm text-on-surface-variant">{v}</span>
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function MetricCard({ label, value, sub }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-      <p className="text-xs text-gray-400 mb-1">{label}</p>
-      <p className="text-2xl font-bold text-gray-900">{value ?? '—'}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+    <div className="card p-4">
+      <p className="text-label-md text-on-surface-variant mb-1">{label}</p>
+      <p className="text-headline-sm text-on-surface">{value ?? '—'}</p>
+      {sub && <p className="text-body-sm text-on-surface-variant mt-1">{sub}</p>}
     </div>
   )
 }
 
 function ChartCard({ title, caption, children }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <h3 className={`font-semibold text-gray-800 ${caption ? 'mb-1' : 'mb-4'}`}>{title}</h3>
+    <div className="card p-5">
+      <h3 className={`text-title-md text-on-surface ${caption ? 'mb-1' : 'mb-4'}`}>{title}</h3>
       {caption && <div className="mb-3">{caption}</div>}
       {children}
     </div>
@@ -42,10 +54,10 @@ function ChartCard({ title, caption, children }) {
 
 function SummaryLine({ text, isAi, variant }) {
   return (
-    <div className={`flex items-start gap-2 ${variant === 'card' ? 'text-sm text-gray-600' : 'text-xs text-gray-500'}`}>
+    <div className={`flex items-start gap-2 ${variant === 'card' ? 'text-sm text-on-surface-variant' : 'text-xs text-on-surface-variant'}`}>
       <span
-        className={`shrink-0 mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-          isAi ? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-500'
+        className={`shrink-0 text-label-sm px-1.5 rounded ${
+          isAi ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high text-on-surface-variant'
         }`}
       >
         {isAi ? 'AI' : 'Auto'}
@@ -56,19 +68,19 @@ function SummaryLine({ text, isAi, variant }) {
 }
 
 function EmptyChart() {
-  return <p className="text-sm text-gray-400 text-center py-8">No readings in this period.</p>
+  return <p className="text-sm text-on-surface-variant text-center py-8">No readings in this period.</p>
 }
 
 function ComplianceBar({ label, value }) {
   if (value == null) return null
-  const bar = value >= 80 ? 'bg-green-500' : value >= 60 ? 'bg-yellow-400' : 'bg-red-400'
+  const bar = value >= 80 ? 'bg-primary' : value >= 60 ? 'bg-warning' : 'bg-error'
   return (
     <div>
       <div className="flex justify-between text-sm mb-1">
-        <span className="text-gray-600">{label}</span>
-        <span className="font-semibold text-gray-800">{value}%</span>
+        <span className="text-on-surface-variant">{label}</span>
+        <span className="font-medium text-on-surface">{value}%</span>
       </div>
-      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+      <div className="h-2 bg-surface-container-high rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all ${bar}`} style={{ width: `${value}%` }} />
       </div>
     </div>
@@ -208,7 +220,7 @@ export default function AnalyticsPage() {
     return () => { cancelled = true }
   }, [loadedFor, user]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loadingZones) return <p className="text-sm text-gray-400 mt-8 text-center">Loading…</p>
+  if (loadingZones) return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
 
   const isAllZones   = selectedZoneId === 'all'
   const selectedZone = isAllZones ? null : zones.find(z => z.id === selectedZoneId)
@@ -271,24 +283,29 @@ export default function AnalyticsPage() {
       {/* Header + controls */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Track plant health and growing conditions.</p>
+          <h1 className="text-headline-sm text-on-surface">Analytics</h1>
+          <p className="text-body-md text-on-surface-variant mt-0.5">Track plant health and growing conditions.</p>
         </div>
         <select
           value={selectedZoneId}
           onChange={e => setSelectedZoneId(e.target.value)}
-          className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+          className="field w-auto h-10"
         >
           <option value="all">All Zones</option>
           {zones.map(z => <option key={z.id} value={z.id}>{z.zoneName}</option>)}
         </select>
-        <div className="flex border border-gray-200 rounded-xl overflow-hidden text-sm">
-          {['today', '7days'].map(t => (
+        {/* M3 segmented button */}
+        <div role="group" aria-label="Time range" className="inline-flex h-10 rounded-full border border-outline overflow-hidden">
+          {['today', '7days'].map((t, i) => (
             <button
               key={t}
               onClick={() => setTimeRange(t)}
-              className={`px-4 py-2 font-medium transition-colors ${timeRange === t ? 'bg-brand-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+              aria-pressed={timeRange === t}
+              className={`state-layer flex items-center gap-2 px-4 text-label-lg ${i ? 'border-l border-outline' : ''} ${
+                timeRange === t ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface'
+              }`}
             >
+              {timeRange === t && <Icon name="check" size={18} />}
               {t === 'today' ? 'Today' : '7 Days'}
             </button>
           ))}
@@ -309,8 +326,8 @@ export default function AnalyticsPage() {
       </div>
 
       {/* AI Summary */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h3 className="font-semibold text-gray-800 mb-3">AI Summary</h3>
+      <div className="card p-5">
+        <h3 className="text-title-md text-on-surface mb-3">AI Summary</h3>
         <SummaryLine
           variant="card"
           text={aiMap.overview ?? overviewRes.text}
@@ -321,13 +338,13 @@ export default function AnalyticsPage() {
             {aiAdvice.map((a, i) => (
               <div
                 key={i}
-                className={`flex gap-2.5 text-sm p-3 rounded-xl ${
-                  a.severity === 'critical' ? 'bg-red-50 text-red-800'      :
-                  a.severity === 'warn'     ? 'bg-orange-50 text-orange-800' :
-                                              'bg-gray-50 text-gray-600'
+                className={`flex gap-3 text-body-md p-3 rounded-lg ${
+                  a.severity === 'critical' ? 'bg-error-container text-on-error-container' :
+                  a.severity === 'warn' ? 'bg-warning-container text-on-warning-container' :
+                                              'bg-surface-container text-on-surface-variant'
                 }`}
               >
-                <span className="shrink-0">{a.severity === 'critical' ? '🚨' : a.severity === 'warn' ? '⚠️' : 'ℹ️'}</span>
+                <Icon name={a.severity === 'critical' ? 'error' : a.severity === 'warn' ? 'warning' : 'info'} size={20} />
                 <span>{a.text}</span>
               </div>
             ))}
@@ -337,13 +354,13 @@ export default function AnalyticsPage() {
             {insights.map((ins, i) => (
               <div
                 key={i}
-                className={`flex gap-2.5 text-sm p-3 rounded-xl ${
-                  ins.ok === true  ? 'bg-green-50 text-green-800'   :
-                  ins.ok === false ? 'bg-orange-50 text-orange-800' :
-                                     'bg-gray-50 text-gray-600'
+                className={`flex gap-3 text-body-md p-3 rounded-lg ${
+                  ins.ok === true ? 'bg-primary-container text-on-primary-container' :
+                  ins.ok === false ? 'bg-warning-container text-on-warning-container' :
+                                     'bg-surface-container text-on-surface-variant'
                 }`}
               >
-                <span className="shrink-0">{ins.ok === true ? '✅' : ins.ok === false ? '⚠️' : 'ℹ️'}</span>
+                <Icon name={ins.ok === true ? 'check_circle' : ins.ok === false ? 'warning' : 'info'} size={20} />
                 <span>{ins.text}</span>
               </div>
             ))}
@@ -352,16 +369,16 @@ export default function AnalyticsPage() {
       </div>
 
       {loadingReadings && (
-        <p className="text-sm text-gray-400 text-center py-4">Loading readings…</p>
+        <p className="text-sm text-on-surface-variant text-center py-4">Loading readings…</p>
       )}
 
       {/* Trend charts */}
       {!loadingReadings && (
         <div className="space-y-4">
           {[
-            { title: 'Temperature (°C)', key: 'temp',     color: '#f97316', kind: 'temperature' },
-            { title: 'Humidity (%)',     key: 'humidity', color: '#22c55e', kind: 'humidity' },
-            { title: 'Light (%)',       key: 'light',    color: '#eab308', kind: 'light' },
+            { title: 'Temperature (°C)', key: 'temp',     color: 'var(--chart-2)', kind: 'temperature' },
+            { title: 'Humidity (%)',     key: 'humidity', color: 'var(--chart-3)', kind: 'humidity' },
+            { title: 'Light (%)',       key: 'light',    color: 'var(--chart-4)', kind: 'light' },
           ].map(({ title, key, color, kind }) => (
             <ChartCard
               key={key}
@@ -376,10 +393,10 @@ export default function AnalyticsPage() {
               {noReadings ? <EmptyChart /> : (
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} width={40} />
-                    <Tooltip />
+                    <CartesianGrid {...GRID} />
+                    <XAxis dataKey="label" {...AXIS} />
+                    <YAxis {...AXIS} width={40} />
+                    <Tooltip {...TOOLTIP} />
                     <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
@@ -399,11 +416,11 @@ export default function AnalyticsPage() {
             {noReadings ? <EmptyChart /> : (
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} width={40} />
-                  <Tooltip />
-                  {moistureLines.length > 1 && <Legend />}
+                  <CartesianGrid {...GRID} />
+                  <XAxis dataKey="label" {...AXIS} />
+                  <YAxis {...AXIS} width={40} />
+                  <Tooltip {...TOOLTIP} />
+                  {moistureLines.length > 1 && <Legend formatter={legendText} />}
                   {moistureLines.map(({ key, name, color }) => (
                     <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} name={name} connectNulls />
                   ))}
@@ -418,26 +435,26 @@ export default function AnalyticsPage() {
       {selectedZone && !loadingReadings && (
         <div className="space-y-4">
           {/* Health Score */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h3 className="font-semibold text-gray-800 mb-3">Zone Health Score</h3>
+          <div className="card p-5">
+            <h3 className="text-title-md text-on-surface mb-3">Zone Health Score</h3>
             {score == null ? (
-              <p className="text-sm text-gray-400">Add plants with preferred conditions to compute a health score.</p>
+              <p className="text-sm text-on-surface-variant">Add plants with preferred conditions to compute a health score.</p>
             ) : (
               <div className="flex items-center gap-4 flex-wrap">
-                <span className={`text-5xl font-bold ${scoreColor(score)}`}>{score}%</span>
-                <span className={`text-sm font-semibold px-3 py-1 rounded-full ${scoreBadge(score)}`}>
+                <span className={`text-5xl ${scoreColor(score)}`}>{score}%</span>
+                <span className={`inline-flex items-center h-8 px-3 rounded-lg text-label-lg ${scoreBadge(score)}`}>
                   {scoreLabel(score)}
                 </span>
-                <p className="text-sm text-gray-400">Based on current readings vs plant preferred conditions.</p>
+                <p className="text-sm text-on-surface-variant">Based on current readings vs plant preferred conditions.</p>
               </div>
             )}
           </div>
 
           {/* Compliance */}
           {(compTemp != null || compMoist != null || compHumid != null) && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h3 className="font-semibold text-gray-800 mb-1">Compliance Analysis</h3>
-              <p className="text-xs text-gray-400 mb-4">% of historical readings within the preferred range averaged across plants.</p>
+            <div className="card p-5">
+              <h3 className="text-title-md text-on-surface mb-1">Compliance Analysis</h3>
+              <p className="text-xs text-on-surface-variant mb-4">% of historical readings within the preferred range averaged across plants.</p>
               <div className="space-y-4">
                 <ComplianceBar label="Temperature"   value={compTemp} />
                 <ComplianceBar label="Humidity"      value={compHumid} />
@@ -448,18 +465,18 @@ export default function AnalyticsPage() {
 
           {/* Plant Ranking */}
           {ranking.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h3 className="font-semibold text-gray-800 mb-4">Plant Ranking</h3>
+            <div className="card p-5">
+              <h3 className="text-title-md text-on-surface mb-4">Plant Ranking</h3>
               <div className="space-y-3">
                 {ranking.map(({ plant, health }, i) => (
                   <div key={plant.id} className="flex items-start gap-3">
-                    <span className="text-sm text-gray-400 w-5 text-right pt-0.5">{i + 1}</span>
+                    <span className="text-sm text-on-surface-variant w-5 text-right pt-0.5">{i + 1}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-gray-800 truncate">{plant.plantName}</span>
-                        <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${scoreBadge(health.score)}`}>{health.score}%</span>
+                        <span className="text-sm font-medium text-on-surface truncate">{plant.plantName}</span>
+                        <span className={`shrink-0 inline-flex items-center h-6 px-2.5 rounded-lg text-label-md ${scoreBadge(health.score)}`}>{health.score}%</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5">{plantHealthSummary(health)}</p>
+                      <p className="text-xs text-on-surface-variant mt-0.5">{plantHealthSummary(health)}</p>
                     </div>
                   </div>
                 ))}

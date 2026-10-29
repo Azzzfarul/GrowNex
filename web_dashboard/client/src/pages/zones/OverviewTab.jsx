@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { doc, onSnapshot, setDoc, updateDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
 import { db } from '../../firebase'
+import Icon from '../../components/ui/Icon'
 import { uploadZonePhoto, removeZonePhoto } from '../../lib/photoUpload'
 
 function ModuleChip({ label }) {
   return (
-    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+    <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-lg text-label-md bg-primary-container text-on-primary-container">
       {label}
     </span>
   )
@@ -145,23 +146,24 @@ export default function OverviewTab({ zone }) {
   return (
     <div className="space-y-4">
       {/* Zone photo */}
-      <div className="relative w-full h-44 rounded-2xl bg-gray-100 overflow-hidden flex items-center justify-center">
+      <div className="relative w-full h-44 rounded-xl bg-surface-container-high overflow-hidden flex items-center justify-center">
         {zone.zonePhotoUrl ? (
           <img src={zone.zonePhotoUrl} alt={zone.zoneName} className="w-full h-full object-contain" />
         ) : latestSnapshot?.imageUrl ? (
           <>
             <img src={latestSnapshot.imageUrl} alt={`${zone.zoneName} camera feed`} className="w-full h-full object-contain" />
-            <span className="absolute bottom-2 left-2 text-xs font-medium px-2 py-0.5 rounded-full bg-black/50 text-white">
-              📷 Latest camera photo
+            <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 h-6 px-2.5 rounded-lg text-label-md bg-inverse-surface/80 text-inverse-on-surface">
+              <Icon name="photo_camera" size={16} /> Latest camera photo
               {latestSnapshot.capturedAt?.toDate && ` · ${latestSnapshot.capturedAt.toDate().toLocaleString()}`}
             </span>
           </>
         ) : (
-          <span className="text-5xl text-gray-300">🖼</span>
+          <Icon name="image" size={48} className="text-on-surface-variant" />
         )}
       </div>
       <div className="flex items-center gap-3 -mt-2">
-        <label className="text-xs font-medium text-brand-700 hover:text-brand-800 cursor-pointer">
+        <label className="btn-text btn-sm cursor-pointer">
+          <Icon name="add_photo_alternate" />
           {photoBusy ? 'Working…' : zone.zonePhotoUrl ? 'Change photo' : 'Add photo'}
           <input
             type="file"
@@ -177,66 +179,66 @@ export default function OverviewTab({ zone }) {
             type="button"
             onClick={handleRemovePhoto}
             disabled={photoBusy}
-            className="text-xs font-medium text-red-400 hover:text-red-600 disabled:opacity-50"
+            className="btn-text btn-sm text-error"
           >
             Remove
           </button>
         )}
       </div>
-      {photoError && <p className="text-xs text-red-500">{photoError}</p>}
+      {photoError && <p className="text-xs text-error">{photoError}</p>}
 
       {/* Info card */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <p className="text-xs font-bold text-brand-600 uppercase tracking-wide mb-3">{zone.zoneType}</p>
+      <div className="card p-5">
+        <p className="text-label-lg text-primary capitalize mb-3">{zone.zoneType}</p>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Zone name</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Zone name</label>
             <div className="flex gap-2">
               <input
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="field flex-1"
                 value={zoneName}
                 onChange={(e) => setZoneName(e.target.value)}
               />
               <button
                 onClick={renameZone}
                 disabled={renameLoading || zoneName.trim() === zone.zoneName || !zoneName.trim()}
-                className="px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-40"
+                className="btn-filled"
               >
                 {renameLoading ? '…' : 'Save'}
               </button>
             </div>
           </div>
-          <p className="text-sm text-gray-700">
-            Plants: <span className="font-semibold">{plantCount === null ? '…' : plantCount}</span>
-            {' '}of <span className="font-semibold">{zone.totalPlantSlots ?? 4}</span>
+          <p className="text-sm text-on-surface-variant">
+            Plants: <span className="font-medium">{plantCount === null ? '…' : plantCount}</span>
+            {' '}of <span className="font-medium">{zone.totalPlantSlots ?? 4}</span>
           </p>
           {zone.alertSummary && (
-            <p className="text-sm text-orange-500">{zone.alertSummary}</p>
+            <p className="text-sm text-warning">{zone.alertSummary}</p>
           )}
         </div>
       </div>
 
       {/* Device card */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h3 className="font-semibold text-gray-900 mb-3">Device</h3>
+      <div className="card p-5">
+        <h3 className="text-title-md text-on-surface mb-3">Device</h3>
 
         {devError && (
-          <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-3">{devError}</p>
+          <p className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-3">{devError}</p>
         )}
 
         {zone.deviceId ? (
           /* ── Assigned device ── */
           device === undefined ? (
-            <p className="text-sm text-gray-400">Loading…</p>
+            <p className="text-sm text-on-surface-variant">Loading…</p>
           ) : device === null ? (
-            <p className="text-sm text-red-400">Device not found.</p>
+            <p className="text-sm text-error">Device not found.</p>
           ) : (
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-gray-800">{device.deviceName}</p>
+                <p className="text-sm font-medium text-on-surface">{device.deviceName}</p>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-400'}`} />
-                  <span className={`text-xs font-medium ${isOnline ? 'text-green-600' : 'text-red-500'}`}>
+                  <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-primary' : 'bg-error'}`} />
+                  <span className={`text-xs font-medium ${isOnline ? 'text-primary' : 'text-error'}`}>
                     {isOnline ? 'Online' : 'Offline'}
                   </span>
                 </div>
@@ -250,7 +252,7 @@ export default function OverviewTab({ zone }) {
               <button
                 onClick={remove}
                 disabled={removing}
-                className="text-xs text-red-400 hover:text-red-600 font-medium border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+                className="btn-outlined btn-sm text-error border-error shrink-0"
               >
                 {removing ? 'Removing…' : 'Remove'}
               </button>
@@ -259,9 +261,9 @@ export default function OverviewTab({ zone }) {
         ) : (
           /* ── Dropdown assign ── */
           devicesLoading ? (
-            <p className="text-sm text-gray-400">Loading devices…</p>
+            <p className="text-sm text-on-surface-variant">Loading devices…</p>
           ) : availableDevices.length === 0 ? (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-on-surface-variant">
               No available devices. Register a device first from the Devices page.
             </p>
           ) : (
@@ -269,7 +271,7 @@ export default function OverviewTab({ zone }) {
               <select
                 value={selectedDeviceId}
                 onChange={(e) => setSelectedDeviceId(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                className="field w-full"
               >
                 <option value="">Select device</option>
                 {availableDevices.map((d) => (
@@ -281,7 +283,7 @@ export default function OverviewTab({ zone }) {
               <button
                 onClick={assign}
                 disabled={!selectedDeviceId || assigning}
-                className="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
+                className="btn-filled w-full"
               >
                 {assigning ? 'Assigning…' : 'Assign device'}
               </button>
@@ -360,26 +362,26 @@ function CameraCard({ zone, user }) {
   const isOnline = camera?.status === 'online'
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-      <h3 className="font-semibold text-gray-900 mb-1">Camera</h3>
-      <p className="text-xs text-gray-400 mb-3">Uploads a photo to the Camera feed every 4 hours.</p>
+    <div className="card p-5">
+      <h3 className="text-title-md text-on-surface mb-1">Camera</h3>
+      <p className="text-xs text-on-surface-variant mb-3">Uploads a photo to the Camera feed every 4 hours.</p>
 
       {error && (
-        <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-3">{error}</p>
+        <p className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-3">{error}</p>
       )}
 
       {zone.cameraDeviceId ? (
         camera === undefined ? (
-          <p className="text-sm text-gray-400">Loading…</p>
+          <p className="text-sm text-on-surface-variant">Loading…</p>
         ) : camera === null ? (
-          <p className="text-sm text-red-400">Camera not found.</p>
+          <p className="text-sm text-error">Camera not found.</p>
         ) : (
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-gray-800">{camera.deviceName}</p>
+              <p className="text-sm font-medium text-on-surface">{camera.deviceName}</p>
               <div className="flex items-center gap-1.5 mt-1">
-                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-400'}`} />
-                <span className={`text-xs font-medium ${isOnline ? 'text-green-600' : 'text-red-500'}`}>
+                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-primary' : 'bg-error'}`} />
+                <span className={`text-xs font-medium ${isOnline ? 'text-primary' : 'text-error'}`}>
                   {isOnline ? 'Online' : 'Offline'}
                 </span>
               </div>
@@ -387,16 +389,16 @@ function CameraCard({ zone, user }) {
             <button
               onClick={remove}
               disabled={busy}
-              className="text-xs text-red-400 hover:text-red-600 font-medium border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+              className="btn-outlined btn-sm text-error border-error shrink-0"
             >
               {busy ? 'Removing…' : 'Remove'}
             </button>
           </div>
         )
       ) : camerasLoading ? (
-        <p className="text-sm text-gray-400">Loading cameras…</p>
+        <p className="text-sm text-on-surface-variant">Loading cameras…</p>
       ) : availableCameras.length === 0 ? (
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-on-surface-variant">
           No available cameras. Register your ESP32-CAM (ID starts with ESP32CAM-) from the Devices page.
         </p>
       ) : (
@@ -404,7 +406,7 @@ function CameraCard({ zone, user }) {
           <select
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+            className="field w-full"
           >
             <option value="">Select camera</option>
             {availableCameras.map((d) => (
@@ -414,7 +416,7 @@ function CameraCard({ zone, user }) {
           <button
             onClick={assign}
             disabled={!selectedId || busy}
-            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50"
+            className="btn-filled w-full"
           >
             {busy ? 'Assigning…' : 'Assign camera'}
           </button>

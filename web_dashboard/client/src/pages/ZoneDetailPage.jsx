@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, deleteDoc, updateDoc, onSnapshot, collection, query, where, getDocs, limit, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
+import StatusLabel from '../components/ui/StatusLabel'
+import Icon from '../components/ui/Icon'
 import { deleteFile, removePlantPhotoFile } from '../lib/photoUpload'
 import OverviewTab from './zones/OverviewTab'
 import PlantsTab from './zones/PlantsTab'
@@ -25,16 +27,6 @@ async function deleteAll(col) {
   }
 }
 
-function statusColor(status) {
-  switch (status?.toLowerCase()) {
-    case 'healthy': return 'bg-green-100 text-green-700'
-    case 'attention':
-    case 'needs attention': return 'bg-orange-100 text-orange-700'
-    case 'critical': return 'bg-red-100 text-red-700'
-    case 'stable': return 'bg-teal-100 text-teal-700'
-    default: return 'bg-gray-100 text-gray-600'
-  }
-}
 
 export default function ZoneDetailPage() {
   const { zoneId } = useParams()
@@ -85,35 +77,35 @@ export default function ZoneDetailPage() {
   }, [zoneId])
 
   if (loading) {
-    return <p className="text-sm text-gray-400 mt-8 text-center">Loading…</p>
+    return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
   }
   if (!zone) {
-    return <p className="text-sm text-gray-400 mt-8 text-center">Zone not found.</p>
+    return <p className="text-sm text-on-surface-variant mt-8 text-center">Zone not found.</p>
   }
 
   return (
     <div>
       {/* Delete confirmation dialog */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Delete zone?</h2>
-            <p className="text-sm text-gray-500 mb-5">
-              This will permanently delete <span className="font-semibold text-gray-800">"{zone.zoneName}"</span> and
+        <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
+          <div className="dialog w-full max-w-sm p-6">
+            <h2 className="text-headline-sm text-on-surface mb-4">Delete zone?</h2>
+            <p className="text-sm text-on-surface-variant mb-5">
+              This will permanently delete <span className="font-medium text-on-surface">"{zone.zoneName}"</span> and
               all its plants. This cannot be undone.
             </p>
-            <div className="flex gap-3">
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={deleting}
-                className="flex-1 border border-gray-200 text-gray-600 font-medium py-2.5 rounded-xl text-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
+                className="btn-text"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteZone}
                 disabled={deleting}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-60"
+                className="btn-error"
               >
                 {deleting ? 'Deleting…' : 'Delete'}
               </button>
@@ -123,45 +115,29 @@ export default function ZoneDetailPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={() => navigate('/plants')}
-          className="text-sm text-gray-400 hover:text-gray-700 transition-colors"
-        >
-          ← Back
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={() => navigate('/plants')} className="icon-btn text-on-surface" aria-label="Back">
+          <Icon name="arrow_back" />
         </button>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold text-gray-900">{zone.zoneName}</h1>
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${statusColor(zone.status)}`}>
-              {zone.status || 'Unknown'}
-            </span>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-headline-sm text-on-surface">{zone.zoneName}</h1>
+            <StatusLabel status={zone.status} />
           </div>
-          <p className="text-sm text-gray-500 capitalize mt-0.5">
+          <p className="text-body-md text-on-surface-variant capitalize">
             {zone.zoneType} · {zone.totalPlantSlots} slot{zone.totalPlantSlots !== 1 ? 's' : ''}
           </p>
         </div>
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 px-3 py-1.5 rounded-xl transition-colors flex-shrink-0"
-        >
-          <span>🗑</span>
-          <span className="font-medium">Delete zone</span>
+        <button onClick={() => setShowDeleteConfirm(true)} className="btn-text text-error shrink-0">
+          <Icon name="delete" />
+          Delete zone
         </button>
       </div>
 
       {/* Tab bar */}
-      <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
+      <div role="tablist" className="flex border-b border-outline-variant mb-6 overflow-x-auto">
         {TABS.map((t, i) => (
-          <button
-            key={t}
-            onClick={() => setTab(i)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              tab === i
-                ? 'border-brand-600 text-brand-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
+          <button key={t} role="tab" aria-selected={tab === i} onClick={() => setTab(i)} className="tab">
             {t}
           </button>
         ))}

@@ -184,8 +184,8 @@ export function buildOverviewSummary({ selectedZone, plants, results }) {
 }
 
 export function getMoistureLines(plants, readings, isAllZones) {
-  if (isAllZones) return [{ key: 'moisture', name: 'Avg Moisture', color: '#3b82f6' }]
-  const colors = ['#3b82f6', '#22c55e', '#f97316', '#a855f7']
+  if (isAllZones) return [{ key: 'moisture', name: 'Avg Moisture', color: 'var(--chart-1)' }]
+  const colors = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)']  // index.css
   const lines = []
   for (let slot = 1; slot <= 4; slot++) {
     const key = `soilMoisture${slot}`
@@ -193,7 +193,7 @@ export function getMoistureLines(plants, readings, isAllZones) {
     const plant = plants.find(p => p.slotNumber === slot)
     lines.push({ key, name: plant ? plant.plantName : `Slot ${slot}`, color: colors[slot - 1] })
   }
-  return lines.length ? lines : [{ key: 'moisture', name: 'Moisture', color: '#3b82f6' }]
+  return lines.length ? lines : [{ key: 'moisture', name: 'Moisture', color: 'var(--chart-1)' }]
 }
 
 export function healthScoreForPlant(zone, plant) {
@@ -265,17 +265,17 @@ export function generateInsights(zone, plants, readings) {
 }
 
 export function scoreColor(s) {
-  if (s >= 80) return 'text-green-600'
-  if (s >= 60) return 'text-yellow-500'
-  if (s >= 40) return 'text-orange-500'
-  return 'text-red-500'
+  if (s >= 80) return 'text-primary'
+  if (s >= 60) return 'text-warning'
+  if (s >= 40) return 'text-warning'
+  return 'text-error'
 }
 
 export function scoreBadge(s) {
-  if (s >= 80) return 'bg-green-100 text-green-700'
-  if (s >= 60) return 'bg-yellow-100 text-yellow-700'
-  if (s >= 40) return 'bg-orange-100 text-orange-700'
-  return 'bg-red-100 text-red-700'
+  if (s >= 80) return 'bg-primary-container text-on-primary-container'
+  if (s >= 60) return 'bg-warning-container text-on-warning-container'
+  if (s >= 40) return 'bg-warning-container text-on-warning-container'
+  return 'bg-error-container text-on-error-container'
 }
 
 export function scoreLabel(s) {

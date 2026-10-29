@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import Icon from '../components/ui/Icon'
 
 export default function RegisterPage() {
   const { register } = useAuth()
@@ -47,77 +48,77 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+    <div className="min-h-screen bg-surface-container flex items-center justify-center p-4">
+      <div className="card w-full max-w-sm p-8">
         <div className="flex items-center gap-2 mb-8">
-          <span className="text-3xl">🌱</span>
-          <span className="text-xl font-bold text-brand-700">GrowNex</span>
+          <Icon name="eco" filled className="text-primary" size={32} />
+          <span className="text-title-lg text-on-surface">GrowNex</span>
         </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Create account</h1>
-        <p className="text-sm text-gray-500 mb-6">Register to monitor plants, analytics, and connected devices.</p>
+        <h1 className="text-headline-sm text-on-surface mb-1">Create account</h1>
+        <p className="text-sm text-on-surface-variant mb-6">Register to monitor plants, analytics, and connected devices.</p>
 
         {authError && (
-          <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-4">{authError}</p>
+          <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">{authError}</p>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Username</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="field w-full"
               placeholder="Your username"
             />
-            {errors.username && <p className="text-xs text-red-500 mt-1">{errors.username}</p>}
+            {errors.username && <p className="text-xs text-error mt-1">{errors.username}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="field w-full"
               placeholder="you@example.com"
             />
-            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+            {errors.email && <p className="text-xs text-error mt-1">{errors.email}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="field w-full"
               placeholder="Choose a password"
             />
-            {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password}</p>}
+            {errors.password && <p className="text-xs text-error mt-1">{errors.password}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm password</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Confirm password</label>
             <input
               type="password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="field w-full"
               placeholder="Repeat your password"
             />
-            {errors.confirm && <p className="text-xs text-red-500 mt-1">{errors.confirm}</p>}
+            {errors.confirm && <p className="text-xs text-error mt-1">{errors.confirm}</p>}
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+            className="btn-filled w-full"
           >
             {loading ? 'Creating account…' : 'Register'}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-500">
+        <p className="mt-6 text-center text-sm text-on-surface-variant">
           Already have an account?{' '}
-          <Link to="/login" className="text-brand-600 hover:underline font-medium">
+          <Link to="/login" className="text-primary hover:underline font-medium">
             Login
           </Link>
         </p>
