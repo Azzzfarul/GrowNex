@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { confirmPasswordReset } from 'firebase/auth'
 import { auth } from '../firebase'
+import Icon from '../components/ui/Icon'
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
@@ -16,16 +17,16 @@ export default function ResetPasswordPage() {
 
   if (!oobCode) {
     return (
-      <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+      <div className="min-h-screen bg-surface-container flex items-center justify-center p-4">
+        <div className="card w-full max-w-sm p-8 text-center">
           <div className="flex items-center justify-center gap-2 mb-8">
-            <span className="text-3xl">🌱</span>
-            <span className="text-xl font-bold text-brand-700">GrowNex</span>
+            <Icon name="eco" filled className="text-primary" size={32} />
+            <span className="text-title-lg text-on-surface">GrowNex</span>
           </div>
-          <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-4">
+          <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">
             Invalid or expired reset link. Please request a new one.
           </p>
-          <Link to="/login" className="text-sm text-brand-600 hover:underline font-medium">
+          <Link to="/login" className="text-sm text-primary hover:underline font-medium">
             Back to login
           </Link>
         </div>
@@ -65,72 +66,72 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+    <div className="min-h-screen bg-surface-container flex items-center justify-center p-4">
+      <div className="card w-full max-w-sm p-8">
         <div className="flex items-center gap-2 mb-8">
-          <span className="text-3xl">🌱</span>
-          <span className="text-xl font-bold text-brand-700">GrowNex</span>
+          <Icon name="eco" filled className="text-primary" size={32} />
+          <span className="text-title-lg text-on-surface">GrowNex</span>
         </div>
 
         {done ? (
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Password updated!</h1>
-            <p className="text-sm text-gray-500 mb-6">You can now sign in with your new password.</p>
+            <h1 className="text-headline-sm text-on-surface mb-2">Password updated!</h1>
+            <p className="text-sm text-on-surface-variant mb-6">You can now sign in with your new password.</p>
             <Link
               to="/login"
-              className="w-full inline-block bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors text-center"
+              className="btn-filled w-full text-center"
             >
               Back to login
             </Link>
           </div>
         ) : (
           <>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">Set new password</h1>
-            <p className="text-sm text-gray-500 mb-6">Choose a new password for your account.</p>
+            <h1 className="text-headline-sm text-on-surface mb-1">Set new password</h1>
+            <p className="text-sm text-on-surface-variant mb-6">Choose a new password for your account.</p>
 
             {authError && (
-              <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-4">{authError}</p>
+              <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">{authError}</p>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">New password</label>
+                <label className="block text-label-lg text-on-surface-variant mb-1">New password</label>
                 <input
                   type="password"
                   autoFocus
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  className="field w-full"
                   placeholder="At least 6 characters"
                 />
                 {errors.newPassword && (
-                  <p className="text-xs text-red-500 mt-1">{errors.newPassword}</p>
+                  <p className="text-xs text-error mt-1">{errors.newPassword}</p>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm password</label>
+                <label className="block text-label-lg text-on-surface-variant mb-1">Confirm password</label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  className="field w-full"
                   placeholder="Re-enter your password"
                 />
                 {errors.confirmPassword && (
-                  <p className="text-xs text-red-500 mt-1">{errors.confirmPassword}</p>
+                  <p className="text-xs text-error mt-1">{errors.confirmPassword}</p>
                 )}
               </div>
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+                className="btn-filled w-full"
               >
                 {loading ? 'Updating…' : 'Update password'}
               </button>
             </form>
 
-            <p className="mt-6 text-center text-sm text-gray-500">
-              <Link to="/login" className="text-brand-600 hover:underline font-medium">
+            <p className="mt-6 text-center text-sm text-on-surface-variant">
+              <Link to="/login" className="text-primary hover:underline font-medium">
                 Back to login
               </Link>
             </p>

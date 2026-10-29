@@ -67,7 +67,7 @@ Future<void> type(WidgetTester t, Finder f, String text) async {
 
 Finder field(String labelOrHint) => find.widgetWithText(TextField, labelOrHint).first;
 Finder button(String label) => find.ancestor(of: find.text(label), matching: find.byWidgetPredicate((w) => w is ButtonStyleButton));
-Finder navItem(String label) => find.descendant(of: find.byType(BottomNavigationBar), matching: find.text(label));
+Finder navItem(String label) => find.descendant(of: find.byType(NavigationBar), matching: find.text(label));
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -114,7 +114,7 @@ void main() {
     await tap(t, find.text('Plants').last);
     await tap(t, find.text('Add plant'));
     await type(t, field('Species (e.g. Phalaenopsis)'), 'Basil');
-    await tap(t, find.text('✨ Suggest'));
+    await tap(t, find.text('Suggest'));
     await t.pump(const Duration(seconds: 2));
     await tap(t, find.text('Slot 1'));
     await tap(t, button('Add plant'));

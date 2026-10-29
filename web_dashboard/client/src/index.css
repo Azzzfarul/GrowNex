@@ -2,69 +2,226 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Material Design 3 color roles (RGB channels, so Tailwind opacity modifiers work).
+   Generated from the mobile app's seed: Flutter ColorScheme.fromSeed(Color(0xFF4CAF50)), plus a
+   "warning" custom color harmonized to the seed. Keep in step with mobile_app/lib/theme.dart. */
+:root {
+  color-scheme: light;
+  --md-primary: 59 105 57;
+  --md-on-primary: 255 255 255;
+  --md-primary-container: 188 240 180;
+  --md-on-primary-container: 35 80 36;
+  --md-secondary: 82 99 79;
+  --md-on-secondary: 255 255 255;
+  --md-secondary-container: 213 232 207;
+  --md-on-secondary-container: 59 75 56;
+  --md-tertiary: 56 101 106;
+  --md-on-tertiary: 255 255 255;
+  --md-tertiary-container: 188 235 240;
+  --md-on-tertiary-container: 31 77 82;
+  --md-error: 186 26 26;
+  --md-on-error: 255 255 255;
+  --md-error-container: 255 218 214;
+  --md-on-error-container: 147 0 10;
+  --md-warning: 123 89 0;
+  --md-on-warning: 255 255 255;
+  --md-warning-container: 255 222 164;
+  --md-on-warning-container: 38 25 0;
+  --md-surface: 247 251 241;
+  --md-on-surface: 25 29 23;
+  --md-on-surface-variant: 66 73 64;
+  --md-surface-container-lowest: 255 255 255;
+  --md-surface-container-low: 241 245 236;
+  --md-surface-container: 236 239 230;
+  --md-surface-container-high: 230 233 224;
+  --md-surface-container-highest: 224 228 219;
+  --md-outline: 114 121 111;
+  --md-outline-variant: 194 201 189;
+  --md-inverse-surface: 45 50 44;
+  --md-inverse-on-surface: 239 242 233;
+  --md-inverse-primary: 161 211 154;
+  --md-scrim: 0 0 0;
+  /* Chart series (validated categorical slots; dark mode has its own steps) */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+}
+
+.dark {
+  color-scheme: dark;
+  --md-primary: 161 211 154;
+  --md-on-primary: 10 57 15;
+  --md-primary-container: 35 80 36;
+  --md-on-primary-container: 188 240 180;
+  --md-secondary: 186 204 179;
+  --md-on-secondary: 37 52 35;
+  --md-secondary-container: 59 75 56;
+  --md-on-secondary-container: 213 232 207;
+  --md-tertiary: 160 207 212;
+  --md-on-tertiary: 0 54 59;
+  --md-tertiary-container: 31 77 82;
+  --md-on-tertiary-container: 188 235 240;
+  --md-error: 255 180 171;
+  --md-on-error: 105 0 5;
+  --md-error-container: 147 0 10;
+  --md-on-error-container: 255 218 214;
+  --md-warning: 245 190 72;
+  --md-on-warning: 65 45 0;
+  --md-warning-container: 93 66 0;
+  --md-on-warning-container: 255 222 164;
+  --md-surface: 16 20 15;
+  --md-on-surface: 224 228 219;
+  --md-on-surface-variant: 194 201 189;
+  --md-surface-container-lowest: 11 15 10;
+  --md-surface-container-low: 25 29 23;
+  --md-surface-container: 29 33 27;
+  --md-surface-container-high: 39 43 37;
+  --md-surface-container-highest: 50 54 48;
+  --md-outline: 140 147 136;
+  --md-outline-variant: 66 73 64;
+  --md-inverse-surface: 224 228 219;
+  --md-inverse-on-surface: 45 50 44;
+  --md-inverse-primary: 59 105 57;
+  --md-scrim: 0 0 0;
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+}
+
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply bg-surface text-on-surface font-sans antialiased;
   }
 }
 
-/* ── Dark mode overrides ──────────────────────────────────────────────────── */
-/* .dark prefix gives higher specificity than plain Tailwind utilities         */
-
-.dark body {
-  background-color: rgb(17 24 39);   /* gray-900 */
-  color: rgb(249 250 251);           /* gray-50  */
+/* Material Symbols Rounded (Apache-2.0), self-hosted so icons work offline; includes the FILL axis */
+@font-face {
+  font-family: 'Material Symbols Rounded';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('./assets/fonts/material-symbols-rounded.woff2') format('woff2');
 }
 
-/* Surfaces */
-.dark .bg-white       { background-color: rgb(31 41 55)  }  /* gray-800 */
-.dark .bg-gray-50     { background-color: rgb(17 24 39)  }  /* gray-900 */
-.dark .bg-gray-100    { background-color: rgb(55 65 81)  }  /* gray-700 */
+@layer components {
+  /* see components/ui/Icon.jsx */
+  .icon {
+    font-family: 'Material Symbols Rounded';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+    direction: ltr;
+    display: inline-block;
+    flex-shrink: 0;
+    user-select: none;
+    font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+    font-variation-settings: 'FILL' 0;
+  }
+  .icon-fill { font-variation-settings: 'FILL' 1; }
 
-/* Tinted surfaces — desaturate so they read as dark variants */
-.dark .bg-green-50    { background-color: rgb(6  78  59 / 0.25) }
-.dark .bg-blue-50     { background-color: rgb(30  58 138 / 0.25) }
-.dark .bg-amber-50    { background-color: rgb(120  53  15 / 0.25) }
-.dark .bg-teal-50     { background-color: rgb(19  78  74 / 0.25) }
-.dark .bg-orange-50   { background-color: rgb(124  45  18 / 0.25) }
-.dark .bg-red-50      { background-color: rgb(127  29  29 / 0.25) }
+  /* State layer: an overlay of the content color at M3 opacities (hover 8%, focus/pressed 10%) */
+  .state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-pill, .nav-item {
+    position: relative;
+  }
+  :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-pill, .nav-item)::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-color: currentColor;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms;
+  }
+  :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-item):hover::before,
+  .nav-item:hover .nav-pill::before { opacity: 0.08; }
+  :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab):is(:focus-visible, :active)::before { opacity: 0.1; }
+  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .state-layer, .tab):disabled::before { opacity: 0; }
+  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-item, .state-layer, .switch):focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-primary;
+  }
 
-/* Borders */
-.dark .border-gray-100  { border-color: rgb(55 65 81)  }  /* gray-700 */
-.dark .border-gray-200  { border-color: rgb(75 85 99)  }  /* gray-600 */
+  /* Buttons (M3 common buttons: 40px tall, fully rounded) */
+  .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error {
+    @apply inline-flex items-center justify-center gap-2 h-10 px-6 rounded-full text-label-lg whitespace-nowrap select-none transition-shadow disabled:cursor-not-allowed;
+  }
+  .btn-filled { @apply bg-primary text-on-primary hover:shadow-elevation-1; }
+  .btn-tonal { @apply bg-secondary-container text-on-secondary-container hover:shadow-elevation-1; }
+  .btn-error { @apply bg-error text-on-error hover:shadow-elevation-1; }
+  .btn-outlined { @apply border border-outline text-primary; }
+  .btn-text { @apply px-3 text-primary; }
+  :is(.btn-filled, .btn-tonal, .btn-error):disabled { @apply bg-on-surface/[.12] text-on-surface/[.38] shadow-none; }
+  :is(.btn-outlined, .btn-text):disabled { @apply text-on-surface/[.38]; }
+  .btn-outlined:disabled { @apply border-on-surface/[.12]; }
+  .btn-sm { @apply h-8 px-4 gap-1 text-label-md; }
+  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error) .icon { font-size: 18px; }
 
-/* Text */
-.dark .text-gray-900  { color: rgb(249 250 251) }  /* gray-50  */
-.dark .text-gray-800  { color: rgb(243 244 246) }  /* gray-100 */
-.dark .text-gray-700  { color: rgb(209 213 219) }  /* gray-300 */
-.dark .text-gray-600  { color: rgb(156 163 175) }  /* gray-400 */
-.dark .text-gray-500  { color: rgb(156 163 175) }  /* gray-400 */
-.dark .text-gray-400  { color: rgb(107 114 128) }  /* gray-500 */
+  .icon-btn {
+    @apply inline-grid place-items-center w-10 h-10 shrink-0 rounded-full text-on-surface-variant disabled:text-on-surface/[.38];
+  }
 
-/* Hover states */
-.dark .hover\:bg-gray-50:hover   { background-color: rgb(55 65 81) }  /* gray-700 */
-.dark .hover\:bg-gray-200:hover  { background-color: rgb(75 85 99) }  /* gray-600 */
-.dark .hover\:text-gray-700:hover { color: rgb(209 213 219) }
+  /* Cards: elevated (default), filled, outlined */
+  .card { @apply bg-surface-container-low rounded-xl shadow-elevation-1; }
+  .card-filled { @apply bg-surface-container-highest rounded-xl; }
+  .card-outlined { @apply bg-surface rounded-xl border border-outline-variant; }
 
-/* Form controls */
-.dark input:not([type='checkbox']):not([type='radio']),
-.dark select,
-.dark textarea {
-  background-color: rgb(55 65 81);   /* gray-700 */
-  color:            rgb(243 244 246); /* gray-100 */
-  border-color:     rgb(75 85 99);   /* gray-600 */
+  /* Outlined text field (label sits above it) */
+  .field {
+    @apply block w-full h-12 px-4 rounded bg-transparent border border-outline text-body-lg text-on-surface
+      placeholder:text-on-surface-variant/70 outline-none transition-colors
+      hover:border-on-surface focus:border-primary focus:ring-1 focus:ring-primary
+      disabled:border-on-surface/[.12] disabled:text-on-surface/[.38];
+  }
+  textarea.field { @apply h-auto py-3; }
+  select.field { @apply pr-8; }
+  .field-error { @apply border-error hover:border-error focus:border-error focus:ring-error; }
+
+  /* Dialog */
+  .dialog { @apply bg-surface-container-high text-on-surface rounded-4xl shadow-elevation-3; }
+
+  /* Filter chip */
+  .chip {
+    @apply inline-flex items-center gap-2 h-8 px-4 rounded-lg border border-outline-variant text-label-lg text-on-surface-variant select-none;
+  }
+  .chip-selected { @apply bg-secondary-container text-on-secondary-container border-transparent pl-2; }
+  .chip .icon { font-size: 18px; }
+
+  /* Primary tabs */
+  .tab { @apply h-12 px-4 text-title-sm text-on-surface-variant whitespace-nowrap; }
+  .tab[aria-selected='true'] { @apply text-primary; }
+  .tab[aria-selected='true']::after {
+    content: '';
+    @apply absolute bottom-0 inset-x-4 h-[3px] rounded-t-full bg-primary;
+  }
+
+  /* Switch (see components/ui/Switch.jsx) */
+  .switch {
+    @apply relative inline-flex items-center shrink-0 w-[52px] h-8 rounded-full border-2 border-outline bg-surface-container-highest
+      transition-colors disabled:opacity-[.38] disabled:cursor-not-allowed;
+  }
+  .switch-handle { @apply absolute left-[6px] w-4 h-4 rounded-full bg-outline transition-all; }
+  .switch[aria-checked='true'] { @apply bg-primary border-primary; }
+  .switch[aria-checked='true'] .switch-handle { @apply left-[22px] w-6 h-6 bg-on-primary; }
+
+  /* Navigation: a rail below lg, a drawer from lg up (see components/layout/Sidebar.jsx).
+     The state layer sits on the pill in the rail and on the whole item in the drawer. */
+  .nav-item { @apply flex flex-col items-center gap-1 text-label-md text-on-surface-variant; }
+  .nav-item.active { @apply text-on-surface; }
+  .nav-item::before { display: none; }
+  .nav-pill { @apply grid place-items-center w-14 h-8 rounded-full; }
+  .nav-item.active .nav-pill { @apply bg-secondary-container text-on-secondary-container; }
+  @screen lg {
+    .nav-item { @apply flex-row gap-3 h-14 px-4 rounded-full text-label-lg; }
+    .nav-item::before { display: block; }
+    .nav-item.active { @apply bg-secondary-container text-on-secondary-container; }
+    .nav-pill, .nav-item.active .nav-pill { @apply w-6 h-6 bg-transparent; }
+    .nav-pill::before { display: none; }
+  }
 }
-
-.dark input::placeholder,
-.dark textarea::placeholder {
-  color: rgb(107 114 128); /* gray-500 */
-}
-
-/* Dividers */
-.dark .divide-gray-100 > * + * { border-color: rgb(55 65 81) }
-.dark .border-b           { border-color: rgb(55 65 81) }
-
-/* Shadow adjustments — lighter shadows look odd on dark */
-.dark .shadow-sm  { box-shadow: 0 1px 3px rgb(0 0 0 / 0.4) }
-.dark .shadow-md  { box-shadow: 0 4px 6px  rgb(0 0 0 / 0.4) }
-.dark .shadow-xl  { box-shadow: 0 20px 25px rgb(0 0 0 / 0.5) }

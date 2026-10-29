@@ -27,26 +27,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // No app bar: the root screen's already titles this tab. "Add device" sits in the page header
+    // (like "Add zone" on Plants): a FAB here would sit under the root scaffold's snackbars.
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Devices', style: TextStyle(fontWeight: FontWeight.bold)),
-        elevation: 0,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: ElevatedButton.icon(
-              onPressed: () => Navigator.push(
-                  context, MaterialPageRoute(builder: (_) => const AddDeviceScreen())),
-              icon: const Icon(Icons.add),
-              label: const Text('Add device'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[700],
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
       body: StreamBuilder<List<Device>>(
         stream: _devicesStream,
         builder: (context, snapshot) {
@@ -63,6 +46,21 @@ class _DevicesScreenState extends State<DevicesScreen> {
           return ListView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Your sensor nodes and cameras',
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.push(
+                        context, MaterialPageRoute(builder: (_) => const AddDeviceScreen())),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add device'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
               _buildSummaryCard(context, devices.length, onlineCount),
               const SizedBox(height: 24),
               if (devices.isEmpty)
@@ -80,24 +78,19 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   Widget _buildSummaryCard(BuildContext context, int total, int online) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.green[700],
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.green.withValues(alpha: 0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6))
-        ],
+        color: cs.primaryContainer,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
           Expanded(child: _summaryStatColumn('Total devices', total.toString(), Icons.developer_board)),
-          Container(width: 1, height: 48, color: Colors.white24),
+          Container(width: 1, height: 48, color: cs.onPrimaryContainer.withValues(alpha: 0.2)),
           Expanded(child: _summaryStatColumn('Online', online.toString(), Icons.wifi)),
-          Container(width: 1, height: 48, color: Colors.white24),
+          Container(width: 1, height: 48, color: cs.onPrimaryContainer.withValues(alpha: 0.2)),
           Expanded(child: _summaryStatColumn('Offline', (total - online).toString(), Icons.wifi_off)),
         ],
       ),
@@ -105,94 +98,82 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   Widget _summaryStatColumn(String label, String value, IconData icon) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
-        Icon(icon, color: Colors.white70, size: 22),
+        Icon(icon, color: cs.onPrimaryContainer, size: 22),
         const SizedBox(height: 6),
         Text(value,
-            style: const TextStyle(
-                color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+            style: tt.headlineSmall?.copyWith(color: cs.onPrimaryContainer)),
         const SizedBox(height: 2),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(label, style: tt.labelMedium?.copyWith(color: cs.onPrimaryContainer)),
       ],
     );
   }
 
   Widget _buildDeviceCard(BuildContext context, Device device) {
+    final tt = Theme.of(context).textTheme;
     final cs     = Theme.of(context).colorScheme;
     final online = _isOnline(device);
 
-    final chipBg  = online
-        ? Colors.green.withValues(alpha: 0.15)
-        : cs.onSurface.withValues(alpha: 0.08);
-    final chipColor = online ? Colors.green[700]! : cs.onSurface.withValues(alpha: 0.5);
+    final chipBg    = online ? cs.primaryContainer : cs.surfaceContainerHighest;
+    final chipColor = online ? cs.onPrimaryContainer : cs.onSurfaceVariant;
 
-    return GestureDetector(
-      onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => DeviceDetailScreen(device: device))),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainer,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-                color: cs.shadow.withValues(alpha: 0.08),
-                blurRadius: 12,
-                offset: const Offset(0, 6))
-          ],
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: chipBg,
-              child: Icon(
-                device.isCamera ? Icons.camera_alt : Icons.developer_board,
-                color: online ? Colors.green[700] : cs.onSurface.withValues(alpha: 0.5),
-                size: 24,
+    return Card(
+      margin: const EdgeInsets.only(bottom: 14),
+      child: InkWell(
+        onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => DeviceDetailScreen(device: device))),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: chipBg,
+                child: Icon(
+                  device.isCamera ? Icons.camera_alt : Icons.developer_board,
+                  color: chipColor,
+                  size: 24,
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(device.deviceName,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(
-                    device.typeLabel,
-                    style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.5), fontSize: 13),
-                  ),
-                ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(device.deviceName,
+                        style: tt.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      device.typeLabel,
+                      style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: chipBg,
-                borderRadius: BorderRadius.circular(20),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: chipBg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(radius: 4, backgroundColor: chipColor),
+                    const SizedBox(width: 6),
+                    Text(
+                      online ? 'Online' : 'Offline',
+                      style: tt.labelLarge?.copyWith(color: chipColor),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircleAvatar(radius: 4, backgroundColor: chipColor),
-                  const SizedBox(width: 6),
-                  Text(
-                    online ? 'Online' : 'Offline',
-                    style: TextStyle(
-                        color: chipColor,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

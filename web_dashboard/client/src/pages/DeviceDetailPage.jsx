@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, onSnapshot, updateDoc, deleteDoc, collection, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
+import Icon from '../components/ui/Icon'
 
 function formatLastSync(ts) {
   if (!ts) return 'Never'
@@ -137,8 +138,8 @@ export default function DeviceDetailPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-gray-400 mt-8 text-center">Loading…</p>
-  if (!device) return <p className="text-sm text-gray-400 mt-8 text-center">Device not found.</p>
+  if (loading) return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
+  if (!device) return <p className="text-sm text-on-surface-variant mt-8 text-center">Device not found.</p>
 
   const totalSlots = device.totalSlots || 4
   const slotsLeft = Math.max(0, totalSlots - zoneInfo.plantsUsed)
@@ -148,25 +149,25 @@ export default function DeviceDetailPage() {
   return (
     <div>
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Delete device?</h2>
-            <p className="text-sm text-gray-500 mb-5">
-              This will permanently remove <span className="font-semibold text-gray-800">"{device.deviceName}"</span>.
+        <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
+          <div className="dialog w-full max-w-sm p-6">
+            <h2 className="text-headline-sm text-on-surface mb-4">Delete device?</h2>
+            <p className="text-sm text-on-surface-variant mb-5">
+              This will permanently remove <span className="font-medium text-on-surface">"{device.deviceName}"</span>.
               {device.assignedZoneId && ' It will be unassigned from its zone first.'}
             </p>
-            <div className="flex gap-3">
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={deleting}
-                className="flex-1 border border-gray-200 text-gray-600 font-medium py-2.5 rounded-xl text-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
+                className="btn-text"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-60"
+                className="btn-error"
               >
                 {deleting ? 'Deleting…' : 'Delete'}
               </button>
@@ -176,85 +177,76 @@ export default function DeviceDetailPage() {
       )}
 
       <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={() => navigate('/devices')}
-          className="text-sm text-gray-400 hover:text-gray-700 transition-colors"
-        >
-          ← Back
+        <button onClick={() => navigate('/devices')} className="icon-btn text-on-surface" aria-label="Back">
+          <Icon name="arrow_back" />
         </button>
-        <h1 className="text-2xl font-bold text-gray-900 flex-1">{device.deviceName}</h1>
+        <h1 className="text-headline-sm text-on-surface flex-1">{device.deviceName}</h1>
         <button
           onClick={() => setShowDeleteConfirm(true)}
-          className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 px-3 py-1.5 rounded-xl transition-colors flex-shrink-0"
-        >
-          <span>🗑</span>
-          <span className="font-medium">Delete device</span>
+          className="btn-text text-error shrink-0">
+          <Icon name="delete" />
+          Delete device
         </button>
       </div>
 
       <div className="flex flex-col gap-4">
         {/* Device info */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h2 className="font-bold text-gray-900 mb-4">Device info</h2>
+        <div className="card p-5">
+          <h2 className="text-title-md text-on-surface mb-4">Device info</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Device name</label>
+              <label className="block text-label-lg text-on-surface-variant mb-1">Device name</label>
               <input
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="field w-full"
                 value={form.deviceName}
                 onChange={(e) => edit('deviceName', e.target.value)}
               />
             </div>
             {isCamera ? (
-              <p className="text-sm text-gray-500">
-                📷 Camera node — uploads a photo to its zone's Camera feed every 4 hours.
+              <p className="flex items-center gap-2 text-body-md text-on-surface-variant">
+                <Icon name="photo_camera" size={20} /> Camera node — uploads a photo to its zone's Camera feed every 4 hours.
               </p>
             ) : (
             <div className="space-y-3">
               <label className="flex items-center gap-3 cursor-pointer">
-                <span className="text-lg leading-none">☀️</span>
-                <span className="flex-1 text-sm text-gray-800">Light module</span>
+                <Icon name="light_mode" className="text-on-surface-variant" />
+                <span className="flex-1 text-sm text-on-surface">Light module</span>
                 <input
                   type="checkbox"
                   checked={form.hasLightingModule}
                   onChange={(e) => edit('hasLightingModule', e.target.checked)}
-                  className="w-4 h-4 accent-green-600"
+                  className="w-4 h-4 accent-primary"
                 />
               </label>
               <label className="flex items-center gap-3 cursor-pointer">
-                <span className="text-lg leading-none">🧪</span>
-                <span className="flex-1 text-sm text-gray-800">Fertilizer module</span>
+                <Icon name="science" className="text-on-surface-variant" />
+                <span className="flex-1 text-sm text-on-surface">Fertilizer module</span>
                 <input
                   type="checkbox"
                   checked={form.hasFertilizerModule}
                   onChange={(e) => edit('hasFertilizerModule', e.target.checked)}
-                  className="w-4 h-4 accent-green-600"
+                  className="w-4 h-4 accent-primary"
                 />
               </label>
-              <div className="flex items-center gap-3">
-                <span className="text-lg leading-none">📷</span>
-                <span className="flex-1 text-sm text-gray-800">Camera module</span>
-                <span className="text-xs text-green-600 font-semibold">Built-in</span>
-              </div>
             </div>
             )}
           </div>
         </div>
 
         {/* Zone assignment */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h2 className="font-bold text-gray-900 mb-4">Zone assignment</h2>
+        <div className="card p-5">
+          <h2 className="text-title-md text-on-surface mb-4">Zone assignment</h2>
           <div className="space-y-3">
             <div className="flex justify-between">
-              <span className="text-sm text-gray-500">Assigned zone</span>
-              <span className="text-sm font-semibold text-gray-800">
+              <span className="text-sm text-on-surface-variant">Assigned zone</span>
+              <span className="text-sm font-medium text-on-surface">
                 {!zoneInfo.loaded ? '…' : (zoneInfo.zone?.zoneName ?? 'Not assigned')}
               </span>
             </div>
             {!isCamera && (
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Plant slots</span>
-                <span className="text-sm font-semibold text-gray-800">
+                <span className="text-sm text-on-surface-variant">Plant slots</span>
+                <span className="text-sm font-medium text-on-surface">
                   {!zoneInfo.loaded
                     ? '…'
                     : device.assignedZoneId
@@ -267,27 +259,27 @@ export default function DeviceDetailPage() {
         </div>
 
         {/* Sensor / camera status */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h2 className="font-bold text-gray-900 mb-4">{isCamera ? 'Camera status' : 'Sensor status'}</h2>
+        <div className="card p-5">
+          <h2 className="text-title-md text-on-surface mb-4">{isCamera ? 'Camera status' : 'Sensor status'}</h2>
           <div className="space-y-3">
             {isCamera ? (
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Connection</span>
-                <span className={`text-sm font-semibold ${device.status === 'online' ? 'text-green-600' : 'text-red-400'}`}>
+                <span className="text-sm text-on-surface-variant">Connection</span>
+                <span className={`text-sm font-medium ${device.status === 'online' ? 'text-primary' : 'text-error'}`}>
                   {device.status === 'online' ? 'Online' : 'Offline'}
                 </span>
               </div>
             ) : (
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Availability</span>
-                <span className={`text-sm font-semibold ${sensorAvailable ? 'text-green-600' : 'text-red-400'}`}>
+                <span className="text-sm text-on-surface-variant">Availability</span>
+                <span className={`text-sm font-medium ${sensorAvailable ? 'text-primary' : 'text-error'}`}>
                   {sensorAvailable ? 'Available' : 'Unavailable'}
                 </span>
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-sm text-gray-500">{isCamera ? 'Last photo' : 'Last sync'}</span>
-              <span className="text-sm font-semibold text-gray-800">{formatLastSync(device.lastSync)}</span>
+              <span className="text-sm text-on-surface-variant">{isCamera ? 'Last photo' : 'Last sync'}</span>
+              <span className="text-sm font-medium text-on-surface">{formatLastSync(device.lastSync)}</span>
             </div>
           </div>
         </div>
@@ -295,7 +287,7 @@ export default function DeviceDetailPage() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white font-medium py-3 rounded-xl transition-colors"
+          className="btn-filled w-full"
         >
           {saving ? 'Saving…' : saveLabel}
         </button>

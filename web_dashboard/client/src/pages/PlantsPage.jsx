@@ -4,6 +4,7 @@ import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp } fr
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { uploadZonePhoto } from '../lib/photoUpload'
+import Icon from '../components/ui/Icon'
 
 function AddZoneModal({ userId, onClose }) {
   const [zoneName, setZoneName] = useState('')
@@ -48,28 +49,28 @@ function AddZoneModal({ userId, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-5">Add Zone</h2>
+    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
+      <div className="dialog w-full max-w-md p-6">
+        <h2 className="text-headline-sm text-on-surface mb-5">Add Zone</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="w-16 h-16 rounded-xl bg-surface-container-highest flex items-center justify-center overflow-hidden shrink-0">
               {photoPreview ? (
                 <img src={photoPreview} alt="Zone preview" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-2xl text-gray-300">🖼</span>
+                <Icon name="add_photo_alternate" className="text-on-surface-variant" />
               )}
             </div>
-            <label className="text-sm font-medium text-brand-700 hover:text-brand-800 cursor-pointer">
-              {photoFile ? 'Change photo' : 'Add photo'} <span className="text-gray-400 font-normal">(optional)</span>
+            <label className="btn-text cursor-pointer">
+              {photoFile ? 'Change photo' : 'Add photo'} <span className="text-on-surface-variant font-normal">(optional)</span>
               <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
             </label>
           </div>
 
           <div>
-            <label className="block text-sm text-gray-500 mb-1">Zone name</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Zone name</label>
             <input
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="field w-full"
               value={zoneName}
               onChange={(e) => setZoneName(e.target.value)}
               placeholder="e.g. Tomato bed"
@@ -77,9 +78,9 @@ function AddZoneModal({ userId, onClose }) {
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-500 mb-1">Zone type</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Zone type</label>
             <select
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="field w-full"
               value={zoneType}
               onChange={(e) => setZoneType(e.target.value)}
             >
@@ -87,22 +88,22 @@ function AddZoneModal({ userId, onClose }) {
               <option value="outdoor">Outdoor</option>
             </select>
           </div>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-on-surface-variant">
             You can assign a device to this zone after creation from the zone's Overview tab.
           </p>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <div className="flex gap-3 pt-1">
+          {error && <p className="text-sm text-error">{error}</p>}
+          <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              className="btn-text"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
+              className="btn-filled"
             >
               {loading ? 'Creating…' : 'Create zone'}
             </button>
@@ -119,8 +120,8 @@ const FILTERS = ['All', 'Indoor', 'Outdoor']
 function SensorPill({ label, value }) {
   return (
     <div>
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-sm font-semibold text-gray-700">{value ?? '—'}</p>
+      <p className="text-label-sm text-on-surface-variant">{label}</p>
+      <p className="text-title-sm text-on-surface">{value ?? '—'}</p>
     </div>
   )
 }
@@ -169,42 +170,37 @@ export default function PlantsPage() {
     : zones.filter((z) => z.zoneType?.toLowerCase() === filter.toLowerCase())
 
   if (loading) {
-    return <p className="text-sm text-gray-400 mt-8 text-center">Loading…</p>
+    return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">Plant zones</h1>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-        >
-          <span className="text-base leading-none">+</span>
-          <span>Add zone</span>
+        <h1 className="text-headline-sm text-on-surface">Plant zones</h1>
+        <button onClick={() => setShowAdd(true)} className="btn-filled">
+          <Icon name="add" />
+          Add zone
         </button>
       </div>
 
       {/* Filter row */}
-      <div className="flex items-center gap-2 mb-6">
-        <span className="text-sm text-gray-400 mr-1">Filter zones by type</span>
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <span className="text-body-md text-on-surface-variant mr-1">Filter zones by type</span>
         {FILTERS.map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              filter === f
-                ? 'bg-brand-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            aria-pressed={filter === f}
+            className={`chip ${filter === f ? 'chip-selected' : ''}`}
           >
+            {filter === f && <Icon name="check" />}
             {f}
           </button>
         ))}
       </div>
 
       {filteredZones.length === 0 ? (
-        <p className="text-sm text-gray-400">
+        <p className="text-body-md text-on-surface-variant">
           {zones.length === 0
             ? 'No zones found yet. Add a zone to get started.'
             : `No ${filter.toLowerCase()} zones found.`}
@@ -220,19 +216,19 @@ export default function PlantsPage() {
               <button
                 key={z.id}
                 onClick={() => navigate(`/zones/${z.id}`)}
-                className="text-left bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:border-brand-200 hover:shadow-md transition-all"
+                className="card state-layer text-left p-5"
               >
                 {/* Header row */}
                 <div className="flex items-start justify-between gap-2 mb-1">
-                  <h2 className="font-bold text-gray-900 text-lg leading-tight">{z.zoneName}</h2>
+                  <h2 className="text-title-lg text-on-surface">{z.zoneName}</h2>
                   <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
                     {isFull && (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                      <span className="inline-flex items-center h-6 px-2.5 rounded-lg text-label-md bg-warning-container text-on-warning-container">
                         Full
                       </span>
                     )}
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                    <span className={`inline-flex items-center h-6 px-2.5 rounded-lg text-label-md ${
+                      connected ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high text-on-surface-variant'
                     }`}>
                       {connected ? 'Connected' : 'No device'}
                     </span>
@@ -240,10 +236,10 @@ export default function PlantsPage() {
                 </div>
 
                 {/* Subline */}
-                <p className="text-sm text-gray-400 mb-1 capitalize">
+                <p className="text-body-md text-on-surface-variant mb-1 capitalize">
                   {z.zoneType}
                 </p>
-                <p className={`text-xs font-medium mb-4 ${isFull ? 'text-orange-500' : 'text-gray-400'}`}>
+                <p className={`text-xs font-medium mb-4 ${isFull ? 'text-warning' : 'text-on-surface-variant'}`}>
                   Plants: {plantCount}/{MAX_PLANTS}
                 </p>
 
@@ -258,14 +254,14 @@ export default function PlantsPage() {
                         <SensorPill label="Moisture" value={!offline && z.latestMoisture != null ? `${z.latestMoisture}%` : null} />
                         <SensorPill label="Light"    value={!offline && z.latestLight    != null ? `${z.latestLight}%`  : null} />
                       </div>
-                      <p className="text-xs text-gray-400 mt-3">
+                      <p className="text-xs text-on-surface-variant mt-3">
                         {offline ? 'Device is offline.' : (z.alertSummary ?? 'Summary unavailable')}
                       </p>
                     </>
                   )
                 })()}
 
-                <p className="text-xs text-brand-500 font-medium mt-2">Tap to view zone →</p>
+                <p className="flex items-center gap-1 text-label-lg text-primary mt-3">Tap to view zone <Icon name="arrow_forward" size={18} /></p>
               </button>
             )
           })}

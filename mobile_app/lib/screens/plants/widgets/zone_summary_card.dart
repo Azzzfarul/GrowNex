@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../models/plant_model.dart';
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/plant_service.dart';
+import '../../../theme.dart';
 
 class ZoneSummaryCard extends StatefulWidget {
   final Zone zone;
@@ -31,62 +32,61 @@ class _ZoneSummaryCardState extends State<ZoneSummaryCard> {
     return StreamBuilder<List<Plant>>(
       stream: _plantsStream,
       builder: (context, snapshot) {
+        final tt = Theme.of(context).textTheme;
+        final app = AppColors.of(context);
         final plantCount = snapshot.data?.length ?? 0;
         final isFull = plantCount >= _maxPlants;
         final hasDevice = widget.zone.deviceId != null;
         final deviceOffline = widget.zone.deviceOnline == false;
 
-        return GestureDetector(
-          onTap: widget.onTap,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainer,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(widget.zone.zoneName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    ),
-                    if (isFull) ...[
-                      _badge(cs, 'Full', Colors.orange[700]!, Colors.orange.withValues(alpha: 0.15)),
-                      const SizedBox(width: 8),
+        return Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: InkWell(
+            onTap: widget.onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(widget.zone.zoneName, style: tt.titleMedium),
+                      ),
+                      if (isFull) ...[
+                        _badge(cs, 'Full', app.onWarningContainer, app.warningContainer),
+                        const SizedBox(width: 8),
+                      ],
+                      _badge(
+                        cs,
+                        hasDevice ? 'Connected' : 'No device',
+                        hasDevice ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+                        hasDevice ? cs.primaryContainer : cs.surfaceContainerHighest,
+                      ),
                     ],
-                    _badge(
-                      cs,
-                      hasDevice ? 'Connected' : 'No device',
-                      hasDevice ? Colors.green[700]! : cs.onSurface.withValues(alpha: 0.5),
-                      hasDevice ? Colors.green.withValues(alpha: 0.15) : cs.onSurface.withValues(alpha: 0.08),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Plants: $plantCount/$_maxPlants',
-                  style: TextStyle(color: isFull ? Colors.orange[700] : cs.onSurface.withValues(alpha: 0.55)),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _sensorInfo(cs, 'Temp',  deviceOffline ? '--' : (widget.zone.latestTemp  != null ? '${widget.zone.latestTemp}°C'   : '--')),
-                    const SizedBox(width: 10),
-                    _sensorInfo(cs, 'Humid', deviceOffline ? '--' : (widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%'   : '--')),
-                    const SizedBox(width: 10),
-                    _sensorInfo(cs, 'Light', deviceOffline ? '--' : (widget.zone.latestLight != null ? '${widget.zone.latestLight}%' : '--')),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  deviceOffline ? 'Device is offline.' : (widget.zone.alertSummary ?? 'Summary unavailable'),
-                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55)),
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Plants: $plantCount/$_maxPlants',
+                    style: TextStyle(color: isFull ? app.warning : cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _sensorInfo(cs, 'Temp',  deviceOffline ? '--' : (widget.zone.latestTemp  != null ? '${widget.zone.latestTemp}°C'   : '--')),
+                      const SizedBox(width: 10),
+                      _sensorInfo(cs, 'Humid', deviceOffline ? '--' : (widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%'   : '--')),
+                      const SizedBox(width: 10),
+                      _sensorInfo(cs, 'Light', deviceOffline ? '--' : (widget.zone.latestLight != null ? '${widget.zone.latestLight}%' : '--')),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    deviceOffline ? 'Device is offline.' : (widget.zone.alertSummary ?? 'Summary unavailable'),
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -95,20 +95,22 @@ class _ZoneSummaryCardState extends State<ZoneSummaryCard> {
   }
 
   Widget _badge(ColorScheme cs, String label, Color textColor, Color bgColor) {
+    final tt = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(12)),
-      child: Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 13)),
+      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(8)),
+      child: Text(label, style: tt.labelLarge?.copyWith(color: textColor)),
     );
   }
 
   Widget _sensorInfo(ColorScheme cs, String label, String value) {
+    final tt = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55), fontSize: 12)),
+        Text(label, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
         const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
       ],
     );
   }

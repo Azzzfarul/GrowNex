@@ -12,6 +12,8 @@ import '../../services/ai_summary_service.dart';
 import '../../services/firestore/zone_service.dart';
 import '../../utils/analytics.dart';
 import '../../utils/plant_health.dart';
+import '../../theme.dart';
+import '../../widgets/status_label.dart';
 
 List<FlSpot> _toSpots(List<({String label, double? value})> entries) {
   final spots = <FlSpot>[];
@@ -30,26 +32,20 @@ List<({int slot, String label, Color color})> _getMoistureLines(
   List<Plant> plants,
   List<SensorReading> readings,
   bool isAllZones,
+  List<Color> colors,  // AppColors.series
 ) {
-  if (isAllZones) return [(slot: 0, label: 'Avg Moisture', color: Colors.blue)];
-  const colors = [Colors.blue, Colors.green, Colors.orange, Colors.purple];
+  if (isAllZones) return [(slot: 0, label: 'Avg Moisture', color: colors[0])];
   final lines = <({int slot, String label, Color color})>[];
   for (int s = 1; s <= 4; s++) {
     if (!readings.any((r) => r.moistureForSlot(s) != null)) continue;
     final match = plants.where((p) => p.slotNumber == s);
     lines.add((slot: s, label: match.isEmpty ? 'Slot $s' : match.first.plantName, color: colors[s - 1]));
   }
-  return lines.isEmpty ? [(slot: 0, label: 'Moisture', color: Colors.blue)] : lines;
+  return lines.isEmpty ? [(slot: 0, label: 'Moisture', color: colors[0])] : lines;
 }
 
 // ── Score utils ───────────────────────────────────────────────────────────────
 
-Color _scoreColor(int s) {
-  if (s >= 80) return Colors.green;
-  if (s >= 60) return Colors.amber;
-  if (s >= 40) return Colors.orange;
-  return Colors.red;
-}
 
 String _scoreLabel(int s) {
   if (s >= 80) return 'Excellent';
@@ -237,6 +233,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     if (_loadingZones) return const Center(child: CircularProgressIndicator());
 
     final isAllZones   = _selectedZoneId == 'all';
@@ -280,7 +277,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         ? generateInsights(selectedZone, _plants, _readings)
         : <({bool? ok, String text})>[];
 
-    final moistureLines = _getMoistureLines(_plants, _readings, isAllZones);
+    final series = AppColors.of(context).series;
+    final moistureLines = _getMoistureLines(_plants, _readings, isAllZones, series);
 
     // Per-graph + overview summaries (AI value preferred, rule-based fallback otherwise)
     final tempRes = describeTrend(
@@ -310,11 +308,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          const Text('Analytics', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text('Analytics', style: tt.titleLarge),
           const SizedBox(height: 4),
           Text(
             'Track plant health and growing conditions.',
-            style: TextStyle(fontSize: 14, color: cs.onSurface.withValues(alpha: 0.55)),
+            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 20),
 
@@ -335,35 +333,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Time range toggle
-          Row(
-            children: ['today', '7days'].map((t) {
-              final sel = _timeRange == t;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => _onTimeRangeChanged(t),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    decoration: BoxDecoration(
-                      color: sel ? Colors.green[700] : cs.surfaceContainerHigh,
-                      borderRadius: BorderRadius.horizontal(
-                        left:  t == 'today' ? const Radius.circular(10) : Radius.zero,
-                        right: t == '7days' ? const Radius.circular(10) : Radius.zero,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      t == 'today' ? 'Today' : '7 Days',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: sel ? Colors.white : cs.onSurface.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
+          // Time range
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'today', label: Text('Today')),
+                ButtonSegment(value: '7days', label: Text('7 Days')),
+              ],
+              selected: {_timeRange},
+              onSelectionChanged: (s) => _onTimeRangeChanged(s.first),
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -432,7 +412,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 text: _aiSummaries['temperature'] ?? graphRes['temperature']!.text,
                 isAi: _aiSummaries['temperature'] != null,
               ),
-              child: _buildSingleChart(groupByTime(_readings, _timeRange, (r) => r.temperature), Colors.orange),
+              child: _buildSingleChart(groupByTime(_readings, _timeRange, (r) => r.temperature), series[1]),
             ),
             const SizedBox(height: 12),
             _ChartCard(
@@ -442,7 +422,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 text: _aiSummaries['humidity'] ?? graphRes['humidity']!.text,
                 isAi: _aiSummaries['humidity'] != null,
               ),
-              child: _buildSingleChart(groupByTime(_readings, _timeRange, (r) => r.humidity), Colors.green),
+              child: _buildSingleChart(groupByTime(_readings, _timeRange, (r) => r.humidity), series[2]),
             ),
             const SizedBox(height: 12),
             _ChartCard(
@@ -452,7 +432,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 text: _aiSummaries['light'] ?? graphRes['light']!.text,
                 isAi: _aiSummaries['light'] != null,
               ),
-              child: _buildSingleChart(groupByTime(_readings, _timeRange, (r) => r.lightLevel), Colors.amber),
+              child: _buildSingleChart(groupByTime(_readings, _timeRange, (r) => r.lightLevel), series[3]),
             ),
             const SizedBox(height: 12),
             _ChartCard(
@@ -472,19 +452,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 title: 'Zone Health Score',
                 child: score == null
                     ? Text('Add plants with preferred conditions to compute a health score.',
-                        style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55)))
+                        style: TextStyle(color: cs.onSurfaceVariant))
                     : Row(children: [
-                        Text('$score%',
-                            style: TextStyle(fontSize: 44, fontWeight: FontWeight.bold, color: _scoreColor(score))),
+                        Text('$score%', style: tt.displaySmall),
                         const SizedBox(width: 12),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: _scoreColor(score).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
+                            color: scoreColors(context, score).bg,
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(_scoreLabel(score),
-                              style: TextStyle(color: _scoreColor(score), fontWeight: FontWeight.w600)),
+                              style: tt.labelLarge?.copyWith(color: scoreColors(context, score).fg)),
                         ),
                       ]),
               ),
@@ -495,7 +474,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   title: 'Compliance Analysis',
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('% of historical readings within the preferred range.',
-                        style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.5))),
+                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                     const SizedBox(height: 14),
                     if (compTemp  != null) _ComplianceBar(label: 'Temperature',   value: compTemp),
                     if (compHumid != null) _ComplianceBar(label: 'Humidity',       value: compHumid),
@@ -521,7 +500,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                               width: 22,
                               child: Text('${i + 1}',
                                   textAlign: TextAlign.right,
-                                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45))),
+                                  style: TextStyle(color: cs.onSurfaceVariant)),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -534,17 +513,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: _scoreColor(s).withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(20),
+                                          color: scoreColors(context, s).bg,
+                                          borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Text('$s%',
-                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _scoreColor(s))),
+                                            style: tt.labelMedium?.copyWith(color: scoreColors(context, s).fg)),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 2),
                                   Text(plantHealthSummary(r.health),
-                                      style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.55))),
+                                      style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
                                 ],
                               ),
                             ),
@@ -584,7 +563,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ),
         ],
         titlesData: _titlesData(labels),
-        gridData: const FlGridData(show: true, drawVerticalLine: false),
+        gridData: _grid(),
         borderData: FlBorderData(show: false),
         lineTouchData: const LineTouchData(enabled: false),
       )),
@@ -592,6 +571,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _buildMoistureChart(List<({int slot, String label, Color color})> lines) {
+    final tt = Theme.of(context).textTheme;
     final barData = lines.map((line) {
       final entries = line.slot == 0
           ? groupByTime(_readings, _timeRange, (r) => r.moisture)
@@ -623,7 +603,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               children: [
                 Container(width: 10, height: 10, decoration: BoxDecoration(color: l.color, shape: BoxShape.circle)),
                 const SizedBox(width: 4),
-                Text(l.label, style: const TextStyle(fontSize: 11)),
+                Text(l.label, style: tt.labelSmall),
               ],
             )).toList(),
           ),
@@ -634,7 +614,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           child: LineChart(LineChartData(
             lineBarsData: barData,
             titlesData: _titlesData(labels),
-            gridData: const FlGridData(show: true, drawVerticalLine: false),
+            gridData: _grid(),
             borderData: FlBorderData(show: false),
             lineTouchData: const LineTouchData(enabled: false),
           )),
@@ -644,9 +624,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   FlTitlesData _titlesData(List<String> labels) {
+    final tt = Theme.of(context).textTheme;
     final step = (labels.length / 5).ceil().clamp(1, 99);
     return FlTitlesData(
-      leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 36)),
+      leftTitles: AxisTitles(
+        sideTitles: SideTitles(
+          showTitles: true,
+          reservedSize: 36,
+          getTitlesWidget: (value, meta) => Text(meta.formattedValue,
+              style: tt.labelSmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        ),
+      ),
       bottomTitles: AxisTitles(
         sideTitles: SideTitles(
           showTitles: true,
@@ -656,7 +644,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             if (idx < 0 || idx >= labels.length || idx % step != 0) return const SizedBox.shrink();
             return Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text(labels[idx], style: const TextStyle(fontSize: 9)),
+              child: Text(labels[idx], style: tt.labelSmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             );
           },
         ),
@@ -666,10 +654,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _emptyChart() => const SizedBox(
+  Widget _emptyChart() => SizedBox(
         height: 80,
         child: Center(
-          child: Text('No readings in this period.', style: TextStyle(color: Colors.grey, fontSize: 13)),
+          child: Text('No readings in this period.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        ),
+      );
+
+  // Recessive grid lines in the theme's outline color
+  FlGridData _grid() => FlGridData(
+        show: true,
+        drawVerticalLine: false,
+        getDrawingHorizontalLine: (_) => FlLine(
+          color: Theme.of(context).colorScheme.outlineVariant,
+          strokeWidth: 1,
+          dashArray: const [3, 3],
         ),
       );
 }
@@ -685,24 +685,9 @@ class _ZoneChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected ? Colors.green[700] : Theme.of(context).colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: selected ? Colors.white : Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap()),
     );
   }
 }
@@ -717,25 +702,23 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      width: fullWidth ? double.infinity : null,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.07), blurRadius: 8, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.5))),
-          const SizedBox(height: 4),
-          Text(value ?? '—', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          if (sub != null)
-            Text(sub!, style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.45))),
-        ],
+    return Card(
+      child: Container(
+        width: fullWidth ? double.infinity : null,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+            const SizedBox(height: 4),
+            Text(value ?? '—', style: tt.titleLarge),
+            if (sub != null)
+              Text(sub!, style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+          ],
+        ),
       ),
     );
   }
@@ -750,25 +733,22 @@ class _ChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.07), blurRadius: 8, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-          if (caption != null) ...[
-            const SizedBox(height: 4),
-            caption!,
+    final tt = Theme.of(context).textTheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: tt.titleSmall),
+            if (caption != null) ...[
+              const SizedBox(height: 4),
+              caption!,
+            ],
+            const SizedBox(height: 12),
+            child,
           ],
-          const SizedBox(height: 12),
-          child,
-        ],
+        ),
       ),
     );
   }
@@ -783,6 +763,7 @@ class _SummaryLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -791,28 +772,19 @@ class _SummaryLine extends StatelessWidget {
           margin: const EdgeInsets.only(top: 1),
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-            color: isAi
-                ? cs.primary.withValues(alpha: 0.14)
-                : cs.onSurface.withValues(alpha: 0.08),
+            color: isAi ? cs.primaryContainer : cs.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
             isAi ? 'AI' : 'Auto',
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              color: isAi ? cs.primary : cs.onSurface.withValues(alpha: 0.55),
-            ),
+            style: tt.labelSmall?.copyWith(color: isAi ? cs.onPrimaryContainer : cs.onSurfaceVariant),
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             text,
-            style: TextStyle(
-              fontSize: dense ? 11 : 13,
-              color: cs.onSurface.withValues(alpha: 0.7),
-            ),
+            style: (dense ? tt.bodySmall : tt.bodyMedium)?.copyWith(color: cs.onSurfaceVariant),
           ),
         ),
       ],
@@ -828,22 +800,19 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.07), blurRadius: 8, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-          const SizedBox(height: 14),
-          child,
-        ],
+    final tt = Theme.of(context).textTheme;
+    return Card(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: tt.titleSmall),
+            const SizedBox(height: 14),
+            child,
+          ],
+        ),
       ),
     );
   }
@@ -857,9 +826,10 @@ class _ComplianceBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppColors.of(context);
     final cs  = Theme.of(context).colorScheme;
     final pct = value.round();
-    final color = pct >= 80 ? Colors.green : pct >= 60 ? Colors.amber : Colors.red;
+    final color = pct >= 80 ? cs.primary : pct >= 60 ? app.warning : cs.error;
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
@@ -868,7 +838,7 @@ class _ComplianceBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6))),
+              Text(label, style: TextStyle(color: cs.onSurfaceVariant)),
               Text('$pct%', style: TextStyle(fontWeight: FontWeight.w600, color: color)),
             ],
           ),
@@ -893,15 +863,18 @@ class _InsightTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final app = AppColors.of(context);
+    final tt = Theme.of(context).textTheme;
     final isOk   = insight.ok == true;
     final isWarn = insight.ok == false;
-    final bg = isOk   ? Colors.green.withValues(alpha: 0.1)
-             : isWarn ? Colors.orange.withValues(alpha: 0.1)
-             : Theme.of(context).colorScheme.surfaceContainerHigh;
-    final fg = isOk   ? Colors.green[800]
-             : isWarn ? Colors.orange[800]
-             : Theme.of(context).colorScheme.onSurface;
-    final icon = isOk ? '✅' : isWarn ? '⚠️' : 'ℹ️';
+    final bg = isOk   ? cs.primaryContainer
+             : isWarn ? app.warningContainer
+             : cs.surfaceContainerHigh;
+    final fg = isOk   ? cs.onPrimaryContainer
+             : isWarn ? app.onWarningContainer
+             : cs.onSurface;
+    final icon = isOk ? Icons.check_circle_outline : isWarn ? Icons.warning_amber_rounded : Icons.info_outline;
 
     return Container(
       width: double.infinity,
@@ -910,9 +883,9 @@ class _InsightTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(icon, style: const TextStyle(fontSize: 14)),
+          Icon(icon, size: 20, color: fg),
           const SizedBox(width: 8),
-          Expanded(child: Text(insight.text, style: TextStyle(color: fg, fontSize: 13))),
+          Expanded(child: Text(insight.text, style: tt.bodyMedium?.copyWith(color: fg))),
         ],
       ),
     );
@@ -926,15 +899,18 @@ class _AdviceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final app = AppColors.of(context);
+    final tt = Theme.of(context).textTheme;
     final isCritical = advice.severity == 'critical';
     final isWarn = advice.severity == 'warn';
-    final bg = isCritical ? Colors.red.withValues(alpha: 0.1)
-             : isWarn     ? Colors.orange.withValues(alpha: 0.1)
-             : Theme.of(context).colorScheme.surfaceContainerHigh;
-    final fg = isCritical ? Colors.red[800]
-             : isWarn     ? Colors.orange[800]
-             : Theme.of(context).colorScheme.onSurface;
-    final icon = isCritical ? '🚨' : isWarn ? '⚠️' : 'ℹ️';
+    final bg = isCritical ? cs.errorContainer
+             : isWarn     ? app.warningContainer
+             : cs.surfaceContainerHigh;
+    final fg = isCritical ? cs.onErrorContainer
+             : isWarn     ? app.onWarningContainer
+             : cs.onSurface;
+    final icon = isCritical ? Icons.error_outline : isWarn ? Icons.warning_amber_rounded : Icons.info_outline;
 
     return Container(
       width: double.infinity,
@@ -943,9 +919,9 @@ class _AdviceTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(icon, style: const TextStyle(fontSize: 14)),
+          Icon(icon, size: 20, color: fg),
           const SizedBox(width: 8),
-          Expanded(child: Text(advice.text, style: TextStyle(color: fg, fontSize: 13))),
+          Expanded(child: Text(advice.text, style: tt.bodyMedium?.copyWith(color: fg))),
         ],
       ),
     );

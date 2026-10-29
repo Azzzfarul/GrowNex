@@ -9,6 +9,7 @@ import 'screens/auth/register_screen.dart';
 import 'screens/main/root_screen.dart';
 import 'screens/plants/plant_screen.dart';
 import 'services/push_service.dart';
+import 'theme.dart';
 import 'theme_notifier.dart';
 
 Future<void> main() async {
@@ -45,20 +46,8 @@ class MyApp extends StatelessWidget {
       builder: (context, mode, _) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'GrowNex',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-          useMaterial3: true,
-        ),
-        darkTheme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.green,
-            brightness: Brightness.dark,
-            surface: const Color(0xFF1E1E1E),
-            surfaceContainer: const Color(0xFF2A2A2A),
-            surfaceContainerHigh: const Color(0xFF323232),
-          ),
-          useMaterial3: true,
-        ),
+        theme: buildTheme(Brightness.light),
+        darkTheme: buildTheme(Brightness.dark),
         themeMode: mode,
         // Firebase keeps the session across launches; don't make the user log in every time.
         initialRoute: FirebaseAuth.instance.currentUser != null ? RootScreen.routeName : LoginScreen.routeName,

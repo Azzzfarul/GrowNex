@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { collection, query, where, onSnapshot, doc, getDoc, runTransaction } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import Icon from '../components/ui/Icon'
 
 function AddDeviceModal({ user, onClose }) {
   const [searchId,           setSearchId]           = useState('')
@@ -98,19 +99,19 @@ function AddDeviceModal({ user, onClose }) {
   const isOnline = foundDevice?.status === 'online'
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-1">Add Device</h2>
-        <p className="text-sm text-gray-400 mb-5">Select a device that's powered on and connected, or enter its ID.</p>
+    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
+      <div className="dialog w-full max-w-md p-6">
+        <h2 className="text-headline-sm text-on-surface mb-2">Add Device</h2>
+        <p className="text-sm text-on-surface-variant mb-5">Select a device that's powered on and connected, or enter its ID.</p>
 
         {/* Discovered (unclaimed + online) devices */}
         {!discoverError && (
           <div className="mb-3">
-            <p className="text-xs font-semibold text-gray-500 mb-2">New devices nearby</p>
+            <p className="text-title-sm text-on-surface-variant mb-2">New devices nearby</p>
             {nearbyDevices === null ? (
-              <p className="text-sm text-gray-400 py-3">Searching…</p>
+              <p className="text-sm text-on-surface-variant py-3">Searching…</p>
             ) : nearbyDevices.length === 0 ? (
-              <p className="text-sm text-gray-400 bg-gray-50 rounded-xl px-3 py-3">
+              <p className="text-sm text-on-surface-variant bg-surface-container rounded-xl px-3 py-3">
                 No new devices found. Power on your device and keep the server running — it appears
                 here within a few seconds of connecting.
               </p>
@@ -124,21 +125,21 @@ function AddDeviceModal({ user, onClose }) {
                       key={d.id}
                       type="button"
                       onClick={() => selectDevice(d)}
-                      className={`w-full flex items-center gap-3 text-left border rounded-xl px-3 py-2.5 transition-colors ${
-                        selected ? 'border-brand-500 bg-brand-50' : 'border-gray-200 hover:bg-gray-50'
+                      aria-pressed={selected}
+                      className={`state-layer w-full flex items-center gap-4 text-left rounded-xl px-4 py-3 ${
+                        selected ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-low'
                       }`}
                     >
-                      <span className="text-xl leading-none">{camera ? '📷' : '🖥️'}</span>
+                      <Icon name={camera ? 'photo_camera' : 'sensors'} className="text-on-surface-variant" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-800 truncate">{d.deviceName}</p>
-                        <p className="text-xs text-gray-400 truncate">
+                        <p className="text-sm font-medium text-on-surface truncate">{d.deviceName}</p>
+                        <p className="text-xs text-on-surface-variant truncate">
                           {camera ? 'Camera' : d.deviceType === 'outdoor' ? 'Outdoor' : 'Indoor'}
                           {d.deviceName !== d.id && <span className="font-mono"> · {d.id}</span>}
                         </p>
                       </div>
-                      <span className="flex items-center gap-1 text-xs font-medium text-green-600 flex-shrink-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                        Online
+                      <span className="flex items-center gap-1 text-label-md text-primary flex-shrink-0">
+                        {selected ? <Icon name="check_circle" filled size={20} /> : <><span className="w-2 h-2 rounded-full bg-primary" />Online</>}
                       </span>
                     </button>
                   )
@@ -149,14 +150,14 @@ function AddDeviceModal({ user, onClose }) {
         )}
 
         {discoverError && (
-          <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-3">{discoverError}</p>
+          <p className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-3">{discoverError}</p>
         )}
 
         {!showManual ? (
           <button
             type="button"
             onClick={() => setShowManual(true)}
-            className="text-xs font-medium text-brand-700 hover:text-brand-800 mb-4"
+            className="btn-text btn-sm mb-4"
           >
             Can't see your device? Enter its ID
           </button>
@@ -168,12 +169,12 @@ function AddDeviceModal({ user, onClose }) {
             onChange={(e) => setSearchId(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && search()}
             placeholder="e.g. ESP32-ABCD1234"
-            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="field flex-1"
           />
           <button
             onClick={search}
             disabled={searching || !searchId.trim()}
-            className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+            className="btn-filled"
           >
             {searching ? '…' : 'Find'}
           </button>
@@ -181,44 +182,44 @@ function AddDeviceModal({ user, onClose }) {
         )}
 
         {searchError && (
-          <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-3">{searchError}</p>
+          <p className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-3">{searchError}</p>
         )}
 
         {/* Found device card */}
         {foundDevice && (
-          <div className="border border-green-200 bg-green-50 rounded-xl p-4 mb-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-green-600 font-bold text-base">✓</span>
+          <div className="card-outlined p-4 mb-4 space-y-2">
+            <div className="flex items-center gap-3">
+              <Icon name="check_circle" filled className="text-primary" />
               <div>
-                <p className="text-sm font-semibold text-gray-800">{foundDevice.deviceName}</p>
+                <p className="text-sm font-medium text-on-surface">{foundDevice.deviceName}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
-                  <span className="text-xs text-gray-500 capitalize">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-primary' : 'bg-outline'}`} />
+                  <span className="text-xs text-on-surface-variant capitalize">
                     {foundDevice.deviceType ?? 'Unknown'} · {isOnline ? 'Online' : 'Offline'}
                   </span>
                 </div>
               </div>
             </div>
-            {!isCamera && <div className="border-t border-green-200 pt-3 mt-1 space-y-2">
-              <p className="text-xs font-semibold text-gray-500">Modules</p>
+            {!isCamera && <div className="border-t border-outline-variant pt-3 mt-1 space-y-2">
+              <p className="text-xs font-medium text-on-surface-variant">Modules</p>
               <label className="flex items-center gap-3 cursor-pointer">
-                <span className="text-base leading-none">🧪</span>
-                <span className="flex-1 text-sm text-gray-800">Fertilizer module</span>
+                <Icon name="science" size={20} className="text-on-surface-variant" />
+                <span className="flex-1 text-sm text-on-surface">Fertilizer module</span>
                 <input
                   type="checkbox"
                   checked={hasFertilizerModule}
                   onChange={(e) => setHasFertilizerModule(e.target.checked)}
-                  className="w-4 h-4 accent-green-600"
+                  className="w-4 h-4 accent-primary"
                 />
               </label>
               <label className="flex items-center gap-3 cursor-pointer">
-                <span className="text-base leading-none">☀️</span>
-                <span className="flex-1 text-sm text-gray-800">Light module</span>
+                <Icon name="light_mode" size={20} className="text-on-surface-variant" />
+                <span className="flex-1 text-sm text-on-surface">Light module</span>
                 <input
                   type="checkbox"
                   checked={hasLightingModule}
                   onChange={(e) => setHasLightingModule(e.target.checked)}
-                  className="w-4 h-4 accent-green-600"
+                  className="w-4 h-4 accent-primary"
                 />
               </label>
             </div>}
@@ -226,13 +227,13 @@ function AddDeviceModal({ user, onClose }) {
         )}
 
         {claimError && (
-          <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-3">{claimError}</p>
+          <p className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-3">{claimError}</p>
         )}
 
-        <div className="flex gap-3 pt-1">
+        <div className="flex justify-end gap-2 pt-2">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            className="btn-text"
           >
             Cancel
           </button>
@@ -240,7 +241,7 @@ function AddDeviceModal({ user, onClose }) {
             <button
               onClick={claim}
               disabled={claiming}
-              className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
+              className="btn-filled"
             >
               {claiming ? 'Claiming…' : 'Claim device'}
             </button>
@@ -274,46 +275,40 @@ export default function DevicesPage() {
   const offlineCount = devices.length - onlineCount
 
   if (loading) {
-    return <p className="text-sm text-gray-400 mt-8 text-center">Loading…</p>
+    return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Devices</h1>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
-        >
-          <span className="text-base leading-none">+</span>
-          <span>Add device</span>
+        <h1 className="text-headline-sm text-on-surface">Devices</h1>
+        <button onClick={() => setShowAdd(true)} className="btn-filled">
+          <Icon name="add" />
+          Add device
         </button>
       </div>
 
-      {/* Summary card */}
-      <div className="bg-green-700 rounded-2xl shadow-md p-5 mb-6">
-        <div className="grid grid-cols-3 divide-x divide-white/20">
-          <div className="flex flex-col items-center gap-1 px-4">
-            <span className="text-white/70 text-xl leading-none">🖥️</span>
-            <span className="text-white text-2xl font-bold">{devices.length}</span>
-            <span className="text-white/70 text-xs">Total devices</span>
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        {[
+          { label: 'Total devices', value: devices.length, icon: 'router',   tone: 'bg-primary-container text-on-primary-container' },
+          { label: 'Online',        value: onlineCount,    icon: 'wifi',     tone: 'bg-secondary-container text-on-secondary-container' },
+          { label: 'Offline',       value: offlineCount,   icon: 'wifi_off', tone: 'bg-surface-container-highest text-on-surface-variant' },
+        ].map(({ label, value, icon, tone }) => (
+          <div key={label} className={`rounded-xl p-4 flex items-center gap-3 ${tone}`}>
+            <Icon name={icon} size={32} />
+            <div>
+              <p className="text-headline-sm">{value}</p>
+              <p className="text-label-md">{label}</p>
+            </div>
           </div>
-          <div className="flex flex-col items-center gap-1 px-4">
-            <span className="text-white/70 text-xl leading-none">📶</span>
-            <span className="text-white text-2xl font-bold">{onlineCount}</span>
-            <span className="text-white/70 text-xs">Online</span>
-          </div>
-          <div className="flex flex-col items-center gap-1 px-4">
-            <span className="text-white/70 text-xl leading-none">📵</span>
-            <span className="text-white text-2xl font-bold">{offlineCount}</span>
-            <span className="text-white/70 text-xs">Offline</span>
-          </div>
-        </div>
+        ))}
       </div>
 
       {devices.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
-          <p className="text-sm text-gray-400">No devices registered yet.</p>
+        <div className="card-outlined p-8 text-center">
+          <Icon name="router" size={40} className="text-on-surface-variant" />
+          <p className="text-body-md text-on-surface-variant mt-2">No devices registered yet.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -323,25 +318,22 @@ export default function DevicesPage() {
               <div
                 key={device.id}
                 onClick={() => navigate(`/devices/${device.id}`)}
-                className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition-shadow"
+                className="card state-layer p-4 flex items-center gap-4 cursor-pointer"
               >
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${online ? 'bg-green-50' : 'bg-gray-100'}`}>
-                  <span className={`text-xl leading-none ${online ? '' : 'grayscale opacity-50'}`}>
-                    {device.deviceType === 'camera' ? '📷' : '🖥️'}
-                  </span>
+                <div className={`w-12 h-12 rounded-full grid place-items-center flex-shrink-0 ${online ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-highest text-on-surface-variant'}`}>
+                  <Icon name={device.deviceType === 'camera' ? 'photo_camera' : 'sensors'} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-gray-900">{device.deviceName}</p>
-                  <p className="text-sm text-gray-400 capitalize">
+                  <p className="text-title-md text-on-surface">{device.deviceName}</p>
+                  <p className="text-body-md text-on-surface-variant capitalize">
                     {device.deviceType === 'camera' ? 'Camera' : device.deviceType === 'indoor' ? 'Indoor' : 'Outdoor'}
                   </p>
                 </div>
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full flex-shrink-0 ${online ? 'bg-green-50' : 'bg-gray-100'}`}>
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-green-600' : 'bg-gray-400'}`} />
-                  <span className={`text-xs font-semibold ${online ? 'text-green-700' : 'text-gray-500'}`}>
-                    {online ? 'Online' : 'Offline'}
-                  </span>
-                </div>
+                <span className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-label-lg flex-shrink-0 ${online ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-highest text-on-surface-variant'}`}>
+                  <Icon name={online ? 'wifi' : 'wifi_off'} size={18} />
+                  {online ? 'Online' : 'Offline'}
+                </span>
+                <Icon name="chevron_right" className="text-on-surface-variant" />
               </div>
             )
           })}

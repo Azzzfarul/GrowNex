@@ -29,6 +29,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
   
   void _showForgotPasswordDialog() {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     final emailCtrl = TextEditingController(text: _emailController.text.trim());
     bool sending = false;
     String? error;
@@ -42,9 +44,9 @@ class _LoginScreenState extends State<LoginScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 'Enter your email and we\'ll send you a link to reset your password.',
-                style: TextStyle(fontSize: 14),
+                style: tt.bodyMedium,
               ),
               const SizedBox(height: 16),
               if (!sent)
@@ -59,13 +61,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               if (sent)
-                const Text(
+                Text(
                   'Check your inbox — a reset link has been sent.',
-                  style: TextStyle(color: Colors.green),
+                  style: TextStyle(color: cs.primary),
                 ),
               if (error != null) ...[
                 const SizedBox(height: 10),
-                Text(error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+                Text(error!, style: tt.bodyMedium?.copyWith(color: cs.error)),
               ],
             ],
           ),
@@ -145,8 +147,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(  // the keyboard would otherwise cover the form
           child: Padding(
@@ -155,14 +158,22 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 32),
-              const Text(
-                'Welcome back',
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+              Row(
+                children: [
+                  Icon(Icons.eco, size: 36, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Text('GrowNex', style: tt.titleLarge),
+                ],
+              ),
+              const SizedBox(height: 32),
+              Text(
+                'Sign in',
+                style: tt.headlineSmall,
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Sign in to manage your plants, devices, and analytics.',
-                style: TextStyle(fontSize: 16, color: Colors.black54),
+              Text(
+                'Manage your plants, devices, and analytics.',
+                style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: 32),
               Form(
@@ -211,28 +222,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
+                      child: FilledButton(
                         onPressed: _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[700],
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
                         child: _isLoading
-                            ? const SizedBox(
+                            ? SizedBox(
                                 height: 20,
                                 width: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white,
+                                  color: cs.onPrimary,
                                 ),
                               )
-                            : const Text(
-                                'Login',
-                                style: TextStyle(fontSize: 16),
-                              ),
+                            : const Text('Login'),
                       ),
                     ),
                   ],
@@ -242,7 +243,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('Don\'t have an account?', style: TextStyle(color: Colors.black54)),
+                  Text('Don\'t have an account?', style: TextStyle(color: cs.onSurfaceVariant)),
                   TextButton(
                     onPressed: () {
                       Navigator.pushNamed(context, RegisterScreen.routeName);

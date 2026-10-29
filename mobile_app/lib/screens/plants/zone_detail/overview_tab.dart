@@ -105,8 +105,9 @@ class _OverviewTabState extends State<OverviewTab> {
       );
       await DeviceService().assignDeviceToZone(device.id, widget.zone.id, userId);
     } catch (e) {
+      debugPrint('Failed to assign device: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign device: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign device. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _assignLoading = false);
@@ -121,8 +122,9 @@ class _OverviewTabState extends State<OverviewTab> {
       await DeviceService().unassignDevice(deviceId);
       await ZoneService().updateZoneDevice(widget.zone.id, null);
     } catch (e) {
+      debugPrint('Failed to remove device: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove device: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove device. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _removeLoading = false);
@@ -186,7 +188,7 @@ class _OverviewTabState extends State<OverviewTab> {
             if (_photoUrl != null)
               TextButton(
                 onPressed: _photoBusy ? null : _removeZonePhoto,
-                style: TextButton.styleFrom(foregroundColor: Colors.red[400]),
+                style: TextButton.styleFrom(foregroundColor: cs.error),
                 child: const Text('Remove'),
               ),
           ],
@@ -199,6 +201,7 @@ class _OverviewTabState extends State<OverviewTab> {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _latestSnapshotStream,
       builder: (context, snapshot) {
+        final tt = Theme.of(context).textTheme;
         final docs = snapshot.data?.docs ?? [];
         final data = docs.isEmpty ? null : docs.first.data();
         final imageUrl = data?['imageUrl'] as String?;
@@ -236,7 +239,7 @@ class _OverviewTabState extends State<OverviewTab> {
                               : 'Latest camera photo',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w500),
+                          style: tt.labelSmall?.copyWith(color: Colors.white),
                         ),
                       ),
                     ],
@@ -290,8 +293,9 @@ class _OverviewTabState extends State<OverviewTab> {
       final url = await PhotoService().uploadZonePhoto(widget.zone.id, file);
       if (mounted) setState(() => _photoUrl = url);
     } catch (e) {
+      debugPrint('Failed to upload photo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _photoBusy = false);
@@ -304,8 +308,9 @@ class _OverviewTabState extends State<OverviewTab> {
       await PhotoService().removeZonePhoto(widget.zone.id);
       if (mounted) setState(() => _photoUrl = null);
     } catch (e) {
+      debugPrint('Failed to remove photo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove photo: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove photo. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _photoBusy = false);
@@ -319,19 +324,21 @@ class _OverviewTabState extends State<OverviewTab> {
     try {
       await FirebaseFirestore.instance.collection('zones').doc(widget.zone.id).update({'zoneName': name});
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to rename: $e')));
+      debugPrint('Failed to rename: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to rename. Please try again.')));
     } finally {
       if (mounted) setState(() => _renameLoading = false);
     }
   }
 
   Widget _buildInfoCard() {
+    final cs = Theme.of(context).colorScheme;
     return _SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(widget.zone.zoneType.toUpperCase(),
-              style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+              style: TextStyle(color: cs.primary, fontWeight: FontWeight.w500)),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -350,7 +357,7 @@ class _OverviewTabState extends State<OverviewTab> {
               _renameLoading
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                   : IconButton(
-                      icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+                      icon: Icon(Icons.check_circle_outline, color: cs.primary),
                       tooltip: 'Save name',
                       onPressed: _zoneNameCtrl.text.trim() == widget.zone.zoneName ? null : _renameZone,
                     ),
@@ -360,10 +367,11 @@ class _OverviewTabState extends State<OverviewTab> {
           StreamBuilder<List<Plant>>(
             stream: _plantsStream,
             builder: (context, snapshot) {
+              final tt = Theme.of(context).textTheme;
               final count = snapshot.data?.length ?? 0;
               return Text(
                 'Plants: $count of ${widget.zone.totalPlantSlots}',
-                style: const TextStyle(fontSize: 16),
+                style: tt.bodyLarge,
               );
             },
           ),
@@ -373,11 +381,12 @@ class _OverviewTabState extends State<OverviewTab> {
   }
 
   Widget _buildDeviceCard() {
+    final tt = Theme.of(context).textTheme;
     return _SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Device', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          Text('Device', style: tt.titleSmall),
           const SizedBox(height: 14),
           if (widget.zone.deviceId != null)
             _buildAssignedDevice()
@@ -392,6 +401,8 @@ class _OverviewTabState extends State<OverviewTab> {
     return StreamBuilder<Device?>(
       stream: _assignedDeviceStream,
       builder: (context, snapshot) {
+        final tt = Theme.of(context).textTheme;
+        final cs = Theme.of(context).colorScheme;
         final deviceName = snapshot.data?.deviceName ?? widget.zone.deviceId ?? '...';
         final isOnline = snapshot.data?.status == 'online';
 
@@ -401,15 +412,15 @@ class _OverviewTabState extends State<OverviewTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(deviceName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  Text(deviceName, style: tt.titleSmall),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      CircleAvatar(radius: 4, backgroundColor: isOnline ? Colors.green[700] : Colors.grey),
+                      CircleAvatar(radius: 4, backgroundColor: isOnline ? cs.primary : cs.onSurfaceVariant),
                       const SizedBox(width: 6),
                       Text(
                         isOnline ? 'Online' : 'Offline',
-                        style: TextStyle(fontSize: 12, color: isOnline ? Colors.green[700] : Colors.grey),
+                        style: tt.bodySmall?.copyWith(color: isOnline ? cs.primary : cs.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -434,7 +445,7 @@ class _OverviewTabState extends State<OverviewTab> {
                     onPressed: _remove,
                     icon: const Icon(Icons.link_off, size: 18),
                     label: const Text('Remove'),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red[400]),
+                    style: TextButton.styleFrom(foregroundColor: cs.error),
                   ),
           ],
         );
@@ -447,6 +458,7 @@ class _OverviewTabState extends State<OverviewTab> {
     return FutureBuilder<List<Device>>(
       future: _availableDevicesFuture,
       builder: (context, snapshot) {
+        final tt = Theme.of(context).textTheme;
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -456,7 +468,7 @@ class _OverviewTabState extends State<OverviewTab> {
         if (devices.isEmpty) {
           return Text(
             'No available devices. Claim a device first from the Devices screen.',
-            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45), fontSize: 13),
+            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
           );
         }
 
@@ -480,17 +492,12 @@ class _OverviewTabState extends State<OverviewTab> {
               onChanged: (v) => setState(() => _selectedDevice = v),
             ),
             const SizedBox(height: 10),
-            ElevatedButton.icon(
+            FilledButton.icon(
               onPressed: (_selectedDevice == null || _assignLoading) ? null : _assign,
               icon: _assignLoading
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.link, size: 18),
               label: const Text('Assign device'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[700],
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
             ),
           ],
         );
@@ -555,8 +562,9 @@ class _CameraCardState extends State<_CameraCard> {
       await ZoneService().updateZoneCamera(widget.zone.id, camera.id);
       await DeviceService().assignDeviceToZone(camera.id, widget.zone.id, userId);
     } catch (e) {
+      debugPrint('Failed to assign camera: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign camera: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign camera. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -571,8 +579,9 @@ class _CameraCardState extends State<_CameraCard> {
       await DeviceService().unassignDevice(cameraId);
       await ZoneService().updateZoneCamera(widget.zone.id, null);
     } catch (e) {
+      debugPrint('Failed to remove camera: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove camera: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove camera. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -581,16 +590,17 @@ class _CameraCardState extends State<_CameraCard> {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
     return _SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Camera', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          Text('Camera', style: tt.titleSmall),
           const SizedBox(height: 4),
           Text(
             'Uploads a photo to the Camera feed every 4 hours.',
-            style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.45)),
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 14),
           if (_cameraStream != null)
@@ -606,23 +616,25 @@ class _CameraCardState extends State<_CameraCard> {
     return StreamBuilder<Device?>(
       stream: _cameraStream,
       builder: (context, snapshot) {
+        final tt = Theme.of(context).textTheme;
+        final cs = Theme.of(context).colorScheme;
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2));
         }
         final camera = snapshot.data;
         if (camera == null) {
-          return Text('Camera not found.', style: TextStyle(color: Colors.red[400]));
+          return Text('Camera not found.', style: TextStyle(color: cs.error));
         }
 
         final isOnline = camera.status == 'online';
-        final statusColor = isOnline ? Colors.green[700] : Colors.red[400];
+        final statusColor = isOnline ? cs.primary : cs.error;
         return Row(
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(camera.deviceName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  Text(camera.deviceName, style: tt.titleSmall),
                   const SizedBox(height: 4),
                   Row(
                     children: [
@@ -630,7 +642,7 @@ class _CameraCardState extends State<_CameraCard> {
                       const SizedBox(width: 6),
                       Text(
                         isOnline ? 'Online' : 'Offline',
-                        style: TextStyle(fontSize: 12, color: statusColor),
+                        style: tt.bodySmall?.copyWith(color: statusColor),
                       ),
                     ],
                   ),
@@ -643,7 +655,7 @@ class _CameraCardState extends State<_CameraCard> {
                     onPressed: _remove,
                     icon: const Icon(Icons.link_off, size: 18),
                     label: const Text('Remove'),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red[400]),
+                    style: TextButton.styleFrom(foregroundColor: cs.error),
                   ),
           ],
         );
@@ -655,6 +667,7 @@ class _CameraCardState extends State<_CameraCard> {
     return FutureBuilder<List<Device>>(
       future: _availableCamerasFuture,
       builder: (context, snapshot) {
+        final tt = Theme.of(context).textTheme;
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -663,7 +676,7 @@ class _CameraCardState extends State<_CameraCard> {
         if (cameras.isEmpty) {
           return Text(
             'No available cameras. Register your ESP32-CAM (ID starts with ESP32CAM-) from the Devices screen.',
-            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45), fontSize: 13),
+            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
           );
         }
 
@@ -687,17 +700,12 @@ class _CameraCardState extends State<_CameraCard> {
               onChanged: (v) => setState(() => _selectedCamera = v),
             ),
             const SizedBox(height: 10),
-            ElevatedButton.icon(
+            FilledButton.icon(
               onPressed: (_selectedCamera == null || _busy) ? null : _assign,
               icon: _busy
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.link, size: 18),
               label: const Text('Assign camera'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green[700],
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
             ),
           ],
         );
@@ -714,18 +722,20 @@ class _ModuleChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
+        color: cs.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: Colors.green[700]),
+          Icon(icon, size: 12, color: cs.onSecondaryContainer),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: 11, color: Colors.green[700], fontWeight: FontWeight.w600)),
+          Text(label, style: tt.labelSmall?.copyWith(color: cs.primary)),
         ],
       ),
     );
@@ -739,15 +749,11 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: child,
       ),
-      child: child,
     );
   }
 }

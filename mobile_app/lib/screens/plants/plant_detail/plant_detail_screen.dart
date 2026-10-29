@@ -9,6 +9,8 @@ import '../../../models/zone_model.dart';
 import '../../../services/firestore/plant_service.dart';
 import '../../../services/photo_service.dart';
 import '../../../utils/plant_health.dart';
+import '../../../theme.dart';
+import '../../../widgets/status_label.dart';
 
 class PlantDetailScreen extends StatefulWidget {
   final Plant plant;
@@ -96,8 +98,9 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Changes saved.')));
       }
     } catch (e) {
+      debugPrint('Failed to save: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -133,6 +136,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   }
 
   Future<void> _confirmDelete() async {
+    final cs = Theme.of(context).colorScheme;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -145,7 +149,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             child: const Text('Remove'),
           ),
         ],
@@ -158,9 +162,10 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       if (_photoUrl != null) await PhotoService().deletePlantPhotoFile(widget.plant.id).catchError((_) {});
       if (mounted) Navigator.pop(context);
     } catch (e) {
+      debugPrint('Failed to remove plant: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to remove plant: $e')),
+          SnackBar(content: Text('Failed to remove plant. Please try again.')),
         );
       }
     }
@@ -173,8 +178,6 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Plant details'),
-        backgroundColor: Colors.green[700],
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline),
@@ -202,17 +205,12 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
           const SizedBox(height: 20),
           _buildNotesField(),
           const SizedBox(height: 24),
-          ElevatedButton(
+          FilledButton(
             onPressed: _loading ? null : _save,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green[700],
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 14),
               child: _loading
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Text('Save changes'),
             ),
           ),
@@ -261,7 +259,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
             if (_photoUrl != null)
               TextButton(
                 onPressed: _photoBusy ? null : _removePlantPhoto,
-                style: TextButton.styleFrom(foregroundColor: Colors.red[400]),
+                style: TextButton.styleFrom(foregroundColor: cs.error),
                 child: const Text('Remove'),
               ),
           ],
@@ -301,8 +299,9 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       final url = await PhotoService().uploadPlantPhoto(widget.plant.id, file);
       if (mounted) setState(() => _photoUrl = url);
     } catch (e) {
+      debugPrint('Failed to upload photo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _photoBusy = false);
@@ -315,8 +314,9 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       await PhotoService().removePlantPhoto(widget.plant.id);
       if (mounted) setState(() => _photoUrl = null);
     } catch (e) {
+      debugPrint('Failed to remove photo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove photo: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove photo. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _photoBusy = false);
@@ -327,7 +327,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
         const SizedBox(height: 8),
         TextField(controller: controller, decoration: const InputDecoration(border: OutlineInputBorder())),
       ],
@@ -335,6 +335,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   }
 
   Widget _buildSensorOverview(ColorScheme cs) {
+    final app = AppColors.of(context);
+    final tt = Theme.of(context).textTheme;
     final moisture = widget.currentMoisture;
     final min = widget.plant.preferredMoistureMin;
     final max = widget.plant.preferredMoistureMax;
@@ -346,10 +348,10 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     final tooLow  = hasRange && hasData && moisture < min;
 
     final color = !hasData ? cs.onSurface
-        : !hasRange        ? Colors.blue.shade400
-        : inRange          ? Colors.green.shade600
-        : tooLow           ? Colors.orange.shade600
-        : Colors.red.shade500;
+        : !hasRange        ? cs.tertiary
+        : inRange          ? cs.primary
+        : tooLow           ? app.warning
+        : cs.error;
 
     final conditionText = !hasData ? 'No data'
         : !hasRange        ? '${moisture.toStringAsFixed(1)}%'
@@ -357,60 +359,58 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
         : tooLow           ? 'Too dry (${moisture.toStringAsFixed(1)}%)'
         : 'Too wet (${moisture.toStringAsFixed(1)}%)';
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Soil moisture', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Slot ${widget.plant.slotNumber} reading',
-                  style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.55))),
-              Text(
-                hasData ? '${moisture.toStringAsFixed(1)}%' : '--',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
-              ),
-            ],
-          ),
-          if (hasData) ...[
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: (moisture / 100).clamp(0.0, 1.0),
-                backgroundColor: cs.surfaceContainerHigh,
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-                minHeight: 10,
-              ),
-            ),
-            const SizedBox(height: 8),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Soil moisture', style: tt.titleMedium),
+            const SizedBox(height: 14),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(conditionText,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
-                if (hasRange)
-                  Text('Ideal: ${min.toStringAsFixed(0)}–${max.toStringAsFixed(0)}%',
-                      style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.45))),
+                Text('Slot ${widget.plant.slotNumber} reading',
+                    style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+                Text(
+                  hasData ? '${moisture.toStringAsFixed(1)}%' : '--',
+                  style: tt.titleLarge?.copyWith(color: color),
+                ),
               ],
             ),
-          ] else
-            Text('No sensor data yet',
-                style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.45))),
-        ],
+            if (hasData) ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: (moisture / 100).clamp(0.0, 1.0),
+                  backgroundColor: cs.surfaceContainerHigh,
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                  minHeight: 10,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(conditionText,
+                      style: tt.labelLarge?.copyWith(color: color)),
+                  if (hasRange)
+                    Text('Ideal: ${min.toStringAsFixed(0)}–${max.toStringAsFixed(0)}%',
+                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                ],
+              ),
+            ] else
+              Text('No sensor data yet',
+                  style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildPreferredConditions(ColorScheme cs) {
+    final tt = Theme.of(context).textTheme;
     // Material (not a decorated Container) so the tile's tap ripple shows.
     return Material(
       color: cs.surfaceContainer,
@@ -424,10 +424,10 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
           tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
           childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
           initiallyExpanded: _hasAnyCondition(),
-          leading: Icon(Icons.tune, color: Colors.green[700]),
-          title: const Text('Preferred growing conditions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          leading: Icon(Icons.tune, color: cs.primary),
+          title: Text('Preferred growing conditions', style: tt.titleSmall),
           subtitle: Text('Used to compute ideal zone environment',
-              style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.45))),
+              style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
           children: [
             _rangeRow('Moisture (%)', _moistureMinCtrl, _moistureMaxCtrl),
             const SizedBox(height: 12),
@@ -443,15 +443,16 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   }
 
   Widget _rangeRow(String label, TextEditingController minCtrl, TextEditingController maxCtrl) {
+    final tt = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        Text(label, style: tt.labelLarge),
         const SizedBox(height: 6),
         Row(
           children: [
             Expanded(child: _numField('Min', minCtrl)),
-            const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('–', style: TextStyle(fontWeight: FontWeight.bold))),
+            const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('–', style: TextStyle(fontWeight: FontWeight.w500))),
             Expanded(child: _numField('Max', maxCtrl)),
           ],
         ),
@@ -473,10 +474,11 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   }
 
   Widget _lightDropdown() {
+    final tt = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Light condition', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        Text('Light condition', style: tt.labelLarge),
         const SizedBox(height: 6),
         DropdownButtonFormField<String?>(
           initialValue: _lightCondition,
@@ -497,40 +499,34 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   }
 
   Widget _buildConditionCard(ColorScheme cs) {
+    final tt = Theme.of(context).textTheme;
     final h = plantHealth(widget.plant, widget.zone!, _stats!);
     final s = h.score;
-    final color = s == null ? cs.onSurface
-        : s >= 80 ? Colors.green.shade600
-        : s >= 60 ? Colors.amber.shade700
-        : s >= 40 ? Colors.orange.shade700
-        : Colors.red.shade600;
+    final (:bg, :fg) = scoreColors(context, s);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(child: Text('Condition', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-                child: Text(s != null ? '$s%' : '—',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(plantHealthSummary(h),
-              style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.7))),
-        ],
+    return Card(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text('Condition', style: tt.titleSmall)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+                  child: Text(s != null ? '$s%' : '—',
+                      style: tt.labelMedium?.copyWith(color: fg)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(plantHealthSummary(h),
+                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+          ],
+        ),
       ),
     );
   }
@@ -539,7 +535,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Notes', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text('Notes', style: TextStyle(fontWeight: FontWeight.w500)),
         const SizedBox(height: 8),
         TextField(
           controller: _notesCtrl,

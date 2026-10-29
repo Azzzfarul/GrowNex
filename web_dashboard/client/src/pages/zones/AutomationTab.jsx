@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase'
+import Icon from '../../components/ui/Icon'
+import Switch from '../../components/ui/Switch'
 import { useAuth } from '../../context/AuthContext'
 import { fetchAutomationPlan } from '../../lib/aiSummary'
 
@@ -8,35 +10,17 @@ import { fetchAutomationPlan } from '../../lib/aiSummary'
 const TIME_RE  = /^([01]?\d|2[0-3]):[0-5]\d$/
 const LIGHT_RE = /^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$/
 const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN) ([01]?\d|2[0-3]):[0-5]\d$/
-
-function Toggle({ value, onChange, disabled }) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onChange(!value)}
-      className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
-        value ? 'bg-brand-500' : 'bg-gray-200'
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-          value ? 'translate-x-5' : 'translate-x-0'
-        }`}
-      />
-    </button>
-  )
-}
+const SAVE_FAILED = "Couldn't save the change. Please try again."
 
 function ToggleSetting({ title, subtitle, value, onChange, busy, children }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+    <div className="card p-5">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="font-semibold text-gray-900">{title}</p>
-          <p className="text-sm text-gray-400">{subtitle}</p>
+          <p className="text-title-md text-on-surface">{title}</p>
+          <p className="text-body-md text-on-surface-variant">{subtitle}</p>
         </div>
-        <Toggle value={value} onChange={onChange} disabled={busy} />
+        <Switch checked={value} onChange={onChange} disabled={busy} label={title} />
       </div>
       {value && <div className="mt-4">{children}</div>}
     </div>
@@ -86,11 +70,11 @@ export default function AutomationTab({ zone }) {
   const devRef = zone.deviceId ? doc(db, 'devices', zone.deviceId) : null
 
   const actuators = [
-    { label: 'Water',     icon: '💧', activeRing: 'ring-blue-300',  on: waterOn,
+    { label: 'Water',     icon: 'water_drop', on: waterOn,
       onToggle: () => devRef && updateDoc(devRef, { irrigationActive: !waterOn }) },
-    ...(hasFert  ? [{ label: 'Fertilize', icon: '🌿', activeRing: 'ring-green-300', on: fertOn,
+    ...(hasFert  ? [{ label: 'Fertilize', icon: 'compost', on: fertOn,
       onToggle: () => devRef && updateDoc(devRef, { fertilizerActive: !fertOn }) }] : []),
-    ...(hasLight ? [{ label: 'Light',     icon: '☀️', activeRing: 'ring-amber-300', on: lightOn,
+    ...(hasLight ? [{ label: 'Light',     icon: 'light_mode', on: lightOn,
       onToggle: () => devRef && updateDoc(devRef, { lightActive: !lightOn }) }] : []),
   ]
 
@@ -126,7 +110,8 @@ export default function AutomationTab({ zone }) {
     const field = Object.keys(patch)[0]
     setSavingToggle((s) => ({ ...s, [field]: true }))
     setDoc(doc(db, 'automationConfig', zone.id), patch, { merge: true })
-      .catch((e) => { revert(); setConfigError(`Failed to save: ${e.message}`) })
+      .then(() => setConfigError(null))
+      .catch((e) => { console.error('Automation save failed:', e); revert(); setConfigError(SAVE_FAILED) })
       .finally(() => setSavingToggle((s) => ({ ...s, [field]: false })))
   }
 
@@ -139,14 +124,19 @@ export default function AutomationTab({ zone }) {
     if (bad(ls, lightSchedOrig, LIGHT_RE))             return setConfigError('Lighting schedule must look like 08:00–18:00.')
     if (bad(fs, fertSchedOrig.toUpperCase(), FERT_RE)) return setConfigError('Fertilizing schedule must look like MON 06:00.')
     setConfigError(null)
-    await setDoc(doc(db, 'automationConfig', zone.id), {
-      wateringThreshold:   waterThresh    ? parseFloat(waterThresh)   : null,
-      wateringSchedule:    ws             || null,
-      wateringDuration:    waterDuration  ? parseInt(waterDuration)   : null,
-      lightingSchedule:    ls             || null,
-      fertilizingSchedule: fs             || null,
-      fertilizingDuration: fertDuration   ? parseInt(fertDuration)    : null,
-    }, { merge: true })
+    try {
+      await setDoc(doc(db, 'automationConfig', zone.id), {
+        wateringThreshold:   waterThresh    ? parseFloat(waterThresh)   : null,
+        wateringSchedule:    ws             || null,
+        wateringDuration:    waterDuration  ? parseInt(waterDuration)   : null,
+        lightingSchedule:    ls             || null,
+        fertilizingSchedule: fs             || null,
+        fertilizingDuration: fertDuration   ? parseInt(fertDuration)    : null,
+      }, { merge: true })
+    } catch (e) {
+      console.error('Automation save failed:', e)
+      return setConfigError(SAVE_FAILED)  // keeps the edits so the user can retry
+    }
     setWaterThreshOrig(waterThresh); setWaterSchedOrig(waterSched)
     setWaterDurOrig(waterDuration);  setLightSchedOrig(lightSched)
     setFertSchedOrig(fertSched);     setFertDurOrig(fertDuration)
@@ -171,7 +161,13 @@ export default function AutomationTab({ zone }) {
   }
 
   async function applyAiPlan(plan) {
-    await setDoc(doc(db, 'automationConfig', zone.id), { ...plan, aiRecommended: true }, { merge: true })
+    setConfigError(null)
+    try {
+      await setDoc(doc(db, 'automationConfig', zone.id), { ...plan, aiRecommended: true }, { merge: true })
+    } catch (e) {
+      console.error('Automation save failed:', e)
+      return setConfigError(SAVE_FAILED)
+    }
     setAutoWater(!!plan.autoWateringEnabled)
     setAutoLight(!!plan.autoLightingEnabled)
     setAutoFert(!!plan.autoFertilizingEnabled)
@@ -203,14 +199,14 @@ export default function AutomationTab({ zone }) {
     waterDuration !== waterDurOrig || lightSched !== lightSchedOrig ||
     fertSched !== fertSchedOrig    || fertDuration !== fertDurOrig
 
-  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400'
+  const inputCls = 'field'
 
   if (!zone.deviceId) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <span className="text-5xl text-gray-200 mb-4">🎛️</span>
-        <p className="font-semibold text-gray-700 text-lg">No device connected</p>
-        <p className="text-sm text-gray-400 mt-2 max-w-xs">
+        <Icon name="tune" size={48} className="text-on-surface-variant mb-4" />
+        <p className="text-title-md text-on-surface">No device connected</p>
+        <p className="text-body-md text-on-surface-variant mt-2 max-w-xs">
           Connect a device to this zone from the Overview tab to access automation controls.
         </p>
       </div>
@@ -218,27 +214,29 @@ export default function AutomationTab({ zone }) {
   }
 
   if (loading) {
-    return <p className="text-sm text-gray-400 mt-8 text-center">Loading…</p>
+    return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
   }
 
   return (
     <div className="space-y-6">
       {/* Manual controls */}
       <div>
-        <h3 className="font-bold text-gray-900 mb-3">Manual controls</h3>
+        <h3 className="text-title-md text-on-surface mb-3">Manual controls</h3>
         <div className="grid grid-cols-3 gap-3">
-          {actuators.map(({ label, icon, activeRing, on, onToggle }) => (
+          {actuators.map(({ label, icon, on, onToggle }) => (
             <button
               key={label}
               onClick={onToggle}
-              className={`rounded-2xl border shadow-sm p-4 flex flex-col gap-3 text-left transition-all ring-2 ${
-                on
-                  ? `bg-green-600 border-green-600 ${activeRing} text-white`
-                  : `bg-white border-gray-100 ring-transparent hover:ring-2 hover:${activeRing}`
+              aria-pressed={on}
+              className={`state-layer rounded-xl p-4 flex flex-col gap-3 text-left transition-colors ${
+                on ? 'bg-primary text-on-primary shadow-elevation-1' : 'bg-surface-container-high text-on-surface-variant'
               }`}
             >
-              <span className="text-2xl">{icon}</span>
-              <span className={`text-sm font-bold ${on ? 'text-white' : 'text-gray-700'}`}>{label}</span>
+              <Icon name={icon} filled={on} size={32} />
+              <span className="flex items-center justify-between text-label-lg">
+                {label}
+                <span className="text-label-sm">{on ? 'ON' : 'OFF'}</span>
+              </span>
             </button>
           ))}
         </div>
@@ -247,55 +245,59 @@ export default function AutomationTab({ zone }) {
       {/* Automation toggles */}
       <div>
         <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="font-bold text-gray-900">Automation settings</h3>
+          <h3 className="text-title-md text-on-surface">Automation settings</h3>
           <button
             onClick={requestAiPlan}
             disabled={aiLoading}
-            className="text-sm font-medium px-3 py-1.5 rounded-xl bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:opacity-50"
+            className="btn-tonal"
           >
-            {aiLoading ? 'Thinking…' : '✨ Use AI recommendation'}
+            <Icon name="auto_awesome" />
+            {aiLoading ? 'Thinking…' : 'Use AI recommendation'}
           </button>
         </div>
 
         {aiPlan && (
-          <div className="bg-brand-50/60 border border-brand-100 rounded-2xl p-4 mb-4">
+          <div className="card-outlined p-4 mb-4">
             {aiPlan.source === 'error' || !aiPlan.plan ? (
-              <p className="text-sm text-gray-600">Couldn’t reach the AI service. Try again in a moment.</p>
+              <p className="text-sm text-on-surface-variant">Couldn’t reach the AI service. Try again in a moment.</p>
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2 mb-2">
-                  <p className="text-sm font-semibold text-gray-800">Suggested automation plan</p>
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-brand-100 text-brand-700">
+                  <p className="flex items-center gap-2 text-title-sm text-on-surface"><Icon name="auto_awesome" size={18} className="text-primary" />Suggested automation plan</p>
+                  <span className="text-label-sm px-1.5 rounded bg-primary-container text-on-primary-container">
                     {aiPlan.source === 'ai' ? 'AI' : 'Auto'}
                   </span>
                 </div>
                 <div className="space-y-1">
                   {planRows.map(([label, cur, next]) => (
                     <div key={label} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="text-gray-500">{label}</span>
-                      <span className="text-gray-700">
-                        <span className="text-gray-400">{String(cur)}</span>
-                        <span className="mx-1.5 text-gray-300">→</span>
-                        <span className="font-medium">{String(next)}</span>
+                      <span className="text-on-surface-variant">{label}</span>
+                      <span className="text-on-surface-variant">
+                        <span className="text-on-surface-variant">{String(cur)}</span>
+                        <Icon name="arrow_forward" size={14} className="mx-1.5 align-middle" />
+                        <span className="font-medium text-on-surface">{String(next)}</span>
                       </span>
                     </div>
                   ))}
                 </div>
                 {aiPlan.rationale?.length > 0 && (
-                  <ul className="mt-3 space-y-1 text-xs text-gray-500 list-disc list-inside">
+                  <ul className="mt-3 space-y-1 text-xs text-on-surface-variant list-disc list-inside">
                     {aiPlan.rationale.map((r, i) => <li key={i}>{r.text}</li>)}
                   </ul>
                 )}
-                <div className="flex gap-3 mt-4">
+                {configError && (
+                  <p role="alert" className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mt-3">{configError}</p>
+                )}
+                <div className="flex justify-end gap-2 mt-4">
                   <button
                     onClick={() => setAiPlan(null)}
-                    className="flex-1 border border-gray-300 rounded-xl py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                    className="btn-text"
                   >
                     Dismiss
                   </button>
                   <button
                     onClick={() => applyAiPlan(aiPlan.plan)}
-                    className="flex-1 bg-brand-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-brand-700"
+                    className="btn-filled"
                   >
                     Apply
                   </button>
@@ -313,7 +315,7 @@ export default function AutomationTab({ zone }) {
             busy={savingToggle.autoWateringEnabled}
             onChange={(v) => { setAutoWater(v); saveToggle({ autoWateringEnabled: v }, () => setAutoWater(!v)) }}
           >
-            <label className="block text-sm font-medium text-gray-700 mb-1">Moisture threshold (%)</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Moisture threshold (%)</label>
             <input
               type="number"
               value={waterThresh}
@@ -321,7 +323,7 @@ export default function AutomationTab({ zone }) {
               className={inputCls}
               placeholder="e.g. 30"
             />
-            <label className="block text-sm font-medium text-gray-700 mb-1 mt-3">Daily schedule (e.g. 07:00)</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1 mt-3">Daily schedule (e.g. 07:00)</label>
             <input
               type="text"
               value={waterSched}
@@ -329,7 +331,7 @@ export default function AutomationTab({ zone }) {
               className={inputCls}
               placeholder="07:00"
             />
-            <label className="block text-sm font-medium text-gray-700 mb-1 mt-3">Duration (seconds)</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1 mt-3">Duration (seconds)</label>
             <input
               type="number"
               value={waterDuration}
@@ -347,7 +349,7 @@ export default function AutomationTab({ zone }) {
               busy={savingToggle.autoLightingEnabled}
               onChange={(v) => { setAutoLight(v); saveToggle({ autoLightingEnabled: v }, () => setAutoLight(!v)) }}
             >
-              <label className="block text-sm font-medium text-gray-700 mb-1">Schedule (e.g. 08:00–18:00)</label>
+              <label className="block text-label-lg text-on-surface-variant mb-1">Schedule (e.g. 08:00–18:00)</label>
               <input
                 type="text"
                 value={lightSched}
@@ -366,7 +368,7 @@ export default function AutomationTab({ zone }) {
               busy={savingToggle.autoFertilizingEnabled}
               onChange={(v) => { setAutoFert(v); saveToggle({ autoFertilizingEnabled: v }, () => setAutoFert(!v)) }}
             >
-              <label className="block text-sm font-medium text-gray-700 mb-1">Weekly schedule (e.g. MON 06:00)</label>
+              <label className="block text-label-lg text-on-surface-variant mb-1">Weekly schedule (e.g. MON 06:00)</label>
               <input
                 type="text"
                 value={fertSched}
@@ -374,7 +376,7 @@ export default function AutomationTab({ zone }) {
                 className={inputCls}
                 placeholder="MON 06:00"
               />
-              <label className="block text-sm font-medium text-gray-700 mb-1 mt-3">Duration (seconds)</label>
+              <label className="block text-label-lg text-on-surface-variant mb-1 mt-3">Duration (seconds)</label>
               <input
                 type="number"
                 value={fertDuration}
@@ -386,21 +388,21 @@ export default function AutomationTab({ zone }) {
           )}
         </div>
 
-        {configError && (
-          <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mt-4">{configError}</p>
+        {configError && !aiPlan?.plan && (
+          <p role="alert" className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mt-4">{configError}</p>
         )}
 
         {isDirty && (
-          <div className="flex gap-3 mt-4">
+          <div className="flex justify-end gap-2 mt-4">
             <button
               onClick={cancelTextConfig}
-              className="flex-1 border border-gray-300 rounded-xl py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              className="btn-text"
             >
               Cancel
             </button>
             <button
               onClick={saveTextConfig}
-              className="flex-1 bg-brand-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-brand-700"
+              className="btn-filled"
             >
               Save
             </button>

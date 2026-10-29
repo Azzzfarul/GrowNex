@@ -4,10 +4,13 @@ import {
   setDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../../firebase'
+import StatusLabel from '../../components/ui/StatusLabel'
+import Icon from '../../components/ui/Icon'
 import { useAuth } from '../../context/AuthContext'
 import { fetchPlantProfile } from '../../lib/aiSummary'
 import { zoneFitHint } from '../../lib/zoneFit'
 import { plantHealth, plantHealthSummary } from '../../lib/plantHealth'
+import { scoreBadge, plantStatus } from '../../lib/analytics'
 import { uploadPlantPhoto, removePlantPhoto, removePlantPhotoFile } from '../../lib/photoUpload'
 
 const MAX_PLANTS = 4
@@ -20,15 +23,6 @@ const ZONE_HINT_REASON = {
   moisture:    'prefers different soil moisture than',
 }
 
-function statusColor(status) {
-  switch (status?.toLowerCase()) {
-    case 'healthy':         return 'bg-green-100 text-green-700'
-    case 'wilting':         return 'bg-red-100 text-red-700'
-    case 'needs attention': return 'bg-orange-100 text-orange-700'
-    case 'stable':          return 'bg-teal-100 text-teal-700'
-    default:                return 'bg-gray-100 text-gray-600'
-  }
-}
 
 function MoistureBar({ moisture, min, max }) {
   if (moisture == null) return null
@@ -36,15 +30,15 @@ function MoistureBar({ moisture, min, max }) {
   const inRange  = hasRange && moisture >= min && moisture <= max
   const tooLow   = hasRange && moisture < min
 
-  const color = !hasRange ? 'text-blue-500'
-    : inRange ? 'text-green-600'
-    : tooLow  ? 'text-orange-500'
-    : 'text-red-500'
+  const color = !hasRange ? 'text-tertiary'
+    : inRange ? 'text-primary'
+    : tooLow  ? 'text-warning'
+    : 'text-error'
 
-  const barColor = !hasRange ? 'bg-blue-400'
-    : inRange ? 'bg-green-500'
-    : tooLow  ? 'bg-orange-400'
-    : 'bg-red-500'
+  const barColor = !hasRange ? 'bg-tertiary'
+    : inRange ? 'bg-primary'
+    : tooLow  ? 'bg-warning'
+    : 'bg-error'
 
   const label = !hasRange ? null
     : inRange ? 'Within preferred range'
@@ -52,12 +46,12 @@ function MoistureBar({ moisture, min, max }) {
     : 'Too wet'
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-50">
+    <div className="mt-3 pt-3 border-t border-outline-variant">
       <div className="flex justify-between text-xs mb-1.5">
-        <span className="text-gray-400">Soil moisture</span>
-        <span className={`font-semibold ${color}`}>{Number(moisture).toFixed(1)}%</span>
+        <span className="text-on-surface-variant">Soil moisture</span>
+        <span className={`font-medium ${color}`}>{Number(moisture).toFixed(1)}%</span>
       </div>
-      <div className="w-full bg-gray-100 rounded-full h-2">
+      <div className="w-full bg-surface-container-high rounded-full h-2">
         <div
           className={`h-2 rounded-full transition-all ${barColor}`}
           style={{ width: `${Math.min(Math.max(moisture, 0), 100)}%` }}
@@ -65,7 +59,7 @@ function MoistureBar({ moisture, min, max }) {
       </div>
       {label && <p className={`text-xs mt-1 ${color}`}>{label}</p>}
       {hasRange && (
-        <p className="text-xs text-gray-300 mt-0.5">Ideal: {Number(min).toFixed(0)}–{Number(max).toFixed(0)}%</p>
+        <p className="text-xs text-on-surface-variant mt-0.5">Ideal: {Number(min).toFixed(0)}–{Number(max).toFixed(0)}%</p>
       )}
     </div>
   )
@@ -75,8 +69,8 @@ function MoistureBar({ moisture, min, max }) {
 function SlotPicker({ takenSlots, selected, onChange }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">Plant slot</label>
-      <p className="text-xs text-gray-400 mb-3">Select an available slot for this plant.</p>
+      <label className="block text-label-lg text-on-surface-variant mb-2">Plant slot</label>
+      <p className="text-xs text-on-surface-variant mb-3">Select an available slot for this plant.</p>
       <div className="flex gap-2">
         {[1, 2, 3, 4].map((slot) => {
           const isTaken    = takenSlots.has(slot)
@@ -87,28 +81,23 @@ function SlotPicker({ takenSlots, selected, onChange }) {
               type="button"
               disabled={isTaken}
               onClick={() => onChange(isSelected ? null : slot)}
-              className={`w-16 h-16 rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all ${
+              aria-pressed={isSelected}
+              className={`state-layer w-16 h-16 rounded-xl border flex flex-col items-center justify-center gap-1 ${
                 isTaken
-                  ? 'bg-gray-50 border-gray-200 cursor-not-allowed opacity-60'
+                  ? 'border-on-surface/[.12] text-on-surface/[.38] cursor-not-allowed'
                   : isSelected
-                    ? 'bg-green-600 border-green-600'
-                    : 'bg-white border-gray-200 hover:border-green-400'
+                    ? 'bg-secondary-container border-secondary-container text-on-secondary-container'
+                    : 'border-outline text-on-surface-variant'
               }`}
             >
-              <span className={`text-lg ${isTaken ? 'grayscale' : ''}`}>
-                {isTaken ? '🚫' : '🌱'}
-              </span>
-              <span className={`text-xs font-semibold ${
-                isTaken ? 'text-gray-400' : isSelected ? 'text-white' : 'text-gray-700'
-              }`}>
-                Slot {slot}
-              </span>
+              <Icon name={isTaken ? 'block' : isSelected ? 'check_circle' : 'potted_plant'} filled={isSelected} size={20} />
+              <span className="text-label-md">Slot {slot}</span>
             </button>
           )
         })}
       </div>
       {selected == null && (
-        <p className="text-xs text-gray-400 mt-2">No slot selected</p>
+        <p className="text-xs text-on-surface-variant mt-2">No slot selected</p>
       )}
     </div>
   )
@@ -122,7 +111,7 @@ function ConditionFields({ prefs, onChange }) {
         type="number"
         value={prefs[key] ?? ''}
         onChange={(e) => onChange({ ...prefs, [key]: e.target.value === '' ? null : parseFloat(e.target.value) })}
-        className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+        className="field w-full"
         placeholder="—"
         step="0.1"
       />
@@ -137,20 +126,20 @@ function ConditionFields({ prefs, onChange }) {
         { label: 'Temperature (°C)', min: 'preferredTemperatureMin', max: 'preferredTemperatureMax' },
       ].map(({ label, min, max }) => (
         <div key={label}>
-          <p className="text-xs font-semibold text-gray-600 mb-1.5">{label}</p>
+          <p className="text-xs font-medium text-on-surface-variant mb-1.5">{label}</p>
           <div className="flex items-center gap-2">
             {field(min)}
-            <span className="text-gray-400 text-sm font-bold">–</span>
+            <span className="text-on-surface-variant text-sm font-medium">–</span>
             {field(max)}
           </div>
         </div>
       ))}
       <div>
-        <p className="text-xs font-semibold text-gray-600 mb-1.5">Light condition</p>
+        <p className="text-xs font-medium text-on-surface-variant mb-1.5">Light condition</p>
         <select
           value={prefs.preferredLightCondition ?? ''}
           onChange={(e) => onChange({ ...prefs, preferredLightCondition: e.target.value || null })}
-          className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 bg-white capitalize"
+          className="field w-full capitalize"
         >
           {LIGHT_OPTIONS.map((o) => (
             <option key={o} value={o}>{o || 'Not specified'}</option>
@@ -275,110 +264,112 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl p-6 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-end sm:items-center justify-center p-4">
+      <div className="dialog w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-gray-900">Add plant</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+          <h2 className="text-headline-sm text-on-surface">Add plant</h2>
+          <button onClick={onClose} className="icon-btn" aria-label="Close"><Icon name="close" /></button>
         </div>
 
         {errors.submit && (
-          <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-4">{errors.submit}</p>
+          <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">{errors.submit}</p>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="w-16 h-16 rounded-xl bg-surface-container-highest flex items-center justify-center overflow-hidden shrink-0">
               {photoPreview ? (
                 <img src={photoPreview} alt="Plant preview" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-2xl text-gray-300">🌿</span>
+                <Icon name="add_photo_alternate" className="text-on-surface-variant" />
               )}
             </div>
-            <label className="text-sm font-medium text-brand-700 hover:text-brand-800 cursor-pointer">
-              {photoFile ? 'Change photo' : 'Add photo'} <span className="text-gray-400 font-normal">(optional)</span>
+            <label className="btn-text cursor-pointer">
+              {photoFile ? 'Change photo' : 'Add photo'} <span className="text-on-surface-variant font-normal">(optional)</span>
               <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
             </label>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Species <span className="text-red-500">*</span>
+            <label className="block text-label-lg text-on-surface-variant mb-1">
+              Species <span className="text-error">*</span>
             </label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={species}
                 onChange={(e) => { setSpecies(e.target.value); setAiMeta(null) }}
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                className="field flex-1"
                 placeholder="e.g. Phalaenopsis"
               />
               <button
                 type="button"
                 onClick={suggestConditions}
                 disabled={aiLoading || species.trim().length < 3}
-                className="shrink-0 text-sm font-medium px-3 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:opacity-40"
+                className="btn-tonal h-12 px-4 shrink-0"
               >
-                {aiLoading ? '…' : '✨ Suggest'}
+                <Icon name="auto_awesome" />
+                {aiLoading ? '…' : 'Suggest'}
               </button>
             </div>
-            {errors.species && <p className="text-xs text-red-500 mt-1">{errors.species}</p>}
+            {errors.species && <p className="text-xs text-error mt-1">{errors.species}</p>}
             {aiMeta?.source === 'fallback' || aiMeta?.source === 'error' ? (
-              <p className="text-xs text-gray-400 mt-1">Couldn’t fetch suggestions — enter the conditions manually.</p>
+              <p className="text-xs text-on-surface-variant mt-1">Couldn’t fetch suggestions — enter the conditions manually.</p>
             ) : aiMeta ? (
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-on-surface-variant mt-1">
                 {aiMeta.commonName
                   ? <>Interpreted as <span className="font-medium">{aiMeta.commonName}</span>. </>
                   : null}
-                {aiMeta.confidence === 'low' && <span className="text-orange-500">Low-confidence guess — double-check these. </span>}
+                {aiMeta.confidence === 'low' && <span className="text-warning">Low-confidence guess — double-check these. </span>}
                 {aiMeta.careNotes && <span>Care tips added to Notes below. </span>}
               </p>
             ) : (
-              <p className="text-xs text-gray-400 mt-1">
-                ✨ Suggest fills in the preferred conditions below and adds care tips for this species to Notes.
+              <p className="text-xs text-on-surface-variant mt-1">
+                Suggest fills in the preferred conditions below and adds care tips for this species to Notes.
               </p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Plant nickname <span className="text-gray-400">(optional)</span>
+            <label className="block text-label-lg text-on-surface-variant mb-1">
+              Plant nickname <span className="text-on-surface-variant">(optional)</span>
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="field w-full"
               placeholder="e.g. My Orchid"
             />
           </div>
 
           <div>
             <SlotPicker takenSlots={takenSlots} selected={selectedSlot} onChange={setSelectedSlot} />
-            {errors.slot && <p className="text-xs text-red-500 mt-1">{errors.slot}</p>}
+            {errors.slot && <p className="text-xs text-error mt-1">{errors.slot}</p>}
           </div>
 
           {/* Preferred conditions — collapsible */}
-          <div className="border border-gray-100 rounded-xl overflow-hidden">
+          <div className="border border-outline-variant rounded-xl overflow-hidden">
             <button
               type="button"
               onClick={() => setShowPrefs(!showPrefs)}
-              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              aria-expanded={showPrefs}
+              className="w-full flex items-center justify-between px-4 py-3 text-label-lg text-on-surface state-layer"
             >
               <span className="flex items-center gap-2">
-                <span>⚙️</span> Preferred growing conditions <span className="text-gray-400 font-normal">(optional)</span>
+                <Icon name="tune" size={20} className="text-on-surface-variant" /> Preferred growing conditions <span className="text-on-surface-variant font-normal">(optional)</span>
               </span>
-              <span className="text-gray-400 text-xs">{showPrefs ? '▲' : '▼'}</span>
+              <Icon name={showPrefs ? 'expand_less' : 'expand_more'} className="text-on-surface-variant" />
             </button>
             {showPrefs && (
-              <div className="px-4 pb-4 border-t border-gray-100 pt-4">
+              <div className="px-4 pb-4 border-t border-outline-variant pt-4">
                 {aiMeta && aiMeta.source !== 'fallback' && aiMeta.source !== 'error' ? (
-                  <p className="text-xs text-brand-600 mb-3">
-                    <span className="font-semibold">AI suggestion</span> — adjust as needed. Different growth
+                  <p className="text-xs text-primary mb-3">
+                    <span className="font-medium">AI suggestion</span> — adjust as needed. Different growth
                     stages need different soil moisture and feeding; revisit these as the plant matures.
                   </p>
                 ) : (
-                  <p className="text-xs text-gray-400 mb-3">Helps compute ideal zone environment. Edit any time from plant details.</p>
+                  <p className="text-xs text-on-surface-variant mb-3">Helps compute ideal zone environment. Edit any time from plant details.</p>
                 )}
                 <ConditionFields prefs={prefs} onChange={setPrefs} />
               </div>
@@ -386,11 +377,11 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
           </div>
 
           {zoneHint && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm">
-              <p className="text-amber-800">
+            <div className="bg-warning-container rounded-lg p-3 text-body-md">
+              <p className="text-on-warning-container">
                 This plant {ZONE_HINT_REASON[zoneHint.reason] ?? 'is a poorer fit for'} {zone.zoneName}’s other plants
                 {zoneHint.kind === 'move' ? (
-                  <> — <span className="font-semibold">{zoneHint.zone.zoneName}</span> is a closer match.</>
+                  <> — <span className="font-medium">{zoneHint.zone.zoneName}</span> is a closer match.</>
                 ) : (
                   <>, and none of your other zones suit it either. Consider giving it its own zone.</>
                 )}
@@ -398,25 +389,25 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
               <button
                 type="button"
                 onClick={() => setHintDismissed(true)}
-                className="text-xs text-amber-700 underline mt-1"
+                className="text-xs text-on-warning-container underline mt-1"
               >
                 Dismiss
               </button>
             </div>
           )}
 
-          <div className="flex gap-3 pt-1">
+          <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 border border-gray-200 text-gray-600 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+              className="btn-text"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+              className="btn-filled"
             >
               {loading ? 'Adding…' : 'Add plant'}
             </button>
@@ -428,13 +419,7 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
 }
 
 /* ── Condition block (rule-based per-plant health) ───────────────────── */
-function statScoreBadge(s) {
-  if (s == null) return 'bg-gray-100 text-gray-500'
-  if (s >= 80) return 'bg-green-100 text-green-700'
-  if (s >= 60) return 'bg-yellow-100 text-yellow-700'
-  if (s >= 40) return 'bg-orange-100 text-orange-700'
-  return 'bg-red-100 text-red-700'
-}
+const statScoreBadge = (s) => s == null ? 'bg-surface-container-high text-on-surface-variant' : scoreBadge(s)
 
 function ConditionCard({ plant, zone }) {
   const [readings, setReadings] = useState(null)
@@ -454,14 +439,14 @@ function ConditionCard({ plant, zone }) {
   const h = plantHealth(plant, zone, readings)
 
   return (
-    <div className="bg-gray-50 rounded-xl p-4">
+    <div className="bg-surface-container rounded-xl p-4">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Condition</p>
-        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statScoreBadge(h.score)}`}>
+        <p className="text-label-md text-on-surface-variant">Condition</p>
+        <span className={`inline-flex items-center h-6 px-2.5 rounded-lg text-label-md ${statScoreBadge(h.score)}`}>
           {h.score != null ? `${h.score}%` : '—'}
         </span>
       </div>
-      <p className="text-sm text-gray-600">{plantHealthSummary(h)}</p>
+      <p className="text-sm text-on-surface-variant">{plantHealthSummary(h)}</p>
     </div>
   )
 }
@@ -539,40 +524,41 @@ function PlantDetailModal({ plant, zone, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl p-6 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-end sm:items-center justify-center p-4">
+      <div className="dialog w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-gray-900">Plant details</h2>
-          <div className="flex items-center gap-2">
+          <h2 className="text-headline-sm text-on-surface">Plant details</h2>
+          <div className="flex items-center">
             <button
               onClick={() => setShowDelConfirm(true)}
-              className="text-red-400 hover:text-red-600 text-sm transition-colors"
+              className="icon-btn text-error"
               title="Remove plant"
+              aria-label="Remove plant"
             >
-              🗑
+              <Icon name="delete" />
             </button>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            <button onClick={onClose} className="icon-btn" aria-label="Close"><Icon name="close" /></button>
           </div>
         </div>
 
         {/* Delete confirmation inline */}
         {showDelConfirm && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
-            <p className="text-sm font-medium text-red-700 mb-3">
-              Remove <span className="font-bold">{plant.plantName}</span>? This cannot be undone.
+          <div className="bg-error-container rounded-xl p-4 mb-4">
+            <p className="text-body-md text-on-error-container mb-3">
+              Remove <span className="font-medium">{plant.plantName}</span>? This cannot be undone.
             </p>
-            <div className="flex gap-2">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowDelConfirm(false)}
                 disabled={deleting}
-                className="flex-1 border border-gray-200 text-gray-600 font-medium py-1.5 rounded-lg text-sm hover:bg-white transition-colors disabled:opacity-50"
+                className="btn-text btn-sm text-on-error-container"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-1.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+                className="btn-error btn-sm"
               >
                 {deleting ? 'Removing…' : 'Remove'}
               </button>
@@ -580,15 +566,15 @@ function PlantDetailModal({ plant, zone, onClose }) {
           </div>
         )}
 
-        <div className="w-full h-36 rounded-xl bg-gray-100 flex items-center justify-center mb-2 overflow-hidden">
+        <div className="w-full h-36 rounded-xl bg-surface-container-high flex items-center justify-center mb-2 overflow-hidden">
           {photoUrl ? (
             <img src={photoUrl} alt={plant.plantName} className="w-full h-full object-contain" />
           ) : (
-            <span className="text-5xl text-gray-300">🌿</span>
+            <Icon name="local_florist" size={48} className="text-on-surface-variant" />
           )}
         </div>
         <div className="flex items-center gap-3 mb-5">
-          <label className="text-xs font-medium text-brand-700 hover:text-brand-800 cursor-pointer">
+          <label className="btn-text btn-sm cursor-pointer">
             {photoBusy ? 'Working…' : photoUrl ? 'Change photo' : 'Add photo'}
             <input
               type="file"
@@ -604,20 +590,18 @@ function PlantDetailModal({ plant, zone, onClose }) {
               type="button"
               onClick={handleRemovePhoto}
               disabled={photoBusy}
-              className="text-xs font-medium text-red-400 hover:text-red-600 disabled:opacity-50"
+              className="btn-text btn-sm text-error"
             >
               Remove
             </button>
           )}
         </div>
-        {photoError && <p className="text-xs text-red-500 mb-3">{photoError}</p>}
+        {photoError && <p className="text-xs text-error mb-3">{photoError}</p>}
 
         <div className="flex gap-2 mb-5 flex-wrap">
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${statusColor(plant.status)}`}>
-            {plant.status}
-          </span>
+          {plantStatus(zone, plant) && <StatusLabel status={plantStatus(zone, plant)} />}
           {plant.slotNumber > 0 && (
-            <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
+            <span className="inline-flex items-center h-6 px-2.5 rounded-lg border border-outline-variant text-label-md text-on-surface-variant">
               Slot {plant.slotNumber}
             </span>
           )}
@@ -625,27 +609,27 @@ function PlantDetailModal({ plant, zone, onClose }) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => { setName(e.target.value); setSaved(false) }}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="field w-full"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Species</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Species</label>
             <input
               type="text"
               value={species}
               onChange={(e) => { setSpecies(e.target.value); setSaved(false) }}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="field w-full"
             />
           </div>
 
           {/* Preferred conditions — editable */}
-          <div className="bg-gray-50 rounded-xl p-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          <div className="bg-surface-container rounded-xl p-4">
+            <p className="text-label-md text-on-surface-variant mb-3">
               Preferred growing conditions
             </p>
             <ConditionFields prefs={prefs} onChange={(p) => { setPrefs(p); setSaved(false) }} />
@@ -654,12 +638,12 @@ function PlantDetailModal({ plant, zone, onClose }) {
           {zone && <ConditionCard plant={plant} zone={zone} />}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Notes</label>
             <textarea
               value={notes}
               onChange={(e) => { setNotes(e.target.value); setSaved(false) }}
               rows={4}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
+              className="field w-full resize-none"
               placeholder="Enter notes"
             />
           </div>
@@ -667,9 +651,9 @@ function PlantDetailModal({ plant, zone, onClose }) {
           <button
             onClick={handleSave}
             disabled={loading}
-            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+            className="btn-filled w-full"
           >
-            {loading ? 'Saving…' : saved ? 'Saved ✓' : 'Save changes'}
+            {loading ? 'Saving…' : saved ? 'Saved' : 'Save changes'}
           </button>
         </div>
       </div>
@@ -699,7 +683,7 @@ export default function PlantsTab({ zone }) {
   const takenSlots = new Set(plants.map((p) => p.slotNumber).filter(Boolean))
 
   if (loading) {
-    return <p className="text-sm text-gray-400 mt-8 text-center">Loading…</p>
+    return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
   }
 
   return (
@@ -719,17 +703,14 @@ export default function PlantsTab({ zone }) {
         <button
           onClick={() => !isFull && setShowAdd(true)}
           disabled={isFull}
-          className={`w-full flex items-center justify-center gap-2 font-medium py-2.5 rounded-xl text-sm transition-colors mb-5 ${
-            isFull
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-brand-600 hover:bg-brand-700 text-white'
-          }`}
+          className="btn-filled w-full mb-5"
         >
-          {isFull ? `🚫 Zone full (${plants.length}/${MAX_PLANTS})` : '+ Add plant'}
+          <Icon name={isFull ? 'block' : 'add'} />
+          {isFull ? `Zone full (${plants.length}/${MAX_PLANTS})` : 'Add plant'}
         </button>
 
         {plants.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-10">No plants in this zone yet.</p>
+          <p className="text-sm text-on-surface-variant text-center py-10">No plants in this zone yet.</p>
         ) : (
           <div className="space-y-3">
             {plants.map((plant) => {
@@ -740,34 +721,32 @@ export default function PlantsTab({ zone }) {
                 <button
                   key={plant.id}
                   onClick={() => setSelected(plant)}
-                  className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-brand-200 hover:shadow-md transition-all"
+                  className="card state-layer w-full text-left p-5"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="shrink-0 w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
+                    <div className="shrink-0 w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center overflow-hidden">
                       {plant.photoUrl ? (
                         <img src={plant.photoUrl} alt={plant.plantName} className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-xl text-gray-300">🌿</span>
+                        <Icon name="local_florist" className="text-on-surface-variant" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between mb-1.5">
-                        <p className="font-bold text-gray-900 text-base">{plant.plantName}</p>
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize flex-shrink-0 ml-2 ${statusColor(plant.status)}`}>
-                          {plant.status}
-                        </span>
+                        <p className="text-title-md text-on-surface">{plant.plantName}</p>
+                        {plantStatus(zone, plant) && <StatusLabel status={plantStatus(zone, plant)} className="ml-2" />}
                       </div>
-                      <p className="text-sm text-gray-500 mb-3">{plant.species}</p>
+                      <p className="text-body-md text-on-surface-variant mb-3">{plant.species}</p>
                     </div>
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     {plant.slotNumber > 0 && (
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
+                      <span className="inline-flex items-center h-6 px-2.5 rounded-lg border border-outline-variant text-label-md text-on-surface-variant">
                         Slot {plant.slotNumber}
                       </span>
                     )}
                     {plant.preferredLightCondition && (
-                      <span className="text-xs bg-amber-50 text-amber-600 px-2.5 py-1 rounded-full capitalize">
+                      <span className="inline-flex items-center h-6 px-2.5 rounded-lg bg-warning-container text-on-warning-container text-label-md capitalize">
                         Light: {plant.preferredLightCondition}
                       </span>
                     )}

@@ -50,9 +50,10 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
         try {
           await PhotoService().uploadZonePhoto(zone.id, _photoFile!);
         } catch (e) {
+          debugPrint('Zone created, but photo upload failed: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Zone created, but photo upload failed: $e')),
+              SnackBar(content: Text('Zone created, but the photo upload failed.')),
             );
           }
         }
@@ -60,8 +61,9 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
 
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
+      debugPrint('Failed to create zone: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create zone: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create zone. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -69,19 +71,20 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
   }
 
   Widget _buildPhotoPicker() {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
           width: 64,
           height: 64,
           decoration: BoxDecoration(
-            color: Colors.grey[100],
+            color: cs.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(14),
           ),
           clipBehavior: Clip.antiAlias,
           child: _photoFile != null
               ? Image.file(File(_photoFile!.path), fit: BoxFit.cover)
-              : Icon(Icons.photo_outlined, size: 28, color: Colors.grey[400]),
+              : Icon(Icons.photo_outlined, size: 28, color: cs.onSurfaceVariant),
         ),
         const SizedBox(width: 12),
         TextButton(
@@ -120,11 +123,11 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Add Zone'),
-        backgroundColor: Colors.green[700],
-        foregroundColor: Colors.white,
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -155,24 +158,19 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'You can assign a device to this zone after creation from the zone\'s Overview tab.',
-                style: TextStyle(color: Colors.black45, fontSize: 12),
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: FilledButton(
                   onPressed: _loading ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[700],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     child: _loading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Text('Create zone'),
                   ),
                 ),

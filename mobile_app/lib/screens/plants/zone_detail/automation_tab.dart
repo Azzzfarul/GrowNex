@@ -91,7 +91,8 @@ class _AutomationTabState extends State<AutomationTab> {
     try {
       config = await _configService.getConfig(widget.zone.id);
     } catch (e) {
-      if (mounted) setState(() => _loadError = 'Could not load automation settings.\n$e');
+      debugPrint('Could not load automation settings: $e');
+      if (mounted) setState(() => _loadError = 'Could not load automation settings.');
       return;
     }
     if (!mounted) return;
@@ -129,9 +130,10 @@ class _AutomationTabState extends State<AutomationTab> {
     try {
       await _configService.saveFields(widget.zone.id, {field: value});
     } catch (e) {
+      debugPrint('Failed to save: $e');
       if (!mounted) return;
       setState(revert);
-      _snack('Failed to save: $e');
+      _snack('Failed to save. Please try again.');
     } finally {
       if (mounted) setState(() => _savingToggles.remove(field));
     }
@@ -162,7 +164,8 @@ class _AutomationTabState extends State<AutomationTab> {
         'fertilizingDuration': int.tryParse(_fertilizingDurationCtrl.text.trim()),
       });
     } catch (e) {
-      if (mounted) _snack('Failed to save: $e');
+      debugPrint('Failed to save: $e');
+      if (mounted) _snack('Failed to save. Please try again.');
       return;
     }
     if (!mounted) return;
@@ -237,6 +240,7 @@ class _AutomationTabState extends State<AutomationTab> {
   }
 
   Widget _buildAiPlanPreview() {
+    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
     final result = _aiPlan!;
     if (result.plan == null) {
@@ -269,24 +273,25 @@ class _AutomationTabState extends State<AutomationTab> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.25)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(child: Text('Suggested automation plan', style: TextStyle(fontWeight: FontWeight.w600))),
+              Icon(Icons.auto_awesome, size: 18, color: cs.primary),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Suggested automation plan', style: tt.titleSmall)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.14),
+                  color: cs.primaryContainer,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(result.source == 'ai' ? 'AI' : 'Auto',
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: cs.primary)),
+                    style: tt.labelSmall?.copyWith(color: cs.onPrimaryContainer)),
               ),
             ],
           ),
@@ -295,10 +300,13 @@ class _AutomationTabState extends State<AutomationTab> {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Row(
                   children: [
-                    Expanded(child: Text(r[0], style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 13))),
-                    Text(r[1], style: TextStyle(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 13)),
-                    Text('  →  ', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 13)),
-                    Text(r[2], style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    Expanded(child: Text(r[0], style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant))),
+                    Text(r[1], style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Icon(Icons.arrow_forward, size: 14, color: cs.onSurfaceVariant),
+                    ),
+                    Text(r[2], style: tt.labelLarge),
                   ],
                 ),
               )),
@@ -307,7 +315,7 @@ class _AutomationTabState extends State<AutomationTab> {
             ...result.rationale.map((r) => Padding(
                   padding: const EdgeInsets.only(bottom: 3),
                   child: Text('• ${r.text}',
-                      style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 )),
           ],
           const SizedBox(height: 12),
@@ -321,10 +329,9 @@ class _AutomationTabState extends State<AutomationTab> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: ElevatedButton(
+                child: FilledButton(
                   onPressed: () => _applyAiPlan(plan),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
-                  child: const Text('Apply', style: TextStyle(color: Colors.white)),
+                  child: const Text('Apply'),
                 ),
               ),
             ],
@@ -336,6 +343,8 @@ class _AutomationTabState extends State<AutomationTab> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     if (widget.zone.deviceId == null) {
       return Center(
         child: Padding(
@@ -343,14 +352,14 @@ class _AutomationTabState extends State<AutomationTab> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.settings_remote, size: 64, color: Colors.grey[350]),
+              Icon(Icons.settings_remote, size: 64, color: cs.outlineVariant),
               const SizedBox(height: 20),
-              const Text('No device connected', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text('No device connected', style: tt.titleMedium),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'Connect a device to this zone from the Overview tab to access automation controls.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.black54),
+                style: TextStyle(color: cs.onSurfaceVariant),
               ),
             ],
           ),
@@ -383,6 +392,7 @@ class _AutomationTabState extends State<AutomationTab> {
     return StreamBuilder<Device?>(
       stream: _deviceStream,
       builder: (context, snap) {
+        final tt = Theme.of(context).textTheme;
         final device   = snap.data;
         final hasFert  = device?.hasFertilizerModule ?? false;
         final hasLight = device?.hasLightingModule   ?? false;
@@ -395,41 +405,41 @@ class _AutomationTabState extends State<AutomationTab> {
         return ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text('Manual controls', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('Manual controls', style: tt.titleMedium),
             const SizedBox(height: 12),
             if (hasFert)
               Row(
                 children: [
-                  Expanded(child: _buildActionCard('Water', Icons.water_drop, Colors.blue,
+                  Expanded(child: _buildActionCard('Water', Icons.water_drop,
                     isOn: isWaterOn,
                     onToggle: () => svc.updateIrrigationState(deviceId, !isWaterOn))),
                   const SizedBox(width: 12),
-                  Expanded(child: _buildActionCard('Fertilize', Icons.grass, Colors.amber,
+                  Expanded(child: _buildActionCard('Fertilize', Icons.grass,
                     isOn: isFertOn,
                     onToggle: () => svc.updateFertilizerState(deviceId, !isFertOn))),
                 ],
               )
             else
-              _buildActionCard('Water', Icons.water_drop, Colors.blue,
+              _buildActionCard('Water', Icons.water_drop,
                 isOn: isWaterOn,
                 onToggle: () => svc.updateIrrigationState(deviceId, !isWaterOn)),
             if (hasLight) ...[
               const SizedBox(height: 12),
-              _buildActionCard('Light', Icons.sunny, Colors.orange,
+              _buildActionCard('Light', Icons.sunny,
                 isOn: isLightOn,
                 onToggle: () => svc.updateLightState(deviceId, !isLightOn)),
             ],
             const SizedBox(height: 24),
             Row(
               children: [
-                const Expanded(
-                  child: Text('Automation settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Expanded(
+                  child: Text('Automation settings', style: tt.titleMedium),
                 ),
-                TextButton.icon(
+                FilledButton.tonalIcon(
                   onPressed: _aiLoading ? null : _requestAiPlan,
                   icon: _aiLoading
                       ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('✨', style: TextStyle(fontSize: 14)),
+                      : const Icon(Icons.auto_awesome),
                   label: Text(_aiLoading ? 'Thinking…' : 'Use AI recommendation'),
                 ),
               ],
@@ -534,10 +544,9 @@ class _AutomationTabState extends State<AutomationTab> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: ElevatedButton(
+                    child: FilledButton(
                       onPressed: _saveTextConfig,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
-                      child: const Text('Save', style: TextStyle(color: Colors.white)),
+                      child: const Text('Save'),
                     ),
                   ),
                 ],
@@ -549,17 +558,17 @@ class _AutomationTabState extends State<AutomationTab> {
     );
   }
 
-  Widget _buildActionCard(String title, IconData icon, Color color, {required bool isOn, required VoidCallback onToggle}) {
+  // M3 toggle tile: primary when the actuator is on, a tonal surface when off
+  Widget _buildActionCard(String title, IconData icon, {required bool isOn, required VoidCallback onToggle}) {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: 110,
-      child: ElevatedButton(
+      child: FilledButton(
         onPressed: onToggle,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isOn ? Colors.green[700] : cs.surfaceContainer,
-          foregroundColor: isOn ? Colors.white : color,
-          elevation: 1,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        style: FilledButton.styleFrom(
+          backgroundColor: isOn ? cs.primary : cs.surfaceContainerHigh,
+          foregroundColor: isOn ? cs.onPrimary : cs.onSurfaceVariant,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           padding: const EdgeInsets.all(16),
         ),
         child: Column(
@@ -567,7 +576,12 @@ class _AutomationTabState extends State<AutomationTab> {
           children: [
             Icon(icon, size: 28),
             const SizedBox(height: 16),
-            Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isOn ? Colors.white : color)),
+            Row(
+              children: [
+                Expanded(child: Text(title)),
+                Text(isOn ? 'ON' : 'OFF', style: const TextStyle(fontSize: 11)),
+              ],
+            ),
           ],
         ),
       ),
@@ -583,28 +597,25 @@ class _AutomationTabState extends State<AutomationTab> {
     required Widget expandedContent,
   }) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold))),
-              Switch(value: value, onChanged: busy ? null : onChanged, activeThumbColor: Colors.green[700]),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium)),
+                Switch(value: value, onChanged: busy ? null : onChanged),
+              ],
+            ),
+            Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant)),
+            if (value) ...[
+              const SizedBox(height: 14),
+              expandedContent,
             ],
-          ),
-          Text(subtitle, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
-          if (value) ...[
-            const SizedBox(height: 14),
-            expandedContent,
           ],
-        ],
+        ),
       ),
     );
   }

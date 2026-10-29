@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import Icon from '../components/ui/Icon'
 
 function ForgotPasswordModal({ initialEmail, onClose }) {
   const { resetPassword } = useAuth()
@@ -25,43 +26,43 @@ function ForgotPasswordModal({ initialEmail, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Reset password</h2>
-        <p className="text-sm text-gray-500 mb-5">
+    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
+      <div className="dialog w-full max-w-sm p-6">
+        <h2 className="text-headline-sm text-on-surface mb-4">Reset password</h2>
+        <p className="text-sm text-on-surface-variant mb-5">
           Enter your email and we'll send you a link to reset your password.
         </p>
         {sent ? (
-          <p className="text-sm text-green-600 bg-green-50 rounded-lg px-3 py-2 mb-4">
+          <p className="text-sm text-on-secondary-container bg-secondary-container rounded-lg px-3 py-2 mb-4">
             Check your inbox — a reset link has been sent.
           </p>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm text-gray-500 mb-1">Email</label>
+              <label className="block text-label-lg text-on-surface-variant mb-1">Email</label>
               <input
                 type="email"
                 autoFocus
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="field w-full"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             {error && (
-              <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+              <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2">{error}</p>
             )}
-            <div className="flex gap-3">
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                className="btn-text"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={sending}
-                className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
+                className="btn-filled"
               >
                 {sending ? 'Sending…' : 'Send link'}
               </button>
@@ -69,12 +70,9 @@ function ForgotPasswordModal({ initialEmail, onClose }) {
           </form>
         )}
         {sent && (
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            Close
-          </button>
+          <div className="flex justify-end">
+            <button onClick={onClose} className="btn-text">Close</button>
+          </div>
         )}
       </div>
     </div>
@@ -110,55 +108,61 @@ export default function LoginPage() {
     try {
       await login(email, password)
       navigate('/dashboard')
-    } catch {
-      setAuthError('Invalid email or password.')
+    } catch (err) {
+      setAuthError(
+        err.code === 'auth/network-request-failed' ? "Can't reach the server. Check your connection and try again."
+        : err.code === 'auth/too-many-requests' ? 'Too many attempts. Wait a moment and try again.'
+        : err.code === 'auth/user-disabled' ? 'This account has been disabled.'
+        : ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'].includes(err.code)
+          ? 'Invalid email or password.'
+          : 'Sign-in failed. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+    <div className="min-h-screen bg-surface-container flex items-center justify-center p-4">
+      <div className="card w-full max-w-sm p-8">
         <div className="flex items-center gap-2 mb-8">
-          <span className="text-3xl">🌱</span>
-          <span className="text-xl font-bold text-brand-700">GrowNex</span>
+          <Icon name="eco" filled className="text-primary" size={32} />
+          <span className="text-title-lg text-on-surface">GrowNex</span>
         </div>
 
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h1>
-        <p className="text-sm text-gray-500 mb-6">Sign in to manage your plants, devices, and analytics.</p>
+        <h1 className="text-headline-sm text-on-surface mb-1">Sign in</h1>
+        <p className="text-sm text-on-surface-variant mb-6">Manage your plants, devices, and analytics.</p>
 
         {authError && (
-          <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-4">{authError}</p>
+          <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">{authError}</p>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="field w-full"
               placeholder="you@example.com"
             />
-            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+            {errors.email && <p className="text-xs text-error mt-1">{errors.email}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label className="block text-label-lg text-on-surface-variant mb-1">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="field w-full"
               placeholder="Enter your password"
             />
-            {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password}</p>}
+            {errors.password && <p className="text-xs text-error mt-1">{errors.password}</p>}
             <div className="text-right">
               <button
                 type="button"
                 onClick={() => setShowForgot(true)}
-                className="text-xs text-brand-600 hover:underline"
+                className="text-xs text-primary hover:underline"
               >
                 Forgot password?
               </button>
@@ -167,15 +171,15 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60"
+            className="btn-filled w-full"
           >
             {loading ? 'Signing in…' : 'Login'}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-500">
+        <p className="mt-6 text-center text-sm text-on-surface-variant">
           Don't have an account?{' '}
-          <Link to="/register" className="text-brand-600 hover:underline font-medium">
+          <Link to="/register" className="text-primary hover:underline font-medium">
             Register
           </Link>
         </p>

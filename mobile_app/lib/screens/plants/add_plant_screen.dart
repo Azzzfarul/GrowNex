@@ -11,6 +11,7 @@ import '../../services/ai_summary_service.dart';
 import '../../services/firestore/plant_service.dart';
 import '../../services/photo_service.dart';
 import '../../utils/zone_fit.dart';
+import '../../theme.dart';
 
 class AddPlantScreen extends StatefulWidget {
   final String zoneId;
@@ -173,17 +174,19 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         try {
           await PhotoService().uploadPlantPhoto(plant.id, _photoFile!);
         } catch (e) {
+          debugPrint('Plant created, but photo upload failed: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Plant created, but photo upload failed: $e')),
+              SnackBar(content: Text('Plant created, but the photo upload failed.')),
             );
           }
         }
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
+      debugPrint('Failed to add plant: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add plant: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add plant. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -195,27 +198,28 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Add Plant'),
-        backgroundColor: Colors.green[700],
       ),
       body: _availableSlots.isEmpty ? _buildFullMessage() : _buildForm(),
     );
   }
 
   Widget _buildFullMessage() {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.grass, size: 64, color: Colors.grey[400]),
+            Icon(Icons.grass, size: 64, color: cs.onSurfaceVariant),
             const SizedBox(height: 16),
-            const Text('Zone is full', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text('Zone is full', style: tt.titleLarge),
             const SizedBox(height: 8),
             Text(
               'All $_maxSlots plant slots are occupied. Remove a plant to free up a slot.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.black54),
+              style: TextStyle(color: cs.onSurfaceVariant),
             ),
           ],
         ),
@@ -238,7 +242,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _speciesCtrl,
-                    decoration: const InputDecoration(labelText: 'Species (e.g. Phalaenopsis)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(labelText: 'Species (e.g. Phalaenopsis)'),
                     onChanged: (_) => setState(() { _aiSource = ''; _aiCommonName = null; }),
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter the plant species' : null,
                   ),
@@ -246,16 +250,12 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
                 const SizedBox(width: 8),
                 SizedBox(
                   height: 56,
-                  child: ElevatedButton(
+                  child: FilledButton.tonalIcon(
                     onPressed: _aiLoading || _speciesCtrl.text.trim().length < 3 ? null : _suggestConditions,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green[50],
-                      foregroundColor: Colors.green[800],
-                      elevation: 0,
-                    ),
-                    child: _aiLoading
+                    icon: _aiLoading
                         ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('✨ Suggest'),
+                        : const Icon(Icons.auto_awesome),
+                    label: const Text('Suggest'),
                   ),
                 ),
               ],
@@ -265,7 +265,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
             const SizedBox(height: 12),
             TextFormField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: 'Plant nickname (optional)', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'Plant nickname (optional)'),
             ),
             const SizedBox(height: 20),
             _buildSlotPicker(),
@@ -278,16 +278,12 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
             ],
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
+              child: FilledButton(
                 onPressed: _loading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[700],
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   child: _loading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Add plant'),
                 ),
               ),
@@ -299,19 +295,20 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   }
 
   Widget _buildPhotoPicker() {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
           width: 64,
           height: 64,
           decoration: BoxDecoration(
-            color: Colors.grey[100],
+            color: cs.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(14),
           ),
           clipBehavior: Clip.antiAlias,
           child: _photoFile != null
               ? Image.file(File(_photoFile!.path), fit: BoxFit.cover)
-              : Icon(Icons.local_florist_outlined, size: 28, color: Colors.grey[400]),
+              : Icon(Icons.local_florist_outlined, size: 28, color: cs.onSurfaceVariant),
         ),
         const SizedBox(width: 12),
         TextButton(
@@ -351,28 +348,31 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   bool get _aiApplied => _aiSource == 'ai' || _aiSource == 'cache';
 
   Widget _buildSpeciesCaption() {
+    final cs = Theme.of(context).colorScheme;
+    final app = AppColors.of(context);
+    final tt = Theme.of(context).textTheme;
     if (_aiSource == 'fallback' || _aiSource == 'error') {
-      return const Text('Couldn’t fetch suggestions — enter the conditions manually.',
-          style: TextStyle(color: Colors.black54, fontSize: 12));
+      return Text('Couldn’t fetch suggestions — enter the conditions manually.',
+          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant));
     }
     if (_aiApplied) {
       return Wrap(
         children: [
           if (_aiCommonName != null && _aiCommonName!.trim().isNotEmpty)
             Text('Interpreted as $_aiCommonName. ',
-                style: const TextStyle(color: Colors.black87, fontSize: 12, fontWeight: FontWeight.w500)),
+                style: tt.labelMedium?.copyWith(color: cs.onSurface)),
           if (_aiConfidence == 'low')
-            const Text('Low-confidence guess — double-check these. ',
-                style: TextStyle(color: Colors.orange, fontSize: 12)),
+            Text('Low-confidence guess — double-check these. ',
+                style: tt.bodySmall?.copyWith(color: app.warning)),
           if (_aiCareNotes != null && _aiCareNotes!.trim().isNotEmpty)
-            const Text('Care tips added to Notes below.',
-                style: TextStyle(color: Colors.black54, fontSize: 12)),
+            Text('Care tips added to Notes below.',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
         ],
       );
     }
-    return const Text(
-      '✨ Suggest fills in the preferred conditions below and adds care tips for this species to Notes.',
-      style: TextStyle(color: Colors.black54, fontSize: 12),
+    return Text(
+      'Suggest fills in the preferred conditions below and adds care tips for this species to Notes.',
+      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
     );
   }
 
@@ -384,6 +384,8 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   };
 
   Widget _buildZoneHint(ZoneSuggestion hint) {
+    final tt = Theme.of(context).textTheme;
+    final app = AppColors.of(context);
     final reason = _hintReason[hint.reason] ?? 'is a poorer fit for';
     final msg = hint.kind == 'move'
         ? 'This plant $reason this zone’s other plants — "${hint.zone!.zoneName}" is a closer match.'
@@ -392,20 +394,19 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.amber.withValues(alpha: 0.12),
+        color: app.warningContainer,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(msg, style: TextStyle(color: Colors.orange[900], fontSize: 13)),
+          Text(msg, style: tt.bodyMedium?.copyWith(color: app.onWarningContainer)),
           GestureDetector(
             onTap: () => setState(() => _hintDismissed = true),
             child: Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text('Dismiss',
-                  style: TextStyle(color: Colors.orange[800], fontSize: 12, decoration: TextDecoration.underline)),
+                  style: tt.labelMedium?.copyWith(color: app.onWarningContainer, decoration: TextDecoration.underline)),
             ),
           ),
         ],
@@ -414,12 +415,14 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   }
 
   Widget _buildSlotPicker() {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Plant slot', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        Text('Plant slot', style: tt.titleSmall),
         const SizedBox(height: 4),
-        const Text('Select an available slot for this plant.', style: TextStyle(color: Colors.black54, fontSize: 12)),
+        Text('Select an available slot for this plant.', style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
         const SizedBox(height: 12),
         Row(
           children: List.generate(_maxSlots, (i) {
@@ -436,37 +439,28 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
                   width: 64,
                   height: 64,
                   decoration: BoxDecoration(
-                    color: isTaken
-                        ? Colors.grey[100]
-                        : isSelected
-                            ? Colors.green[700]
-                            : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
+                    color: isSelected ? cs.secondaryContainer : null,
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isTaken
-                          ? Colors.grey[300]!
+                          ? cs.onSurface.withValues(alpha: 0.12)
                           : isSelected
-                              ? Colors.green[700]!
-                              : Colors.grey[300]!,
-                      width: isSelected ? 2 : 1,
+                              ? cs.secondaryContainer
+                              : cs.outline,
                     ),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        isTaken ? Icons.block : Icons.local_florist_outlined,
+                        isTaken ? Icons.block : isSelected ? Icons.check_circle : Icons.local_florist_outlined,
                         size: 22,
-                        color: isTaken ? Colors.grey[400] : isSelected ? Colors.white : Colors.green[700],
+                        color: isTaken ? cs.onSurface.withValues(alpha: 0.38) : isSelected ? cs.onSecondaryContainer : cs.onSurfaceVariant,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Slot $slot',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: isTaken ? Colors.grey[400] : isSelected ? Colors.white : Colors.black87,
-                        ),
+                        style: tt.labelSmall?.copyWith(color: isTaken ? cs.onSurface.withValues(alpha: 0.38) : isSelected ? cs.onSecondaryContainer : cs.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -476,15 +470,17 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
           }),
         ),
         if (_selectedSlot == null)
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(top: 8),
-            child: Text('No slot selected', style: TextStyle(color: Colors.black45, fontSize: 12)),
+            child: Text('No slot selected', style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
           ),
       ],
     );
   }
 
   Widget _buildPreferredConditions() {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     // Material (not a decorated Container) so the tile's tap ripple shows, and the theme
     // surface colour so the card isn't white in dark mode.
     return Material(
@@ -499,16 +495,16 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         child: ExpansionTile(
           tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          leading: Icon(Icons.tune, color: Colors.green[700]),
+          leading: Icon(Icons.tune, color: cs.primary),
           initiallyExpanded: _aiApplied,
-          title: const Text('Preferred growing conditions', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          subtitle: const Text('Optional — helps compute ideal zone environment', style: TextStyle(fontSize: 11, color: Colors.black45)),
+          title: Text('Preferred growing conditions', style: tt.titleSmall),
+          subtitle: Text('Optional — helps compute ideal zone environment', style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
           children: [
             if (_aiApplied) ...[
               Text(
                 'AI suggestion — adjust as needed. Different growth stages need different soil '
                 'moisture and feeding; revisit these as the plant matures.',
-                style: TextStyle(fontSize: 11, color: Colors.green[800]),
+                style: tt.labelSmall?.copyWith(color: cs.primary),
               ),
               const SizedBox(height: 12),
             ],
@@ -526,15 +522,16 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   }
 
   Widget _rangeRow(String label, TextEditingController minCtrl, TextEditingController maxCtrl) {
+    final tt = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        Text(label, style: tt.labelLarge),
         const SizedBox(height: 6),
         Row(
           children: [
             Expanded(child: _numField('Min', minCtrl)),
-            const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('–', style: TextStyle(fontWeight: FontWeight.bold))),
+            const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('–', style: TextStyle(fontWeight: FontWeight.w500))),
             Expanded(child: _numField('Max', maxCtrl)),
           ],
         ),
@@ -557,10 +554,11 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   }
 
   Widget _lightDropdown() {
+    final tt = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Light condition', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        Text('Light condition', style: tt.labelLarge),
         const SizedBox(height: 6),
         DropdownButtonFormField<String?>(
           initialValue: _lightCondition,

@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/notification_model.dart';
+import '../../theme.dart';
 import '../../services/firestore/notification_service.dart';
 import '../plants/zone_detail/zone_detail_screen.dart';
 
@@ -18,17 +19,19 @@ class NotificationsScreen extends StatelessWidget {
     return '${d.day}/${d.month}/${d.year}';
   }
 
-  static (IconData, Color) _icon(AppNotification n) {
+  // Leading icon + its container colors, by notification type/severity
+  static (IconData, Color, Color) _icon(BuildContext context, AppNotification n) {
+    final cs = Theme.of(context).colorScheme;
+    final app = AppColors.of(context);
     switch (n.type) {
       case 'actuator':
-        return (Icons.water_drop_outlined, Colors.blue);
+        return (Icons.water_drop_outlined, cs.tertiaryContainer, cs.onTertiaryContainer);
       case 'daily':
-        return (Icons.nightlight_outlined, Colors.indigo);
+        return (Icons.nightlight_outlined, cs.secondaryContainer, cs.onSecondaryContainer);
       default:
-        return (
-          n.severity == 'critical' ? Icons.error_outline : Icons.warning_amber_rounded,
-          n.severity == 'critical' ? Colors.red : Colors.orange,
-        );
+        return n.severity == 'critical'
+            ? (Icons.error_outline, cs.errorContainer, cs.onErrorContainer)
+            : (Icons.warning_amber_rounded, app.warningContainer, app.onWarningContainer);
     }
   }
 
@@ -41,12 +44,10 @@ class NotificationsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
-        backgroundColor: Colors.green[700],
-        foregroundColor: Colors.white,
         actions: [
           TextButton(
             onPressed: () => svc.markAllRead(uid),
-            child: const Text('Mark all read', style: TextStyle(color: Colors.white)),
+            child: const Text('Mark all read'),
           ),
         ],
       ),
@@ -60,27 +61,28 @@ class NotificationsScreen extends StatelessWidget {
           if (items.isEmpty) {
             return Center(
               child: Text('You’re all caught up.',
-                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5))),
+                  style: TextStyle(color: cs.onSurfaceVariant)),
             );
           }
           return ListView.separated(
             itemCount: items.length,
             separatorBuilder: (_, _) => Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.4)),
             itemBuilder: (context, i) {
+              final tt = Theme.of(context).textTheme;
               final n = items[i];
-              final (icon, color) = _icon(n);
+              final (icon, bg, fg) = _icon(context, n);
               return ListTile(
-                tileColor: n.isRead ? null : Colors.green.withValues(alpha: 0.06),
-                leading: Icon(icon, color: color),
+                tileColor: n.isRead ? null : cs.secondaryContainer.withValues(alpha: 0.4),
+                leading: CircleAvatar(backgroundColor: bg, foregroundColor: fg, child: Icon(icon)),
                 title: Text(n.title,
-                    style: TextStyle(fontWeight: n.isRead ? FontWeight.w500 : FontWeight.w700)),
+                    style: TextStyle(fontWeight: n.isRead ? FontWeight.w400 : FontWeight.w600)),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(n.message),
                     const SizedBox(height: 2),
                     Text(_relative(n.createdAt),
-                        style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.45))),
+                        style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
                   ],
                 ),
                 isThreeLine: true,

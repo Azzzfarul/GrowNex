@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// M3 navigation bar for the five root tabs.
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTabSelected;
@@ -12,19 +13,15 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      currentIndex: currentIndex,
-      selectedItemColor: Colors.green[800],
-      unselectedItemColor: Colors.grey[600],
-      showUnselectedLabels: true,
-      type: BottomNavigationBarType.fixed,
-      onTap: onTabSelected,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
-        BottomNavigationBarItem(icon: Icon(Icons.local_florist), label: 'Plants'),
-        BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Analytics'),
-        BottomNavigationBarItem(icon: Icon(Icons.devices), label: 'Devices'),
-        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+    return NavigationBar(
+      selectedIndex: currentIndex,
+      onDestinationSelected: onTabSelected,
+      destinations: const [
+        NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+        NavigationDestination(icon: Icon(Icons.local_florist_outlined), selectedIcon: Icon(Icons.local_florist), label: 'Plants'),
+        NavigationDestination(icon: Icon(Icons.insights_outlined), selectedIcon: Icon(Icons.insights), label: 'Analytics'),
+        NavigationDestination(icon: Icon(Icons.router_outlined), selectedIcon: Icon(Icons.router), label: 'Devices'),
+        NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
       ],
     );
   }

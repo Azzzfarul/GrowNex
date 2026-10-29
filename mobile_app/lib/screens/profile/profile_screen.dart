@@ -44,6 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showThemeDialog() {
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (dlgCtx) => AlertDialog(
@@ -65,12 +66,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   RadioListTile<bool>(
                     value: false,
                     title: const Text('Light Mode'),
-                    activeColor: Colors.green[700],
+                    activeColor: cs.primary,
                   ),
                   RadioListTile<bool>(
                     value: true,
                     title: const Text('Dark Mode'),
-                    activeColor: Colors.green[700],
+                    activeColor: cs.primary,
                   ),
                 ],
               ),
@@ -89,69 +90,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text('Profile',
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(fontWeight: FontWeight.bold)),
+        Text('Profile', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
         Text('Manage your account and app settings.',
-            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
+            style: TextStyle(color: cs.onSurfaceVariant)),
         const SizedBox(height: 24),
 
         // Profile card
-        Container(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainer,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                  color: cs.shadow.withValues(alpha: 0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, 5)),
-            ],
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: _loadingProfile
+                ? const SizedBox(
+                    height: 56,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: cs.primaryContainer,
+                        child: Text(
+                          _username.isNotEmpty ? _username[0].toUpperCase() : '?',
+                          style: tt.titleLarge?.copyWith(color: cs.onPrimaryContainer),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(_username,
+                                style: tt.titleMedium),
+                            const SizedBox(height: 4),
+                            Text(_email,
+                                style: TextStyle(
+                                    color: cs.onSurfaceVariant)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: _loadingProfile
-              ? const SizedBox(
-                  height: 56,
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: Colors.green[700],
-                      child: Text(
-                        _username.isNotEmpty ? _username[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_username,
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),
-                          Text(_email,
-                              style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.55))),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
         ),
 
         const SizedBox(height: 24),
@@ -188,49 +174,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         const SizedBox(height: 18),
 
-        ElevatedButton(
+        FilledButton(
           onPressed: () async {
             final nav = Navigator.of(context);
             await AuthService().logout();
             nav.pushNamedAndRemoveUntil(LoginScreen.routeName, (route) => false);
           },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green[700],
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          child: const Text('Logout', style: TextStyle(fontSize: 16)),
+          child: const Text('Logout'),
         ),
 
         const SizedBox(height: 32),
 
-        Text(
-          'DANGER ZONE',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: Colors.red[700],
-            letterSpacing: 1.2,
-          ),
-        ),
+        Text('Danger zone', style: tt.titleSmall?.copyWith(color: cs.error)),
         const SizedBox(height: 10),
 
-        OutlinedButton(
+        OutlinedButton.icon(
           onPressed: _showDeleteAccountDialog,
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.red[700],
-            side: BorderSide(color: Colors.red[300]!),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            foregroundColor: cs.error,
+            side: BorderSide(color: cs.error),
           ),
-          child: const Text('Delete account', style: TextStyle(fontSize: 16)),
+          icon: const Icon(Icons.delete_forever_outlined),
+          label: const Text('Delete account'),
         ),
       ],
     );
   }
 
   void _showDeleteAccountDialog() {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
     final pwCtrl = TextEditingController();
     String? error;
     bool deleting = false;
@@ -245,9 +218,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'This action is permanent and cannot be undone. All your data will be deleted.',
-                style: TextStyle(fontSize: 14),
+                style: tt.bodyMedium,
               ),
               const SizedBox(height: 16),
               TextField(
@@ -262,7 +235,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               if (error != null) ...[
                 const SizedBox(height: 10),
-                Text(error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+                Text(error!, style: tt.bodyMedium?.copyWith(color: cs.error)),
               ],
             ],
           ),
@@ -294,7 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           error = switch (e.code) {
                             'wrong-password'     => 'Incorrect password',
                             'invalid-credential' => 'Incorrect password',
-                            _                    => e.message ?? 'An error occurred',
+                            _                    => 'Something went wrong. Please try again.',
                           };
                         });
                       } catch (e) {
@@ -307,7 +280,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         });
                       }
                     },
-              style: TextButton.styleFrom(foregroundColor: Colors.red[700]),
+              style: TextButton.styleFrom(foregroundColor: cs.error),
               child: deleting
                   ? const SizedBox(
                       height: 16, width: 16,
@@ -336,30 +309,22 @@ class _ProfileListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     // Material (not a decorated Container) so the tile's tap ripple shows.
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: Material(
-      color: Theme.of(context).colorScheme.surfaceContainer,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Theme.of(context).dividerColor),
-      ),
-      child: ListTile(
-        onTap: onTap,
-        leading: CircleAvatar(
-          backgroundColor: Colors.green.withValues(alpha: 0.15),
-          child: Icon(icon, color: Colors.green[700]),
+      child: Card(
+        child: ListTile(
+          onTap: onTap,
+          leading: CircleAvatar(
+            backgroundColor: cs.secondaryContainer,
+            foregroundColor: cs.onSecondaryContainer,
+            child: Icon(icon),
+          ),
+          title: Text(title),
+          subtitle: Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant)),
+          trailing: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(subtitle,
-            style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55))),
-        trailing: Icon(Icons.arrow_forward_ios,
-            size: 16,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)),
-      ),
       ),
     );
   }
