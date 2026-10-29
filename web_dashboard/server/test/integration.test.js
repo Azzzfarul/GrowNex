@@ -227,10 +227,20 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(stats.temperature, 35, 'a null reading does not blank the hour')
     const z = await docData(`zones/${ids.zoneA}`)
     assert.equal(z.latestTemp, null)
+    assert.equal(before.status, 'critical')
     assert.equal(z.status, 'critical', 'moisture alone must not make the zone healthy')
-    assert.equal(z.alertSummary, before.alertSummary)
+    assert.match(z.alertSummary, /^No temperature or humidity reading, so the last status is kept\./)
     await sleep(500)
     assert.equal((await notifs(users.alice.uid, 'threshold')).length, 1)
+
+    // A soil probe that stops reporting is cleared, not kept like temperature/humidity
+    await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture1: 60 })
+    const after = await waitFor(async () => {
+      const s = await docData(`zones/${ids.zoneA}/stats/${hour}`)
+      return s.moisture === 60 && s
+    }, 'stats updated again')
+    assert.equal(after.soilMoisture2, null)
+    assert.equal(after.temperature, 35)
   })
 
   test('manual toggles publish one debounced command and ignore the device echo', async () => {
@@ -412,13 +422,19 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
   test('after a restart: no commands re-sent, and the first status seen does not alert', async () => {
     const before = commands.length
     const alerts = (await notifs(users.alice.uid, 'threshold')).length
+    await db.doc(`zones/${ids.zoneA}`).update({ status: 'critical' })  // the status the bridge last stored
     await stopServer()
     await startServer()
     await sleep(1000)
     assert.equal(commands.length, before, 'startup publishes nothing')
 
-    await sensors('ESP32-T1', { temperature: 35, humidity: 60, lightLevel: 0, soilMoisture1: 40, soilMoisture2: 40 })
+    // A failed DHT11 read right after the restart keeps the stored status, not just the in-memory one
+    await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture1: 60, soilMoisture2: 64 })
     await waitForLog(/sensor write → zone/)
+    assert.equal((await docData(`zones/${ids.zoneA}`)).status, 'critical')
+
+    await sensors('ESP32-T1', { temperature: 35, humidity: 60, lightLevel: 0, soilMoisture1: 40, soilMoisture2: 40 })
+    await waitFor(async () => (await docData(`zones/${ids.zoneA}`)).latestTemp === 35, 'second reading')
     await sleep(500)
     assert.equal((await notifs(users.alice.uid, 'threshold')).length, alerts)
   })
