@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 
 import '../config.dart';
 import 'firestore/zone_service.dart';
+import 'push_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -64,7 +65,7 @@ class AuthService {
           'username': username,
           'email': email,
           'createdAt': Timestamp.now(),
-        });
+        }, SetOptions(merge: true));  // PushService may already have saved this phone's token
       }
 
       return user;
@@ -79,6 +80,11 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    final user = _auth.currentUser;
+    // main.dart never starts push in the sandbox; don't make logout wait on FCM there either.
+    if (user != null && !const bool.fromEnvironment('USE_FIREBASE_EMULATORS')) {
+      await PushService.unregister(user.uid);
+    }
     await _auth.signOut();
   }
 

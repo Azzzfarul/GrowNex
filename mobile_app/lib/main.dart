@@ -8,6 +8,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/main/root_screen.dart';
 import 'screens/plants/plant_screen.dart';
+import 'services/push_service.dart';
 import 'theme.dart';
 import 'theme_notifier.dart';
 
@@ -21,6 +22,10 @@ Future<void> main() async {
     await FirebaseAuth.instance.useAuthEmulator(host, 9099);
     FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
     await FirebaseStorage.instance.useStorageEmulator(host, 9199);
+  } else {
+    // Not in the sandbox: FCM has no emulator, and the permission prompt would block the
+    // integration test.
+    PushService.init();
   }
 
   final prefs = await SharedPreferences.getInstance();
