@@ -441,8 +441,9 @@ class _MonitoringTabState extends State<MonitoringTab> {
     try {
       await PhotoService().uploadZoneSnapshot(widget.zone.id, file);
     } catch (e) {
+      debugPrint('Failed to upload photo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _uploadingSnapshot = false);

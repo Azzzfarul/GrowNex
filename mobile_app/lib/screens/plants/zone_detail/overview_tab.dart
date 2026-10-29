@@ -105,8 +105,9 @@ class _OverviewTabState extends State<OverviewTab> {
       );
       await DeviceService().assignDeviceToZone(device.id, widget.zone.id, userId);
     } catch (e) {
+      debugPrint('Failed to assign device: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign device: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign device. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _assignLoading = false);
@@ -121,8 +122,9 @@ class _OverviewTabState extends State<OverviewTab> {
       await DeviceService().unassignDevice(deviceId);
       await ZoneService().updateZoneDevice(widget.zone.id, null);
     } catch (e) {
+      debugPrint('Failed to remove device: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove device: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove device. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _removeLoading = false);
@@ -291,8 +293,9 @@ class _OverviewTabState extends State<OverviewTab> {
       final url = await PhotoService().uploadZonePhoto(widget.zone.id, file);
       if (mounted) setState(() => _photoUrl = url);
     } catch (e) {
+      debugPrint('Failed to upload photo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _photoBusy = false);
@@ -305,8 +308,9 @@ class _OverviewTabState extends State<OverviewTab> {
       await PhotoService().removeZonePhoto(widget.zone.id);
       if (mounted) setState(() => _photoUrl = null);
     } catch (e) {
+      debugPrint('Failed to remove photo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove photo: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove photo. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _photoBusy = false);
@@ -320,7 +324,8 @@ class _OverviewTabState extends State<OverviewTab> {
     try {
       await FirebaseFirestore.instance.collection('zones').doc(widget.zone.id).update({'zoneName': name});
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to rename: $e')));
+      debugPrint('Failed to rename: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to rename. Please try again.')));
     } finally {
       if (mounted) setState(() => _renameLoading = false);
     }
@@ -557,8 +562,9 @@ class _CameraCardState extends State<_CameraCard> {
       await ZoneService().updateZoneCamera(widget.zone.id, camera.id);
       await DeviceService().assignDeviceToZone(camera.id, widget.zone.id, userId);
     } catch (e) {
+      debugPrint('Failed to assign camera: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign camera: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to assign camera. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -573,8 +579,9 @@ class _CameraCardState extends State<_CameraCard> {
       await DeviceService().unassignDevice(cameraId);
       await ZoneService().updateZoneCamera(widget.zone.id, null);
     } catch (e) {
+      debugPrint('Failed to remove camera: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove camera: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove camera. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);

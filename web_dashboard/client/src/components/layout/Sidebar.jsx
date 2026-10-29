@@ -31,7 +31,6 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <p className="hidden lg:block text-label-md text-on-surface-variant px-4 py-2">Final Year Project</p>
     </aside>
   )
 }

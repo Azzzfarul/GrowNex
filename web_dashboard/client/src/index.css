@@ -96,8 +96,17 @@
   }
 }
 
+/* Material Symbols Rounded (Apache-2.0), self-hosted so icons work offline; includes the FILL axis */
+@font-face {
+  font-family: 'Material Symbols Rounded';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('./assets/fonts/material-symbols-rounded.woff2') format('woff2');
+}
+
 @layer components {
-  /* Material Symbols (font loaded in index.html); see components/ui/Icon.jsx */
+  /* see components/ui/Icon.jsx */
   .icon {
     font-family: 'Material Symbols Rounded';
     font-weight: normal;

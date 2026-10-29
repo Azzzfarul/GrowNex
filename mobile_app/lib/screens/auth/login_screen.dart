@@ -167,12 +167,12 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 32),
               Text(
-                'Welcome back',
+                'Sign in',
                 style: tt.headlineSmall,
               ),
               const SizedBox(height: 12),
               Text(
-                'Sign in to manage your plants, devices, and analytics.',
+                'Manage your plants, devices, and analytics.',
                 style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: 32),

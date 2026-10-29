@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../models/plant_model.dart';
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/plant_service.dart';
+import '../../../utils/analytics.dart' show plantStatus;
 import '../add_plant_screen.dart';
 import '../../../widgets/status_label.dart';
 import '../plant_detail/plant_detail_screen.dart';
@@ -125,7 +126,7 @@ class _PlantsTabState extends State<PlantsTab> {
                         : null,
                   ),
                   Expanded(child: Text(plant.plantName, style: tt.titleMedium)),
-                  StatusLabel(plant.status),
+                  if (plantStatus(widget.zone, plant) case final status?) StatusLabel(status),
                 ],
               ),
               const SizedBox(height: 10),

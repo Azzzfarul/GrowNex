@@ -54,7 +54,8 @@ export async function uploadPlantPhoto(plantId, file) {
     await updateDoc(doc(db, 'plants', plantId), { photoUrl })
     return { photoUrl }
   } catch (err) {
-    return { error: err.message ?? 'Failed to upload photo' }
+    console.error('Photo upload failed:', err)
+    return { error: "Couldn't upload the photo. Please try again." }
   }
 }
 
@@ -71,7 +72,8 @@ export async function removePlantPhoto(plantId) {
     await updateDoc(doc(db, 'plants', plantId), { photoUrl: null })
     return {}
   } catch (err) {
-    return { error: err.message ?? 'Failed to remove photo' }
+    console.error('Photo removal failed:', err)
+    return { error: "Couldn't remove the photo. Please try again." }
   }
 }
 
@@ -84,7 +86,8 @@ export async function uploadZonePhoto(zoneId, file) {
     await updateDoc(doc(db, 'zones', zoneId), { zonePhotoUrl })
     return { zonePhotoUrl }
   } catch (err) {
-    return { error: err.message ?? 'Failed to upload photo' }
+    console.error('Photo upload failed:', err)
+    return { error: "Couldn't upload the photo. Please try again." }
   }
 }
 
@@ -94,7 +97,8 @@ export async function removeZonePhoto(zoneId) {
     await updateDoc(doc(db, 'zones', zoneId), { zonePhotoUrl: null })
     return {}
   } catch (err) {
-    return { error: err.message ?? 'Failed to remove photo' }
+    console.error('Photo removal failed:', err)
+    return { error: "Couldn't remove the photo. Please try again." }
   }
 }
 
@@ -114,6 +118,7 @@ export async function uploadZoneSnapshot(zoneId, file) {
     })
     return { imageUrl }
   } catch (err) {
-    return { error: err.message ?? 'Failed to upload photo' }
+    console.error('Photo upload failed:', err)
+    return { error: "Couldn't upload the photo. Please try again." }
   }
 }

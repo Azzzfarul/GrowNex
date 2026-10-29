@@ -10,6 +10,7 @@ import { fetchAutomationPlan } from '../../lib/aiSummary'
 const TIME_RE  = /^([01]?\d|2[0-3]):[0-5]\d$/
 const LIGHT_RE = /^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$/
 const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN) ([01]?\d|2[0-3]):[0-5]\d$/
+const SAVE_FAILED = "Couldn't save the change. Please try again."
 
 function ToggleSetting({ title, subtitle, value, onChange, busy, children }) {
   return (
@@ -109,7 +110,7 @@ export default function AutomationTab({ zone }) {
     const field = Object.keys(patch)[0]
     setSavingToggle((s) => ({ ...s, [field]: true }))
     setDoc(doc(db, 'automationConfig', zone.id), patch, { merge: true })
-      .catch((e) => { revert(); setConfigError(`Failed to save: ${e.message}`) })
+      .catch((e) => { console.error('Automation save failed:', e); revert(); setConfigError(SAVE_FAILED) })
       .finally(() => setSavingToggle((s) => ({ ...s, [field]: false })))
   }
 
@@ -132,7 +133,8 @@ export default function AutomationTab({ zone }) {
         fertilizingDuration: fertDuration   ? parseInt(fertDuration)    : null,
       }, { merge: true })
     } catch (e) {
-      return setConfigError(`Failed to save: ${e.message}`)  // keeps the edits so the user can retry
+      console.error('Automation save failed:', e)
+      return setConfigError(SAVE_FAILED)  // keeps the edits so the user can retry
     }
     setWaterThreshOrig(waterThresh); setWaterSchedOrig(waterSched)
     setWaterDurOrig(waterDuration);  setLightSchedOrig(lightSched)
@@ -161,7 +163,8 @@ export default function AutomationTab({ zone }) {
     try {
       await setDoc(doc(db, 'automationConfig', zone.id), { ...plan, aiRecommended: true }, { merge: true })
     } catch (e) {
-      return setConfigError(`Failed to save: ${e.message}`)
+      console.error('Automation save failed:', e)
+      return setConfigError(SAVE_FAILED)
     }
     setAutoWater(!!plan.autoWateringEnabled)
     setAutoLight(!!plan.autoLightingEnabled)

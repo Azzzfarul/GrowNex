@@ -2,7 +2,7 @@
 // These modules are hand-ported to the mobile app — keep both sides passing the same cases.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildChartData, describeTrend, buildOverviewSummary, moistureBucketSeries, healthScoreForPlant, generateInsights } from '../src/lib/analytics.js'
+import { buildChartData, describeTrend, buildOverviewSummary, moistureBucketSeries, healthScoreForPlant, generateInsights, plantStatus } from '../src/lib/analytics.js'
 import { plantHealth, plantHealthSummary, compliancePercent } from '../src/lib/plantHealth.js'
 import { plantZoneFit, zoneFitHint } from '../src/lib/zoneFit.js'
 
@@ -49,6 +49,29 @@ test('describeTrend reports in-range, drifting and out-of-range series', () => {
   assert.equal(d([35, 35]).text, 'Too hot — above 30°C for the whole period')
   assert.equal(d([25]).level, 'none')
   assert.equal(describeTrend({ series: [1, 2, 3], pref: { min: null, max: null }, timeRange: '7days', label: 'humidity', kind: 'humidity' }).level, 'none')
+})
+
+test('light gets a trend-only summary', () => {
+  const l = (series) => describeTrend({ series, pref: { min: null, max: null }, timeRange: 'today', label: 'light', kind: 'light' })
+  assert.equal(l([30, 30, 31, 30]).text, 'Averaging 30% and steady')
+  assert.equal(l([10, 20, 40, 60, 70, 80]).text, 'Averaging 47% and rising')
+  assert.equal(l([30]).level, 'none')
+})
+
+test('overview without enough readings blames the readings, not a missing device', () => {
+  const none = { level: 'none', text: '' }
+  const results = { temperature: none, humidity: none, moisture: none }
+  const plants = [{ preferredMoistureMin: 40 }]
+  assert.equal(buildOverviewSummary({ selectedZone: { deviceId: 'd' }, plants, results }).text, 'Not enough readings yet for a summary.')
+  assert.match(buildOverviewSummary({ selectedZone: {}, plants, results }).text, /connect a device/)
+})
+
+test('plant status follows the live health score', () => {
+  const p = { slotNumber: 1, preferredMoistureMin: 40, preferredMoistureMax: 60, preferredTemperatureMin: 20, preferredTemperatureMax: 30 }
+  assert.equal(plantStatus({ latestMoisture1: 50, latestTemp: 25 }, p), 'healthy')
+  assert.equal(plantStatus({ latestMoisture1: 90, latestTemp: 25 }, p), 'needs attention')
+  assert.equal(plantStatus({ latestMoisture1: 90, latestTemp: 40 }, p), 'critical')
+  assert.equal(plantStatus({}, p), null)
 })
 
 test('overview summary leads with the worst metric', () => {

@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext'
 import { fetchPlantProfile } from '../../lib/aiSummary'
 import { zoneFitHint } from '../../lib/zoneFit'
 import { plantHealth, plantHealthSummary } from '../../lib/plantHealth'
-import { scoreBadge } from '../../lib/analytics'
+import { scoreBadge, plantStatus } from '../../lib/analytics'
 import { uploadPlantPhoto, removePlantPhoto, removePlantPhotoFile } from '../../lib/photoUpload'
 
 const MAX_PLANTS = 4
@@ -599,7 +599,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
         {photoError && <p className="text-xs text-error mb-3">{photoError}</p>}
 
         <div className="flex gap-2 mb-5 flex-wrap">
-          <StatusLabel status={plant.status} />
+          {plantStatus(zone, plant) && <StatusLabel status={plantStatus(zone, plant)} />}
           {plant.slotNumber > 0 && (
             <span className="inline-flex items-center h-6 px-2.5 rounded-lg border border-outline-variant text-label-md text-on-surface-variant">
               Slot {plant.slotNumber}
@@ -734,7 +734,7 @@ export default function PlantsTab({ zone }) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between mb-1.5">
                         <p className="text-title-md text-on-surface">{plant.plantName}</p>
-                        <StatusLabel status={plant.status} className="ml-2" />
+                        {plantStatus(zone, plant) && <StatusLabel status={plantStatus(zone, plant)} className="ml-2" />}
                       </div>
                       <p className="text-body-md text-on-surface-variant mb-3">{plant.species}</p>
                     </div>

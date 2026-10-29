@@ -50,6 +50,13 @@ List<({String label, double? value})> groupByTime(
 
 // ── Health / compliance helpers ───────────────────────────────────────────────
 
+/// Live plant status (StatusLabel wording) from the zone's current readings; null until scorable.
+String? plantStatus(Zone zone, Plant plant) {
+  final s = healthScoreForPlant(zone, plant);
+  if (s == null) return null;
+  return s >= 80 ? 'healthy' : s >= 40 ? 'needs attention' : 'critical';
+}
+
 int? healthScoreForPlant(Zone zone, Plant plant) {
   final scores = <double>[];
   final moisture =
@@ -345,15 +352,21 @@ String _trendBad(String kind, bool high, int bound, String dur) =>
   required String label,
   required String kind,
 }) {
-  if (kind == 'light') {
-    return (level: 'none', text: "Light sensor data isn't available yet.");
-  }
   final nonNull = series.whereType<double>().toList();
   if (nonNull.length < 2) {
     return (
       level: 'none',
       text: 'Not enough readings yet to summarise $label.',
     );
+  }
+  // Plants store light only as low/medium/high, so there's no % range to judge: trend only
+  if (kind == 'light') {
+    final dir = switch (_seriesDirection(series, (min: 0, max: 100))) {
+      'rising' => 'rising',
+      'falling' => 'falling',
+      _ => 'steady',
+    };
+    return (level: 'none', text: 'Averaging ${_meanOf(nonNull)!.round()}% and $dir');
   }
   if (pref.min == null || pref.max == null) {
     return (
@@ -444,15 +457,14 @@ List<double?> moistureBucketSeries(
           p.preferredHumidityMin != null ||
           p.preferredMoistureMin != null,
     );
-    return hasPrefs
-        ? (
-            level: 'none',
-            text:
-                'No sensor readings for this zone yet — connect a device to start monitoring.',
-          )
+    if (!hasPrefs) {
+      return (level: 'none', text: 'Add plants with preferred conditions to see insights.');
+    }
+    return selectedZone.deviceId != null
+        ? (level: 'none', text: 'Not enough readings yet for a summary.')
         : (
             level: 'none',
-            text: 'Add plants with preferred conditions to see insights.',
+            text: 'No sensor readings for this zone yet — connect a device to start monitoring.',
           );
   }
   if (ranked.first.level == 'ok') {

@@ -123,8 +123,8 @@ export default function LoginPage() {
           <span className="text-title-lg text-on-surface">GrowNex</span>
         </div>
 
-        <h1 className="text-headline-sm text-on-surface mb-1">Welcome back</h1>
-        <p className="text-sm text-on-surface-variant mb-6">Sign in to manage your plants, devices, and analytics.</p>
+        <h1 className="text-headline-sm text-on-surface mb-1">Sign in</h1>
+        <p className="text-sm text-on-surface-variant mb-6">Manage your plants, devices, and analytics.</p>
 
         {authError && (
           <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">{authError}</p>

@@ -174,17 +174,19 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         try {
           await PhotoService().uploadPlantPhoto(plant.id, _photoFile!);
         } catch (e) {
+          debugPrint('Plant created, but photo upload failed: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Plant created, but photo upload failed: $e')),
+              SnackBar(content: Text('Plant created, but the photo upload failed.')),
             );
           }
         }
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
+      debugPrint('Failed to add plant: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add plant: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add plant. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);

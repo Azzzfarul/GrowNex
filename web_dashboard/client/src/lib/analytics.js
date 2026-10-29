@@ -119,12 +119,14 @@ const TREND_TEXT = {
 // series: ordered (number|null)[] of bucketed averages; pref: {min,max} (nullable)
 // timeRange: 'today' (1 bucket = 1h) | '7days' (1 bucket = 1 day)
 export function describeTrend({ series, pref, timeRange, label, kind }) {
-  if (kind === 'light')
-    return { level: 'none', text: "Light sensor data isn't available yet." }
-
   const nonNull = series.filter(x => x != null)
   if (nonNull.length < 2)
     return { level: 'none', text: `Not enough readings yet to summarise ${label}.` }
+  // Plants store light only as low/medium/high, so there's no % range to judge: trend only
+  if (kind === 'light') {
+    const dir = { rising: 'rising', falling: 'falling', flat: 'steady' }[seriesDirection(series, { min: 0, max: 100 })]
+    return { level: 'none', text: `Averaging ${Math.round(meanOf(nonNull))}% and ${dir}` }
+  }
   if (pref.min == null || pref.max == null)
     return { level: 'none', text: `Set plant preferred ${label} range to get a summary.` }
 
@@ -174,9 +176,10 @@ export function buildOverviewSummary({ selectedZone, plants, results }) {
   if (!ranked.length) {
     const hasPrefs = plants.some(p =>
       p.preferredTemperatureMin != null || p.preferredHumidityMin != null || p.preferredMoistureMin != null)
-    return hasPrefs
-      ? { level: 'none', text: 'No sensor readings for this zone yet — connect a device to start monitoring.' }
-      : { level: 'none', text: 'Add plants with preferred conditions to see insights.' }
+    if (!hasPrefs) return { level: 'none', text: 'Add plants with preferred conditions to see insights.' }
+    return selectedZone.deviceId
+      ? { level: 'none', text: 'Not enough readings yet for a summary.' }
+      : { level: 'none', text: 'No sensor readings for this zone yet — connect a device to start monitoring.' }
   }
   if (ranked[0].level === 'ok')
     return { level: 'ok', text: 'Stable and within the ideal range across temperature, humidity and soil moisture.' }
@@ -207,6 +210,13 @@ export function healthScoreForPlant(zone, plant) {
     scores.push(zone.latestHumid >= plant.preferredHumidityMin && zone.latestHumid <= plant.preferredHumidityMax ? 1 : 0)
   if (!scores.length) return null
   return Math.round(scores.reduce((a, b) => a + b) / scores.length * 100)
+}
+
+// Live plant status (StatusLabel wording) from the zone's current readings; null until scorable
+export function plantStatus(zone, plant) {
+  const s = healthScoreForPlant(zone, plant)
+  if (s == null) return null
+  return s >= 80 ? 'healthy' : s >= 40 ? 'needs attention' : 'critical'
 }
 
 export function zoneHealthScore(zone, plants) {

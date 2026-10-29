@@ -91,7 +91,8 @@ class _AutomationTabState extends State<AutomationTab> {
     try {
       config = await _configService.getConfig(widget.zone.id);
     } catch (e) {
-      if (mounted) setState(() => _loadError = 'Could not load automation settings.\n$e');
+      debugPrint('Could not load automation settings: $e');
+      if (mounted) setState(() => _loadError = 'Could not load automation settings.');
       return;
     }
     if (!mounted) return;
@@ -129,9 +130,10 @@ class _AutomationTabState extends State<AutomationTab> {
     try {
       await _configService.saveFields(widget.zone.id, {field: value});
     } catch (e) {
+      debugPrint('Failed to save: $e');
       if (!mounted) return;
       setState(revert);
-      _snack('Failed to save: $e');
+      _snack('Failed to save. Please try again.');
     } finally {
       if (mounted) setState(() => _savingToggles.remove(field));
     }
@@ -162,7 +164,8 @@ class _AutomationTabState extends State<AutomationTab> {
         'fertilizingDuration': int.tryParse(_fertilizingDurationCtrl.text.trim()),
       });
     } catch (e) {
-      if (mounted) _snack('Failed to save: $e');
+      debugPrint('Failed to save: $e');
+      if (mounted) _snack('Failed to save. Please try again.');
       return;
     }
     if (!mounted) return;

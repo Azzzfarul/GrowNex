@@ -267,7 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           error = switch (e.code) {
                             'wrong-password'     => 'Incorrect password',
                             'invalid-credential' => 'Incorrect password',
-                            _                    => e.message ?? 'An error occurred',
+                            _                    => 'Something went wrong. Please try again.',
                           };
                         });
                       } catch (e) {

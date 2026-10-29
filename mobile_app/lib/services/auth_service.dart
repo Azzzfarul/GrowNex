@@ -25,8 +25,8 @@ class AuthService {
       );
 
       return credential.user;
-    } on FirebaseAuthException catch (e) {
-      throw Exception(e.message);
+    } on FirebaseAuthException {
+      throw Exception('Invalid email or password.');  // web LoginPage wording
     }
   }
 
@@ -62,7 +62,9 @@ class AuthService {
 
       return user;
     } on FirebaseAuthException catch (e) {
-      throw Exception(e.message);
+      throw Exception(e.code == 'email-already-in-use'
+          ? 'An account with this email already exists.'
+          : 'Failed to create account. Please try again.');
     }
   }
 
