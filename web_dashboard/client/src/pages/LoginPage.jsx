@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/ui/Icon'
+import TextField from '../components/ui/TextField'
+import Dialog from '../components/ui/Dialog'
+import AuthLayout from '../components/layout/AuthLayout'
 
 function ForgotPasswordModal({ initialEmail, onClose }) {
   const { resetPassword } = useAuth()
@@ -26,56 +29,26 @@ function ForgotPasswordModal({ initialEmail, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
-      <div className="dialog w-full max-w-sm p-6">
-        <h2 className="text-headline-sm text-on-surface mb-4">Reset password</h2>
-        <p className="text-sm text-on-surface-variant mb-5">
-          Enter your email and we'll send you a link to reset your password.
-        </p>
-        {sent ? (
-          <p className="text-sm text-on-secondary-container bg-secondary-container rounded-lg px-3 py-2 mb-4">
-            Check your inbox — a reset link has been sent.
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-label-lg text-on-surface-variant mb-1">Email</label>
-              <input
-                type="email"
-                autoFocus
-                className="field w-full"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            {error && (
-              <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2">{error}</p>
-            )}
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="btn-text"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={sending}
-                className="btn-filled"
-              >
-                {sending ? 'Sending…' : 'Send link'}
-              </button>
-            </div>
-          </form>
-        )}
-        {sent && (
-          <div className="flex justify-end">
-            <button onClick={onClose} className="btn-text">Close</button>
-          </div>
-        )}
-      </div>
-    </div>
+    <Dialog
+      title="Reset password"
+      onClose={onClose}
+      busy={sending}
+      actions={sent
+        ? <button onClick={onClose} className="btn-text">Close</button>
+        : <>
+            <button type="button" onClick={onClose} className="btn-text">Cancel</button>
+            <button type="submit" form="reset-form" disabled={sending} className="btn-filled">{sending ? 'Sending…' : 'Send link'}</button>
+          </>}
+    >
+      {sent ? (
+        <p className="banner banner-info"><Icon name="mark_email_read" />Check your inbox — a reset link is on its way.</p>
+      ) : (
+        <form id="reset-form" onSubmit={handleSubmit}>
+          <p className="mb-5">Enter your email and we'll send you a link to reset your password.</p>
+          <TextField type="email" label="Email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} error={error || undefined} />
+        </form>
+      )}
+    </Dialog>
   )
 }
 
@@ -122,75 +95,24 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-container flex items-center justify-center p-4">
-      <div className="card w-full max-w-sm p-8">
-        <div className="flex items-center gap-2 mb-8">
-          <Icon name="eco" filled className="text-primary" size={32} />
-          <span className="text-title-lg text-on-surface">GrowNex</span>
+    <AuthLayout title="Sign in" subtitle="Manage your plants, devices and analytics.">
+      {authError && <p className="banner banner-error mb-6"><Icon name="error" />{authError}</p>}
+
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        <TextField type="email" label="Email" value={email} onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com" error={errors.email} autoComplete="email" autoFocus />
+        <div>
+          <TextField type="password" label="Password" value={password} onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your password" error={errors.password} autoComplete="current-password" />
+          <button type="button" onClick={() => setShowForgot(true)} className="btn-text btn-sm -ml-2 mt-1">Forgot password?</button>
         </div>
+        <div className="flex items-center justify-between pt-4">
+          <Link to="/register" className="btn-text -ml-3">Create account</Link>
+          <button type="submit" disabled={loading} className="btn-filled">{loading ? 'Signing in…' : 'Sign in'}</button>
+        </div>
+      </form>
 
-        <h1 className="text-headline-sm text-on-surface mb-1">Sign in</h1>
-        <p className="text-sm text-on-surface-variant mb-6">Manage your plants, devices, and analytics.</p>
-
-        {authError && (
-          <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">{authError}</p>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="field w-full"
-              placeholder="you@example.com"
-            />
-            {errors.email && <p className="text-xs text-error mt-1">{errors.email}</p>}
-          </div>
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="field w-full"
-              placeholder="Enter your password"
-            />
-            {errors.password && <p className="text-xs text-error mt-1">{errors.password}</p>}
-            <div className="text-right">
-              <button
-                type="button"
-                onClick={() => setShowForgot(true)}
-                className="text-xs text-primary hover:underline"
-              >
-                Forgot password?
-              </button>
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-filled w-full"
-          >
-            {loading ? 'Signing in…' : 'Login'}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-on-surface-variant">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-primary hover:underline font-medium">
-            Register
-          </Link>
-        </p>
-      </div>
-
-      {showForgot && (
-        <ForgotPasswordModal
-          initialEmail={email}
-          onClose={() => setShowForgot(false)}
-        />
-      )}
-    </div>
+      {showForgot && <ForgotPasswordModal initialEmail={email} onClose={() => setShowForgot(false)} />}
+    </AuthLayout>
   )
 }

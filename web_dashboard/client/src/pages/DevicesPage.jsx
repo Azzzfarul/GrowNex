@@ -4,6 +4,12 @@ import { collection, query, where, onSnapshot, doc, getDoc, runTransaction } fro
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/ui/Icon'
+import TextField from '../components/ui/TextField'
+import Dialog from '../components/ui/Dialog'
+import Loading from '../components/ui/Loading'
+import EmptyState from '../components/ui/EmptyState'
+import PageHeader from '../components/layout/PageHeader'
+import { formatRelative } from '../hooks/useNotifications'
 
 function AddDeviceModal({ user, onClose }) {
   const [searchId,           setSearchId]           = useState('')
@@ -99,165 +105,128 @@ function AddDeviceModal({ user, onClose }) {
   const isOnline = foundDevice?.status === 'online'
 
   return (
-    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
-      <div className="dialog w-full max-w-md p-6">
-        <h2 className="text-headline-sm text-on-surface mb-2">Add Device</h2>
-        <p className="text-sm text-on-surface-variant mb-5">Select a device that's powered on and connected, or enter its ID.</p>
+    <Dialog
+      title="Add device"
+      size="md"
+      onClose={onClose}
+      busy={claiming}
+      actions={<>
+        <button onClick={onClose} className="btn-text">Cancel</button>
+        <button onClick={claim} disabled={!foundDevice || claiming} className="btn-filled">{claiming ? 'Claiming…' : 'Claim device'}</button>
+      </>}
+    >
+      <p className="mb-5">Pick a device that's powered on and connected, or enter its ID.</p>
 
-        {/* Discovered (unclaimed + online) devices */}
-        {!discoverError && (
-          <div className="mb-3">
-            <p className="text-title-sm text-on-surface-variant mb-2">New devices nearby</p>
-            {nearbyDevices === null ? (
-              <p className="text-sm text-on-surface-variant py-3">Searching…</p>
-            ) : nearbyDevices.length === 0 ? (
-              <p className="text-sm text-on-surface-variant bg-surface-container rounded-xl px-3 py-3">
-                No new devices found. Power on your device and keep the server running — it appears
-                here within a few seconds of connecting.
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-56 overflow-y-auto">
-                {nearbyDevices.map((d) => {
-                  const camera = d.deviceType === 'camera'
-                  const selected = foundDevice?.id === d.id
-                  return (
-                    <button
-                      key={d.id}
-                      type="button"
-                      onClick={() => selectDevice(d)}
-                      aria-pressed={selected}
-                      className={`state-layer w-full flex items-center gap-4 text-left rounded-xl px-4 py-3 ${
-                        selected ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-low'
-                      }`}
-                    >
-                      <Icon name={camera ? 'photo_camera' : 'sensors'} className="text-on-surface-variant" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-on-surface truncate">{d.deviceName}</p>
-                        <p className="text-xs text-on-surface-variant truncate">
-                          {camera ? 'Camera' : d.deviceType === 'outdoor' ? 'Outdoor' : 'Indoor'}
-                          {d.deviceName !== d.id && <span className="font-mono"> · {d.id}</span>}
-                        </p>
-                      </div>
-                      <span className="flex items-center gap-1 text-label-md text-primary flex-shrink-0">
-                        {selected ? <Icon name="check_circle" filled size={20} /> : <><span className="w-2 h-2 rounded-full bg-primary" />Online</>}
+      {!discoverError && (
+        <div className="mb-4">
+          <p className="text-title-sm text-on-surface mb-2">New devices nearby</p>
+          {nearbyDevices === null ? (
+            <div className="progress-linear my-4" role="progressbar" aria-label="Searching" />
+          ) : nearbyDevices.length === 0 ? (
+            <p className="rounded-xl bg-surface-container px-4 py-3">
+              No new devices found. Power on your device and keep the server running — it shows up here
+              a few seconds after connecting.
+            </p>
+          ) : (
+            <div className="rounded-xl border border-outline-variant overflow-hidden max-h-60 overflow-y-auto divide-y divide-outline-variant">
+              {nearbyDevices.map((d) => {
+                const camera = d.deviceType === 'camera'
+                const selected = foundDevice?.id === d.id
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => selectDevice(d)}
+                    aria-pressed={selected}
+                    className={`state-layer list-row w-full ${selected ? 'bg-secondary-container text-on-secondary-container' : ''}`}
+                  >
+                    <span className="list-icon"><Icon name={camera ? 'photo_camera' : 'sensors'} /></span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-body-lg text-on-surface truncate">{d.deviceName}</span>
+                      <span className="block text-body-sm text-on-surface-variant truncate">
+                        {camera ? 'Camera' : d.deviceType === 'outdoor' ? 'Outdoor' : 'Indoor'}
+                        {d.deviceName !== d.id && <span className="font-mono"> · {d.id}</span>}
                       </span>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
+                    </span>
+                    {selected
+                      ? <Icon name="check_circle" filled className="text-primary" />
+                      : <span className="flex items-center gap-1.5 text-label-md text-primary"><span className="w-2 h-2 rounded-full bg-primary" />Online</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
-        {discoverError && (
-          <p className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-3">{discoverError}</p>
-        )}
+      {discoverError && <p className="banner banner-error mb-4"><Icon name="error" />{discoverError}</p>}
 
-        {!showManual ? (
-          <button
-            type="button"
-            onClick={() => setShowManual(true)}
-            className="btn-text btn-sm mb-4"
-          >
-            Can't see your device? Enter its ID
-          </button>
-        ) : (
-        <div className="flex gap-2 mb-3">
-          <input
-            type="text"
+      {!showManual ? (
+        <button type="button" onClick={() => setShowManual(true)} className="btn-text btn-sm -ml-2 mb-2">
+          <Icon name="keyboard" />Enter a device ID instead
+        </button>
+      ) : (
+        <div className="flex items-start gap-2 mb-4">
+          <TextField
+            label="Device ID"
             value={searchId}
             onChange={(e) => setSearchId(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && search()}
             placeholder="e.g. ESP32-ABCD1234"
-            className="field flex-1"
+            className="flex-1"
+            error={searchError}
           />
-          <button
-            onClick={search}
-            disabled={searching || !searchId.trim()}
-            className="btn-filled"
-          >
-            {searching ? '…' : 'Find'}
+          <button onClick={search} disabled={searching || !searchId.trim()} className="btn-tonal h-12">
+            {searching ? 'Finding…' : 'Find'}
           </button>
         </div>
-        )}
+      )}
 
-        {searchError && (
-          <p className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-3">{searchError}</p>
-        )}
-
-        {/* Found device card */}
-        {foundDevice && (
-          <div className="card-outlined p-4 mb-4 space-y-2">
-            <div className="flex items-center gap-3">
-              <Icon name="check_circle" filled className="text-primary" />
-              <div>
-                <p className="text-sm font-medium text-on-surface">{foundDevice.deviceName}</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-primary' : 'bg-outline'}`} />
-                  <span className="text-xs text-on-surface-variant capitalize">
-                    {foundDevice.deviceType ?? 'Unknown'} · {isOnline ? 'Online' : 'Offline'}
-                  </span>
-                </div>
-              </div>
+      {foundDevice && (
+        <div className="card-outlined p-4 mb-2">
+          <div className="flex items-center gap-3">
+            <Icon name="check_circle" filled className="text-primary" />
+            <div>
+              <p className="text-body-lg text-on-surface">{foundDevice.deviceName}</p>
+              <p className="flex items-center gap-1.5 text-body-sm text-on-surface-variant capitalize">
+                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-primary' : 'bg-outline'}`} />
+                {foundDevice.deviceType ?? 'Unknown'} · {isOnline ? 'Online' : 'Offline'}
+              </p>
             </div>
-            {!isCamera && <div className="border-t border-outline-variant pt-3 mt-1 space-y-2">
-              <p className="text-xs font-medium text-on-surface-variant">Modules</p>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <Icon name="science" size={20} className="text-on-surface-variant" />
-                <span className="flex-1 text-sm text-on-surface">Fertilizer module</span>
-                <input
-                  type="checkbox"
-                  checked={hasFertilizerModule}
-                  onChange={(e) => setHasFertilizerModule(e.target.checked)}
-                  className="w-4 h-4 accent-primary"
-                />
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <Icon name="light_mode" size={20} className="text-on-surface-variant" />
-                <span className="flex-1 text-sm text-on-surface">Light module</span>
-                <input
-                  type="checkbox"
-                  checked={hasLightingModule}
-                  onChange={(e) => setHasLightingModule(e.target.checked)}
-                  className="w-4 h-4 accent-primary"
-                />
-              </label>
-            </div>}
           </div>
-        )}
-
-        {claimError && (
-          <p className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-3">{claimError}</p>
-        )}
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            onClick={onClose}
-            className="btn-text"
-          >
-            Cancel
-          </button>
-          {foundDevice && (
-            <button
-              onClick={claim}
-              disabled={claiming}
-              className="btn-filled"
-            >
-              {claiming ? 'Claiming…' : 'Claim device'}
-            </button>
+          {!isCamera && (
+            <div className="border-t border-outline-variant pt-3 mt-3">
+              <p className="text-label-lg text-on-surface-variant mb-1">Installed modules</p>
+              {[
+                ['science', 'Fertilizer module', hasFertilizerModule, setHasFertilizerModule],
+                ['light_mode', 'Light module', hasLightingModule, setHasLightingModule],
+              ].map(([icon, label, checked, set]) => (
+                <label key={label} className="state-layer flex items-center gap-3 h-12 px-2 -mx-2 rounded-lg cursor-pointer">
+                  <Icon name={icon} size={20} className="text-on-surface-variant" />
+                  <span className="flex-1 text-body-lg text-on-surface">{label}</span>
+                  <input type="checkbox" checked={checked} onChange={(e) => set(e.target.checked)} className="checkbox" />
+                </label>
+              ))}
+            </div>
           )}
         </div>
-      </div>
-    </div>
+      )}
+
+      {claimError && <p className="banner banner-error mt-3"><Icon name="error" />{claimError}</p>}
+    </Dialog>
   )
 }
+
+const TYPE_LABEL = { camera: 'Camera', indoor: 'Indoor', outdoor: 'Outdoor' }
 
 export default function DevicesPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [devices, setDevices] = useState([])
+  const [zoneNames, setZoneNames] = useState({})
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
+  const [filter, setFilter] = useState('all')
 
   useEffect(() => {
     if (!user) return
@@ -271,73 +240,83 @@ export default function DevicesPage() {
     return unsub
   }, [user])
 
+  // Zone names for the Zone column
+  useEffect(() => {
+    if (!user) return
+    return onSnapshot(query(collection(db, 'zones'), where('userId', '==', user.uid)), (snap) => {
+      setZoneNames(Object.fromEntries(snap.docs.map((d) => [d.id, d.data().zoneName])))
+    })
+  }, [user])
+
   const onlineCount = devices.filter((d) => d.status === 'online').length
   const offlineCount = devices.length - onlineCount
-
-  if (loading) {
-    return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
-  }
+  const shown = devices.filter((d) => filter === 'all' || (filter === 'online') === (d.status === 'online'))
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-headline-sm text-on-surface">Devices</h1>
-        <button onClick={() => setShowAdd(true)} className="btn-filled">
-          <Icon name="add" />
-          Add device
-        </button>
-      </div>
+      <PageHeader
+        title="Devices"
+        subtitle="Sensor nodes and cameras on your account"
+        actions={<button onClick={() => setShowAdd(true)} className="btn-filled"><Icon name="add" />Add device</button>}
+      />
 
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {[
-          { label: 'Total devices', value: devices.length, icon: 'router',   tone: 'bg-primary-container text-on-primary-container' },
-          { label: 'Online',        value: onlineCount,    icon: 'wifi',     tone: 'bg-secondary-container text-on-secondary-container' },
-          { label: 'Offline',       value: offlineCount,   icon: 'wifi_off', tone: 'bg-surface-container-highest text-on-surface-variant' },
-        ].map(({ label, value, icon, tone }) => (
-          <div key={label} className={`rounded-xl p-4 flex items-center gap-3 ${tone}`}>
-            <Icon name={icon} size={32} />
-            <div>
-              <p className="text-headline-sm">{value}</p>
-              <p className="text-label-md">{label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {devices.length === 0 ? (
-        <div className="card-outlined p-8 text-center">
-          <Icon name="router" size={40} className="text-on-surface-variant" />
-          <p className="text-body-md text-on-surface-variant mt-2">No devices registered yet.</p>
-        </div>
+      {loading ? <Loading /> : devices.length === 0 ? (
+        <EmptyState
+          icon="router"
+          title="No devices yet"
+          body="Power on a GrowNex sensor node or camera, then add it here."
+          action={<button onClick={() => setShowAdd(true)} className="btn-filled"><Icon name="add" />Add device</button>}
+        />
       ) : (
-        <div className="flex flex-col gap-3">
-          {devices.map((device) => {
-            const online = device.status === 'online'
-            return (
-              <div
-                key={device.id}
-                onClick={() => navigate(`/devices/${device.id}`)}
-                className="card state-layer p-4 flex items-center gap-4 cursor-pointer"
-              >
-                <div className={`w-12 h-12 rounded-full grid place-items-center flex-shrink-0 ${online ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-highest text-on-surface-variant'}`}>
-                  <Icon name={device.deviceType === 'camera' ? 'photo_camera' : 'sensors'} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-title-md text-on-surface">{device.deviceName}</p>
-                  <p className="text-body-md text-on-surface-variant capitalize">
-                    {device.deviceType === 'camera' ? 'Camera' : device.deviceType === 'indoor' ? 'Indoor' : 'Outdoor'}
-                  </p>
-                </div>
-                <span className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-label-lg flex-shrink-0 ${online ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-highest text-on-surface-variant'}`}>
-                  <Icon name={online ? 'wifi' : 'wifi_off'} size={18} />
-                  {online ? 'Online' : 'Offline'}
-                </span>
-                <Icon name="chevron_right" className="text-on-surface-variant" />
-              </div>
-            )
-          })}
-        </div>
+        <>
+          <div className="flex gap-2 mb-4 flex-wrap">
+            {[['all', 'All', devices.length], ['online', 'Online', onlineCount], ['offline', 'Offline', offlineCount]].map(([k, l, n]) => (
+              <button key={k} onClick={() => setFilter(k)} aria-pressed={filter === k} className={`chip ${filter === k ? 'chip-selected' : ''}`}>
+                {filter === k && <Icon name="check" />}{l}<span className="opacity-70">{n}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="card overflow-x-auto">
+            <table className="table">
+              <thead>
+                <tr><th>Device</th><th>Type</th><th>Zone</th><th>Status</th><th>Last seen</th><th className="w-12" /></tr>
+              </thead>
+              <tbody>
+                {shown.map((device) => {
+                  const online = device.status === 'online'
+                  return (
+                    <tr key={device.id} role="link" tabIndex={0}
+                      onClick={() => navigate(`/devices/${device.id}`)}
+                      onKeyDown={(e) => e.key === 'Enter' && navigate(`/devices/${device.id}`)}>
+                      <td>
+                        <span className="flex items-center gap-3">
+                          <span className={`list-icon ${online ? '' : 'bg-surface-container-highest text-on-surface-variant'}`}>
+                            <Icon name={device.deviceType === 'camera' ? 'photo_camera' : 'sensors'} />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-body-lg text-on-surface">{device.deviceName}</span>
+                            {device.deviceName !== device.id && <span className="block text-body-sm text-on-surface-variant font-mono">{device.id}</span>}
+                          </span>
+                        </span>
+                      </td>
+                      <td className="text-on-surface-variant">{TYPE_LABEL[device.deviceType] ?? 'Outdoor'}</td>
+                      <td className="text-on-surface-variant">{zoneNames[device.assignedZoneId] ?? '—'}</td>
+                      <td>
+                        <span className={`tag ${online ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-highest text-on-surface-variant'}`}>
+                          <Icon name={online ? 'wifi' : 'wifi_off'} />{online ? 'Online' : 'Offline'}
+                        </span>
+                      </td>
+                      <td className="text-on-surface-variant whitespace-nowrap">{device.lastSync ? formatRelative(device.lastSync) : 'Never'}</td>
+                      <td><Icon name="chevron_right" className="text-on-surface-variant" /></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {shown.length === 0 && <p className="p-6 text-center text-body-md text-on-surface-variant">No {filter} devices.</p>}
+          </div>
+        </>
       )}
 
       {showAdd && <AddDeviceModal user={user} onClose={() => setShowAdd(false)} />}

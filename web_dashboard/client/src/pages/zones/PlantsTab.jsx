@@ -6,6 +6,9 @@ import {
 import { db } from '../../firebase'
 import StatusLabel from '../../components/ui/StatusLabel'
 import Icon from '../../components/ui/Icon'
+import TextField from '../../components/ui/TextField'
+import Dialog, { Sheet } from '../../components/ui/Dialog'
+import Loading from '../../components/ui/Loading'
 import { useAuth } from '../../context/AuthContext'
 import { fetchPlantProfile } from '../../lib/aiSummary'
 import { zoneFitHint } from '../../lib/zoneFit'
@@ -46,32 +49,29 @@ function MoistureBar({ moisture, min, max }) {
     : 'Too wet'
 
   return (
-    <div className="mt-3 pt-3 border-t border-outline-variant">
-      <div className="flex justify-between text-xs mb-1.5">
+    <div>
+      <div className="flex justify-between text-body-sm mb-1.5">
         <span className="text-on-surface-variant">Soil moisture</span>
-        <span className={`font-medium ${color}`}>{Number(moisture).toFixed(1)}%</span>
+        <span className={`font-medium ${color}`}>{Number(moisture).toFixed(1)}%{label && ` · ${label}`}</span>
       </div>
-      <div className="w-full bg-surface-container-high rounded-full h-2">
-        <div
-          className={`h-2 rounded-full transition-all ${barColor}`}
-          style={{ width: `${Math.min(Math.max(moisture, 0), 100)}%` }}
-        />
+      <div className="relative w-full bg-surface-container-highest rounded-full h-1.5">
+        {hasRange && (
+          <div className="absolute inset-y-0 bg-primary/20 rounded-full"
+            style={{ left: `${Math.max(min, 0)}%`, width: `${Math.max(Math.min(max, 100) - Math.max(min, 0), 0)}%` }} />
+        )}
+        <div className={`relative h-1.5 rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(Math.max(moisture, 0), 100)}%` }} />
       </div>
-      {label && <p className={`text-xs mt-1 ${color}`}>{label}</p>}
-      {hasRange && (
-        <p className="text-xs text-on-surface-variant mt-0.5">Ideal: {Number(min).toFixed(0)}–{Number(max).toFixed(0)}%</p>
-      )}
+      {hasRange && <p className="text-body-sm text-on-surface-variant mt-1">Ideal {Number(min).toFixed(0)}–{Number(max).toFixed(0)}%</p>}
     </div>
   )
 }
 
 /* ── Slot Picker ─────────────────────────────────────────────────────── */
-function SlotPicker({ takenSlots, selected, onChange }) {
+function SlotPicker({ takenSlots, selected, onChange, error }) {
   return (
     <div>
-      <label className="block text-label-lg text-on-surface-variant mb-2">Plant slot</label>
-      <p className="text-xs text-on-surface-variant mb-3">Select an available slot for this plant.</p>
-      <div className="flex gap-2">
+      <p className="text-label-lg text-on-surface-variant mb-2">Plant slot</p>
+      <div role="group" aria-label="Plant slot" className="grid grid-cols-4 gap-2">
         {[1, 2, 3, 4].map((slot) => {
           const isTaken    = takenSlots.has(slot)
           const isSelected = selected === slot
@@ -82,80 +82,65 @@ function SlotPicker({ takenSlots, selected, onChange }) {
               disabled={isTaken}
               onClick={() => onChange(isSelected ? null : slot)}
               aria-pressed={isSelected}
-              className={`state-layer w-16 h-16 rounded-xl border flex flex-col items-center justify-center gap-1 ${
+              className={`state-layer h-16 rounded-xl border flex flex-col items-center justify-center gap-1 ${
                 isTaken
                   ? 'border-on-surface/[.12] text-on-surface/[.38] cursor-not-allowed'
                   : isSelected
                     ? 'bg-secondary-container border-secondary-container text-on-secondary-container'
-                    : 'border-outline text-on-surface-variant'
+                    : 'border-outline-variant text-on-surface-variant'
               }`}
             >
               <Icon name={isTaken ? 'block' : isSelected ? 'check_circle' : 'potted_plant'} filled={isSelected} size={20} />
-              <span className="text-label-md">Slot {slot}</span>
+              <span className="text-label-md">{isTaken ? 'Taken' : `Slot ${slot}`}</span>
             </button>
           )
         })}
       </div>
-      {selected == null && (
-        <p className="text-xs text-on-surface-variant mt-2">No slot selected</p>
-      )}
+      <p className={`text-body-sm mt-1.5 ${error ? 'text-error' : 'text-on-surface-variant'}`}>
+        {error || 'Matches the soil sensor the plant sits on.'}
+      </p>
     </div>
   )
 }
 
 /* ── Preferred Conditions Fields ─────────────────────────────────────── */
 function ConditionFields({ prefs, onChange }) {
-  function field(key) {
-    return (
-      <input
-        type="number"
-        value={prefs[key] ?? ''}
-        onChange={(e) => onChange({ ...prefs, [key]: e.target.value === '' ? null : parseFloat(e.target.value) })}
-        className="field w-full"
-        placeholder="—"
-        step="0.1"
-      />
-    )
-  }
-
+  const num = (key, label) => (
+    <TextField
+      type="number"
+      step="0.1"
+      label={label}
+      value={prefs[key] ?? ''}
+      onChange={(e) => onChange({ ...prefs, [key]: e.target.value === '' ? null : parseFloat(e.target.value) })}
+    />
+  )
   return (
-    <div className="space-y-3">
-      {[
-        { label: 'Moisture (%)',    min: 'preferredMoistureMin',    max: 'preferredMoistureMax'    },
-        { label: 'Humidity (%)',    min: 'preferredHumidityMin',    max: 'preferredHumidityMax'    },
-        { label: 'Temperature (°C)', min: 'preferredTemperatureMin', max: 'preferredTemperatureMax' },
-      ].map(({ label, min, max }) => (
-        <div key={label}>
-          <p className="text-xs font-medium text-on-surface-variant mb-1.5">{label}</p>
-          <div className="flex items-center gap-2">
-            {field(min)}
-            <span className="text-on-surface-variant text-sm font-medium">–</span>
-            {field(max)}
-          </div>
-        </div>
-      ))}
-      <div>
-        <p className="text-xs font-medium text-on-surface-variant mb-1.5">Light condition</p>
-        <select
-          value={prefs.preferredLightCondition ?? ''}
-          onChange={(e) => onChange({ ...prefs, preferredLightCondition: e.target.value || null })}
-          className="field w-full capitalize"
-        >
-          {LIGHT_OPTIONS.map((o) => (
-            <option key={o} value={o}>{o || 'Not specified'}</option>
-          ))}
-        </select>
-      </div>
+    <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+      {num('preferredMoistureMin', 'Moisture min (%)')}
+      {num('preferredMoistureMax', 'Moisture max (%)')}
+      {num('preferredHumidityMin', 'Humidity min (%)')}
+      {num('preferredHumidityMax', 'Humidity max (%)')}
+      {num('preferredTemperatureMin', 'Temp min (°C)')}
+      {num('preferredTemperatureMax', 'Temp max (°C)')}
+      <TextField
+        as="select"
+        label="Light condition"
+        value={prefs.preferredLightCondition ?? ''}
+        onChange={(e) => onChange({ ...prefs, preferredLightCondition: e.target.value || null })}
+        className="col-span-2 capitalize"
+      >
+        {LIGHT_OPTIONS.map((o) => <option key={o} value={o}>{o || 'Not specified'}</option>)}
+      </TextField>
     </div>
   )
 }
 
 /* ── Add Plant Modal ─────────────────────────────────────────────────── */
-function AddPlantModal({ zone, takenSlots, onClose }) {
+function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
   const { user } = useAuth()
   const [species,      setSpecies]     = useState('')
   const [name,         setName]        = useState('')
-  const [selectedSlot, setSelectedSlot]= useState(null)
+  const [selectedSlot, setSelectedSlot]= useState(initialSlot)
   const [showPrefs,    setShowPrefs]   = useState(false)
   const [prefs,        setPrefs]       = useState({})
   const [errors,       setErrors]      = useState({})
@@ -263,158 +248,102 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
     }
   }
 
+  const aiOk = aiMeta && aiMeta.source !== 'fallback' && aiMeta.source !== 'error'
+
   return (
-    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="dialog w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-headline-sm text-on-surface">Add plant</h2>
-          <button onClick={onClose} className="icon-btn" aria-label="Close"><Icon name="close" /></button>
-        </div>
+    <Dialog
+      title="Add plant"
+      size="lg"
+      onClose={onClose}
+      busy={loading}
+      actions={<>
+        <button type="button" onClick={onClose} className="btn-text">Cancel</button>
+        <button type="submit" form="add-plant-form" disabled={loading} className="btn-filled">{loading ? 'Adding…' : 'Add plant'}</button>
+      </>}
+    >
+      <form id="add-plant-form" onSubmit={handleSubmit} className="space-y-5 pt-1">
+        {errors.submit && <p className="banner banner-error"><Icon name="error" />{errors.submit}</p>}
 
-        {errors.submit && (
-          <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">{errors.submit}</p>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-16 h-16 rounded-xl bg-surface-container-highest flex items-center justify-center overflow-hidden shrink-0">
-              {photoPreview ? (
-                <img src={photoPreview} alt="Plant preview" className="w-full h-full object-cover" />
-              ) : (
-                <Icon name="add_photo_alternate" className="text-on-surface-variant" />
-              )}
-            </div>
-            <label className="btn-text cursor-pointer">
-              {photoFile ? 'Change photo' : 'Add photo'} <span className="text-on-surface-variant font-normal">(optional)</span>
-              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
-            </label>
-          </div>
-
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">
-              Species <span className="text-error">*</span>
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
+        <div className="flex items-start gap-4">
+          <label className="state-layer w-20 h-20 rounded-xl bg-surface-container-highest grid place-items-center overflow-hidden shrink-0 cursor-pointer" aria-label="Add photo">
+            {photoPreview
+              ? <img src={photoPreview} alt="Plant preview" className="w-full h-full object-cover" />
+              : <Icon name="add_photo_alternate" className="text-on-surface-variant" />}
+            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
+          </label>
+          <div className="flex-1 space-y-4">
+            <div className="flex items-start gap-2">
+              <TextField
+                label="Species *"
                 value={species}
                 onChange={(e) => { setSpecies(e.target.value); setAiMeta(null) }}
-                className="field flex-1"
                 placeholder="e.g. Phalaenopsis"
+                error={errors.species}
+                className="flex-1"
+                autoFocus
               />
-              <button
-                type="button"
-                onClick={suggestConditions}
-                disabled={aiLoading || species.trim().length < 3}
-                className="btn-tonal h-12 px-4 shrink-0"
-              >
-                <Icon name="auto_awesome" />
-                {aiLoading ? '…' : 'Suggest'}
+              <button type="button" onClick={suggestConditions} disabled={aiLoading || species.trim().length < 3} className="btn-tonal h-12">
+                <Icon name="auto_awesome" />{aiLoading ? 'Thinking…' : 'Suggest'}
               </button>
             </div>
-            {errors.species && <p className="text-xs text-error mt-1">{errors.species}</p>}
-            {aiMeta?.source === 'fallback' || aiMeta?.source === 'error' ? (
-              <p className="text-xs text-on-surface-variant mt-1">Couldn’t fetch suggestions — enter the conditions manually.</p>
-            ) : aiMeta ? (
-              <p className="text-xs text-on-surface-variant mt-1">
-                {aiMeta.commonName
-                  ? <>Interpreted as <span className="font-medium">{aiMeta.commonName}</span>. </>
-                  : null}
+            <TextField label="Nickname (optional)" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My Orchid" />
+          </div>
+        </div>
+
+        <p className="text-body-sm text-on-surface-variant -mt-2">
+          {aiMeta?.source === 'fallback' || aiMeta?.source === 'error'
+            ? 'Couldn’t fetch suggestions — enter the conditions manually.'
+            : aiMeta ? (
+              <>
+                {aiMeta.commonName && <>Interpreted as <span className="font-medium text-on-surface">{aiMeta.commonName}</span>. </>}
                 {aiMeta.confidence === 'low' && <span className="text-warning">Low-confidence guess — double-check these. </span>}
-                {aiMeta.careNotes && <span>Care tips added to Notes below. </span>}
+                {aiMeta.careNotes && <span>Care tips added to Notes. </span>}
+              </>
+            ) : 'Suggest fills in the preferred conditions and adds care tips for this species to Notes.'}
+        </p>
+
+        <SlotPicker takenSlots={takenSlots} selected={selectedSlot} onChange={setSelectedSlot} error={errors.slot} />
+
+        <div className="rounded-xl border border-outline-variant overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowPrefs(!showPrefs)}
+            aria-expanded={showPrefs}
+            className="state-layer w-full flex items-center gap-3 px-4 h-14 text-left"
+          >
+            <Icon name="tune" className="text-on-surface-variant" />
+            <span className="flex-1">
+              <span className="block text-body-lg text-on-surface">Preferred growing conditions</span>
+            </span>
+            {aiOk && <span className="tag bg-primary-container text-on-primary-container"><Icon name="auto_awesome" />AI</span>}
+            <Icon name={showPrefs ? 'expand_less' : 'expand_more'} className="text-on-surface-variant" />
+          </button>
+          {showPrefs && (
+            <div className="px-4 pb-4 pt-1">
+              <p className="text-body-sm text-on-surface-variant mb-4">
+                {aiOk
+                  ? 'AI suggestion — adjust as needed. Growth stages need different moisture and feeding; revisit these as the plant matures.'
+                  : 'Used to compute the ideal zone environment. Editable later from the plant details.'}
               </p>
-            ) : (
-              <p className="text-xs text-on-surface-variant mt-1">
-                Suggest fills in the preferred conditions below and adds care tips for this species to Notes.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">
-              Plant nickname <span className="text-on-surface-variant">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="field w-full"
-              placeholder="e.g. My Orchid"
-            />
-          </div>
-
-          <div>
-            <SlotPicker takenSlots={takenSlots} selected={selectedSlot} onChange={setSelectedSlot} />
-            {errors.slot && <p className="text-xs text-error mt-1">{errors.slot}</p>}
-          </div>
-
-          {/* Preferred conditions — collapsible */}
-          <div className="border border-outline-variant rounded-xl overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowPrefs(!showPrefs)}
-              aria-expanded={showPrefs}
-              className="w-full flex items-center justify-between px-4 py-3 text-label-lg text-on-surface state-layer"
-            >
-              <span className="flex items-center gap-2">
-                <Icon name="tune" size={20} className="text-on-surface-variant" /> Preferred growing conditions <span className="text-on-surface-variant font-normal">(optional)</span>
-              </span>
-              <Icon name={showPrefs ? 'expand_less' : 'expand_more'} className="text-on-surface-variant" />
-            </button>
-            {showPrefs && (
-              <div className="px-4 pb-4 border-t border-outline-variant pt-4">
-                {aiMeta && aiMeta.source !== 'fallback' && aiMeta.source !== 'error' ? (
-                  <p className="text-xs text-primary mb-3">
-                    <span className="font-medium">AI suggestion</span> — adjust as needed. Different growth
-                    stages need different soil moisture and feeding; revisit these as the plant matures.
-                  </p>
-                ) : (
-                  <p className="text-xs text-on-surface-variant mb-3">Helps compute ideal zone environment. Edit any time from plant details.</p>
-                )}
-                <ConditionFields prefs={prefs} onChange={setPrefs} />
-              </div>
-            )}
-          </div>
-
-          {zoneHint && (
-            <div className="bg-warning-container rounded-lg p-3 text-body-md">
-              <p className="text-on-warning-container">
-                This plant {ZONE_HINT_REASON[zoneHint.reason] ?? 'is a poorer fit for'} {zone.zoneName}’s other plants
-                {zoneHint.kind === 'move' ? (
-                  <> — <span className="font-medium">{zoneHint.zone.zoneName}</span> is a closer match.</>
-                ) : (
-                  <>, and none of your other zones suit it either. Consider giving it its own zone.</>
-                )}
-              </p>
-              <button
-                type="button"
-                onClick={() => setHintDismissed(true)}
-                className="text-xs text-on-warning-container underline mt-1"
-              >
-                Dismiss
-              </button>
+              <ConditionFields prefs={prefs} onChange={setPrefs} />
             </div>
           )}
+        </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-text"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-filled"
-            >
-              {loading ? 'Adding…' : 'Add plant'}
-            </button>
+        {zoneHint && (
+          <div className="banner banner-warning">
+            <Icon name="lightbulb" />
+            <div className="flex-1">
+              This plant {ZONE_HINT_REASON[zoneHint.reason] ?? 'is a poorer fit for'} {zone.zoneName}’s other plants
+              {zoneHint.kind === 'move'
+                ? <> — <span className="font-medium">{zoneHint.zone.zoneName}</span> is a closer match.</>
+                : <>, and none of your other zones suit it either. Consider giving it its own zone.</>}
+            </div>
+            <button type="button" onClick={() => setHintDismissed(true)} className="btn-text btn-sm text-on-warning-container -my-1">Dismiss</button>
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+      </form>
+    </Dialog>
   )
 }
 
@@ -439,14 +368,12 @@ function ConditionCard({ plant, zone }) {
   const h = plantHealth(plant, zone, readings)
 
   return (
-    <div className="bg-surface-container rounded-xl p-4">
+    <div className="card-filled p-4">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-label-md text-on-surface-variant">Condition</p>
-        <span className={`inline-flex items-center h-6 px-2.5 rounded-lg text-label-md ${statScoreBadge(h.score)}`}>
-          {h.score != null ? `${h.score}%` : '—'}
-        </span>
+        <p className="text-title-sm text-on-surface">7-day condition</p>
+        <span className={`tag ${statScoreBadge(h.score)}`}>{h.score != null ? `${h.score}%` : '—'}</span>
       </div>
-      <p className="text-sm text-on-surface-variant">{plantHealthSummary(h)}</p>
+      <p className="text-body-md text-on-surface-variant">{plantHealthSummary(h)}</p>
     </div>
   )
 }
@@ -523,149 +450,118 @@ function PlantDetailModal({ plant, zone, onClose }) {
     }
   }
 
+  const status = plantStatus(zone, plant)
+
   return (
-    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="dialog w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-headline-sm text-on-surface">Plant details</h2>
-          <div className="flex items-center">
-            <button
-              onClick={() => setShowDelConfirm(true)}
-              className="icon-btn text-error"
-              title="Remove plant"
-              aria-label="Remove plant"
-            >
-              <Icon name="delete" />
-            </button>
-            <button onClick={onClose} className="icon-btn" aria-label="Close"><Icon name="close" /></button>
-          </div>
-        </div>
+    <Sheet
+      title="Plant details"
+      onClose={onClose}
+      busy={deleting || showDelConfirm}
+      headerActions={
+        <button onClick={() => setShowDelConfirm(true)} className="icon-btn text-error" aria-label="Remove plant" data-tip="Remove plant">
+          <Icon name="delete" />
+        </button>
+      }
+      actions={<>
+        {saved && <span className="flex items-center gap-1 mr-auto text-body-md text-primary"><Icon name="check" size={18} />Saved</span>}
+        <button onClick={onClose} className="btn-text">Close</button>
+        <button onClick={handleSave} disabled={loading} className="btn-filled">{loading ? 'Saving…' : 'Save changes'}</button>
+      </>}
+    >
+      {showDelConfirm && (
+        <Dialog
+          icon="delete"
+          title="Remove plant?"
+          onClose={() => setShowDelConfirm(false)}
+          busy={deleting}
+          actions={<>
+            <button onClick={() => setShowDelConfirm(false)} disabled={deleting} className="btn-text">Cancel</button>
+            <button onClick={handleDelete} disabled={deleting} className="btn-error">{deleting ? 'Removing…' : 'Remove'}</button>
+          </>}
+        >
+          <span className="font-medium text-on-surface">{plant.plantName}</span> and its photo will be deleted. This can't be undone.
+        </Dialog>
+      )}
 
-        {/* Delete confirmation inline */}
-        {showDelConfirm && (
-          <div className="bg-error-container rounded-xl p-4 mb-4">
-            <p className="text-body-md text-on-error-container mb-3">
-              Remove <span className="font-medium">{plant.plantName}</span>? This cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowDelConfirm(false)}
-                disabled={deleting}
-                className="btn-text btn-sm text-on-error-container"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="btn-error btn-sm"
-              >
-                {deleting ? 'Removing…' : 'Remove'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="w-full h-36 rounded-xl bg-surface-container-high flex items-center justify-center mb-2 overflow-hidden">
-          {photoUrl ? (
-            <img src={photoUrl} alt={plant.plantName} className="w-full h-full object-contain" />
-          ) : (
-            <Icon name="local_florist" size={48} className="text-on-surface-variant" />
-          )}
-        </div>
-        <div className="flex items-center gap-3 mb-5">
-          <label className="btn-text btn-sm cursor-pointer">
-            {photoBusy ? 'Working…' : photoUrl ? 'Change photo' : 'Add photo'}
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handlePhotoFile}
-              disabled={photoBusy}
-              className="hidden"
-            />
+      <div className="relative w-full aspect-[4/3] rounded-xl bg-surface-container-high grid place-items-center overflow-hidden">
+        {photoUrl
+          ? <img src={photoUrl} alt={plant.plantName} className="absolute inset-0 w-full h-full object-cover" />
+          : <Icon name="local_florist" size={48} className="text-on-surface-variant" />}
+        <div className="absolute bottom-3 right-3 flex gap-2">
+          <label className="btn-tonal btn-sm cursor-pointer shadow-elevation-1">
+            <Icon name="add_photo_alternate" />
+            {photoBusy ? 'Working…' : photoUrl ? 'Change' : 'Add photo'}
+            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoFile} disabled={photoBusy} className="hidden" />
           </label>
           {photoUrl && (
-            <button
-              type="button"
-              onClick={handleRemovePhoto}
-              disabled={photoBusy}
-              className="btn-text btn-sm text-error"
-            >
-              Remove
+            <button type="button" onClick={handleRemovePhoto} disabled={photoBusy}
+              className="icon-btn icon-btn-sm icon-btn-tonal shadow-elevation-1" aria-label="Remove photo" data-tip="Remove photo">
+              <Icon name="delete" />
             </button>
           )}
         </div>
-        {photoError && <p className="text-xs text-error mb-3">{photoError}</p>}
-
-        <div className="flex gap-2 mb-5 flex-wrap">
-          {plantStatus(zone, plant) && <StatusLabel status={plantStatus(zone, plant)} />}
-          {plant.slotNumber > 0 && (
-            <span className="inline-flex items-center h-6 px-2.5 rounded-lg border border-outline-variant text-label-md text-on-surface-variant">
-              Slot {plant.slotNumber}
-            </span>
-          )}
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setSaved(false) }}
-              className="field w-full"
-            />
-          </div>
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Species</label>
-            <input
-              type="text"
-              value={species}
-              onChange={(e) => { setSpecies(e.target.value); setSaved(false) }}
-              className="field w-full"
-            />
-          </div>
-
-          {/* Preferred conditions — editable */}
-          <div className="bg-surface-container rounded-xl p-4">
-            <p className="text-label-md text-on-surface-variant mb-3">
-              Preferred growing conditions
-            </p>
-            <ConditionFields prefs={prefs} onChange={(p) => { setPrefs(p); setSaved(false) }} />
-          </div>
-
-          {zone && <ConditionCard plant={plant} zone={zone} />}
-
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Notes</label>
-            <textarea
-              value={notes}
-              onChange={(e) => { setNotes(e.target.value); setSaved(false) }}
-              rows={4}
-              className="field w-full resize-none"
-              placeholder="Enter notes"
-            />
-          </div>
-
-          <button
-            onClick={handleSave}
-            disabled={loading}
-            className="btn-filled w-full"
-          >
-            {loading ? 'Saving…' : saved ? 'Saved' : 'Save changes'}
-          </button>
-        </div>
       </div>
-    </div>
+      {photoError && <p className="banner banner-error mt-3"><Icon name="error" />{photoError}</p>}
+
+      <div className="flex gap-2 mt-4 mb-6 flex-wrap">
+        {status && <StatusLabel status={status} />}
+        {plant.slotNumber > 0 && <span className="tag border border-outline-variant text-on-surface-variant">Slot {plant.slotNumber}</span>}
+      </div>
+
+      <div className="space-y-4">
+        <TextField label="Name" value={name} onChange={(e) => { setName(e.target.value); setSaved(false) }} />
+        <TextField label="Species" value={species} onChange={(e) => { setSpecies(e.target.value); setSaved(false) }} />
+
+        {zone && <ConditionCard plant={plant} zone={zone} />}
+
+        <h3 className="text-title-sm text-on-surface pt-2">Preferred growing conditions</h3>
+        <ConditionFields prefs={prefs} onChange={(p) => { setPrefs(p); setSaved(false) }} />
+
+        <TextField as="textarea" label="Notes" rows={5} value={notes} onChange={(e) => { setNotes(e.target.value); setSaved(false) }} />
+      </div>
+    </Sheet>
   )
 }
 
 /* ── Plants Tab ──────────────────────────────────────────────────────── */
+function PlantCard({ plant, zone, onOpen }) {
+  const slotMoisture = plant.slotNumber > 0 ? zone[`latestMoisture${plant.slotNumber}`] ?? null : null
+  const status = plantStatus(zone, plant)
+  return (
+    <button onClick={onOpen} className="card card-link overflow-hidden flex flex-col">
+      <div className="relative h-36 w-full bg-surface-container-high grid place-items-center">
+        {plant.photoUrl
+          ? <img src={plant.photoUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          : <Icon name="local_florist" size={40} className="text-on-surface-variant/60" />}
+        {plant.slotNumber > 0 && (
+          <span className="tag absolute top-3 left-3 bg-inverse-surface/80 text-inverse-on-surface">Slot {plant.slotNumber}</span>
+        )}
+      </div>
+      <div className="p-4 flex flex-col gap-3 w-full flex-1">
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-title-md text-on-surface truncate">{plant.plantName}</p>
+            <p className="text-body-md text-on-surface-variant truncate">{plant.species}</p>
+          </div>
+          {status && <StatusLabel status={status} />}
+        </div>
+        {plant.preferredLightCondition && (
+          <span className="tag self-start bg-surface-container-high text-on-surface-variant capitalize">
+            <Icon name="light_mode" />{plant.preferredLightCondition} light
+          </span>
+        )}
+        <div className="mt-auto">
+          <MoistureBar moisture={slotMoisture} min={plant.preferredMoistureMin ?? null} max={plant.preferredMoistureMax ?? null} />
+        </div>
+      </div>
+    </button>
+  )
+}
+
 export default function PlantsTab({ zone }) {
   const [plants,   setPlants]   = useState([])
   const [loading,  setLoading]  = useState(true)
-  const [showAdd,  setShowAdd]  = useState(false)
+  const [adding,   setAdding]   = useState(null)  // null = closed, else { slot }
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
@@ -681,86 +577,42 @@ export default function PlantsTab({ zone }) {
 
   const isFull     = plants.length >= MAX_PLANTS
   const takenSlots = new Set(plants.map((p) => p.slotNumber).filter(Boolean))
+  const bySlot     = Object.fromEntries(plants.filter((p) => p.slotNumber > 0).map((p) => [p.slotNumber, p]))
+  const unslotted  = plants.filter((p) => !(p.slotNumber > 0))
 
-  if (loading) {
-    return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
-  }
+  if (loading) return <Loading />
 
   return (
     <>
-      {showAdd && (
-        <AddPlantModal
-          zone={zone}
-          takenSlots={takenSlots}
-          onClose={() => setShowAdd(false)}
-        />
-      )}
-      {selected && (
-        <PlantDetailModal plant={selected} zone={zone} onClose={() => setSelected(null)} />
-      )}
+      {adding && <AddPlantModal zone={zone} takenSlots={takenSlots} initialSlot={adding.slot} onClose={() => setAdding(null)} />}
+      {selected && <PlantDetailModal plant={selected} zone={zone} onClose={() => setSelected(null)} />}
 
-      <div>
-        <button
-          onClick={() => !isFull && setShowAdd(true)}
-          disabled={isFull}
-          className="btn-filled w-full mb-5"
-        >
-          <Icon name={isFull ? 'block' : 'add'} />
-          {isFull ? `Zone full (${plants.length}/${MAX_PLANTS})` : 'Add plant'}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex-1">
+          <h3 className="text-title-lg text-on-surface">Plants</h3>
+          <p className="text-body-md text-on-surface-variant">{plants.length} of {MAX_PLANTS} slots used</p>
+        </div>
+        <button onClick={() => setAdding({ slot: null })} disabled={isFull} className="btn-filled">
+          <Icon name={isFull ? 'block' : 'add'} />{isFull ? 'Zone full' : 'Add plant'}
         </button>
+      </div>
 
-        {plants.length === 0 ? (
-          <p className="text-sm text-on-surface-variant text-center py-10">No plants in this zone yet.</p>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[1, 2, 3, 4].map((slot) => bySlot[slot] ? (
+          <PlantCard key={bySlot[slot].id} plant={bySlot[slot]} zone={zone} onOpen={() => setSelected(bySlot[slot])} />
         ) : (
-          <div className="space-y-3">
-            {plants.map((plant) => {
-              const slotMoisture = plant.slotNumber > 0
-                ? zone[`latestMoisture${plant.slotNumber}`] ?? null
-                : null
-              return (
-                <button
-                  key={plant.id}
-                  onClick={() => setSelected(plant)}
-                  className="card state-layer w-full text-left p-5"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="shrink-0 w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center overflow-hidden">
-                      {plant.photoUrl ? (
-                        <img src={plant.photoUrl} alt={plant.plantName} className="w-full h-full object-cover" />
-                      ) : (
-                        <Icon name="local_florist" className="text-on-surface-variant" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between mb-1.5">
-                        <p className="text-title-md text-on-surface">{plant.plantName}</p>
-                        {plantStatus(zone, plant) && <StatusLabel status={plantStatus(zone, plant)} className="ml-2" />}
-                      </div>
-                      <p className="text-body-md text-on-surface-variant mb-3">{plant.species}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    {plant.slotNumber > 0 && (
-                      <span className="inline-flex items-center h-6 px-2.5 rounded-lg border border-outline-variant text-label-md text-on-surface-variant">
-                        Slot {plant.slotNumber}
-                      </span>
-                    )}
-                    {plant.preferredLightCondition && (
-                      <span className="inline-flex items-center h-6 px-2.5 rounded-lg bg-warning-container text-on-warning-container text-label-md capitalize">
-                        Light: {plant.preferredLightCondition}
-                      </span>
-                    )}
-                  </div>
-                  <MoistureBar
-                    moisture={slotMoisture}
-                    min={plant.preferredMoistureMin ?? null}
-                    max={plant.preferredMoistureMax ?? null}
-                  />
-                </button>
-              )
-            })}
-          </div>
-        )}
+          <button
+            key={`empty-${slot}`}
+            onClick={() => !isFull && setAdding({ slot })}
+            disabled={isFull}
+            className="state-layer min-h-[260px] rounded-xl border-2 border-dashed border-outline-variant flex flex-col items-center justify-center gap-2 text-on-surface-variant disabled:opacity-50"
+          >
+            <Icon name="add_circle" size={32} />
+            <span className="text-title-sm">Slot {slot} is empty</span>
+            {!isFull && <span className="text-body-sm">Add a plant here</span>}
+          </button>
+        ))}
+        {unslotted.map((p) => <PlantCard key={p.id} plant={p} zone={zone} onOpen={() => setSelected(p)} />)}
       </div>
     </>
   )

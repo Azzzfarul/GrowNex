@@ -3,6 +3,9 @@ import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore'
 import { db } from '../../firebase'
 import Icon from '../../components/ui/Icon'
 import Switch from '../../components/ui/Switch'
+import TextField from '../../components/ui/TextField'
+import Loading from '../../components/ui/Loading'
+import EmptyState from '../../components/ui/EmptyState'
 import { useAuth } from '../../context/AuthContext'
 import { fetchAutomationPlan } from '../../lib/aiSummary'
 
@@ -12,17 +15,18 @@ const LIGHT_RE = /^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$
 const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN) ([01]?\d|2[0-3]):[0-5]\d$/
 const SAVE_FAILED = "Couldn't save the change. Please try again."
 
-function ToggleSetting({ title, subtitle, value, onChange, busy, children }) {
+function ToggleSetting({ icon, title, subtitle, value, onChange, busy, children }) {
   return (
     <div className="card p-5">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
+      <div className="flex items-center gap-4">
+        <span className={`list-icon ${value ? '' : 'bg-surface-container-highest text-on-surface-variant'}`}><Icon name={icon} /></span>
+        <div className="flex-1 min-w-0">
           <p className="text-title-md text-on-surface">{title}</p>
           <p className="text-body-md text-on-surface-variant">{subtitle}</p>
         </div>
         <Switch checked={value} onChange={onChange} disabled={busy} label={title} />
       </div>
-      {value && <div className="mt-4">{children}</div>}
+      {value && <div className="grid gap-4 sm:grid-cols-3 mt-5 pl-14">{children}</div>}
     </div>
   )
 }
@@ -199,216 +203,158 @@ export default function AutomationTab({ zone }) {
     waterDuration !== waterDurOrig || lightSched !== lightSchedOrig ||
     fertSched !== fertSchedOrig    || fertDuration !== fertDurOrig
 
-  const inputCls = 'field'
-
   if (!zone.deviceId) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <Icon name="tune" size={48} className="text-on-surface-variant mb-4" />
-        <p className="text-title-md text-on-surface">No device connected</p>
-        <p className="text-body-md text-on-surface-variant mt-2 max-w-xs">
-          Connect a device to this zone from the Overview tab to access automation controls.
-        </p>
-      </div>
+      <EmptyState
+        icon="tune"
+        title="No device connected"
+        body="Assign a sensor node to this zone on the Overview tab to control its pumps and light."
+      />
     )
   }
 
-  if (loading) {
-    return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
-  }
+  if (loading) return <Loading />
 
   return (
-    <div className="space-y-6">
-      {/* Manual controls */}
-      <div>
-        <h3 className="text-title-md text-on-surface mb-3">Manual controls</h3>
-        <div className="grid grid-cols-3 gap-3">
-          {actuators.map(({ label, icon, on, onToggle }) => (
-            <button
-              key={label}
-              onClick={onToggle}
-              aria-pressed={on}
-              className={`state-layer rounded-xl p-4 flex flex-col gap-3 text-left transition-colors ${
-                on ? 'bg-primary text-on-primary shadow-elevation-1' : 'bg-surface-container-high text-on-surface-variant'
-              }`}
-            >
-              <Icon name={icon} filled={on} size={32} />
-              <span className="flex items-center justify-between text-label-lg">
-                {label}
-                <span className="text-label-sm">{on ? 'ON' : 'OFF'}</span>
-              </span>
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[340px_minmax(0,1fr)] items-start">
+      <div className="space-y-4">
+        {/* Manual controls */}
+        <section className="card p-5">
+          <h3 className="card-title mb-1">Manual controls</h3>
+          <p className="text-body-sm text-on-surface-variant mb-4">Turn an actuator on or off right now.</p>
+          <div className="space-y-2">
+            {actuators.map(({ label, icon, on, onToggle }) => (
+              <button
+                key={label}
+                onClick={onToggle}
+                aria-pressed={on}
+                className={`state-layer w-full h-16 rounded-2xl px-4 flex items-center gap-4 text-left transition-colors duration-200 ${
+                  on ? 'bg-primary text-on-primary shadow-elevation-1' : 'bg-surface-container-highest text-on-surface'
+                }`}
+              >
+                <Icon name={icon} filled={on} />
+                <span className="flex-1 text-title-sm">{label}</span>
+                <span className="text-label-lg">{on ? 'ON' : 'OFF'}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* AI recommendation */}
+        <section className="card-outlined p-5">
+          <div className="flex items-center gap-3">
+            <span className="list-icon bg-tertiary-container text-on-tertiary-container"><Icon name="auto_awesome" /></span>
+            <div className="flex-1 min-w-0">
+              <h3 className="card-title">AI recommendation</h3>
+              <p className="text-body-sm text-on-surface-variant">A plan from this zone's plants and readings.</p>
+            </div>
+          </div>
+          {!aiPlan && (
+            <button onClick={requestAiPlan} disabled={aiLoading} className="btn-tonal mt-4">
+              <Icon name="auto_awesome" />{aiLoading ? 'Thinking…' : 'Suggest a plan'}
             </button>
-          ))}
-        </div>
+          )}
+          {aiPlan && (
+            <div className="mt-4">
+              {aiPlan.source === 'error' || !aiPlan.plan ? (
+                <p className="banner banner-error"><Icon name="cloud_off" />Couldn’t reach the AI service. Try again in a moment.</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-title-sm text-on-surface">Suggested changes</p>
+                    <span className="tag bg-primary-container text-on-primary-container">{aiPlan.source === 'ai' ? 'AI' : 'Auto'}</span>
+                  </div>
+                  <div className="rounded-lg bg-surface-container divide-y divide-outline-variant">
+                    {planRows.map(([label, cur, next]) => (
+                      <div key={label} className="flex items-center justify-between gap-3 px-3 py-2 text-body-sm">
+                        <span className="text-on-surface-variant">{label}</span>
+                        <span className="text-right whitespace-nowrap">
+                          <span className="text-on-surface-variant">{String(cur)}</span>
+                          <Icon name="arrow_forward" size={14} className="mx-1 align-middle text-on-surface-variant" />
+                          <span className={`font-medium ${String(cur) !== String(next) ? 'text-primary' : 'text-on-surface'}`}>{String(next)}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {aiPlan.rationale?.length > 0 && (
+                    <ul className="mt-3 space-y-1 text-body-sm text-on-surface-variant list-disc pl-5">
+                      {aiPlan.rationale.map((r, i) => <li key={i}>{r.text}</li>)}
+                    </ul>
+                  )}
+                  {configError && <p role="alert" className="banner banner-error mt-3"><Icon name="error" />{configError}</p>}
+                </>
+              )}
+              <div className="flex justify-end gap-2 mt-4">
+                <button onClick={() => setAiPlan(null)} className="btn-text">Dismiss</button>
+                {aiPlan.plan && aiPlan.source !== 'error' && (
+                  <button onClick={() => applyAiPlan(aiPlan.plan)} className="btn-filled">Apply plan</button>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
       </div>
 
-      {/* Automation toggles */}
-      <div>
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="text-title-md text-on-surface">Automation settings</h3>
-          <button
-            onClick={requestAiPlan}
-            disabled={aiLoading}
-            className="btn-tonal"
-          >
-            <Icon name="auto_awesome" />
-            {aiLoading ? 'Thinking…' : 'Use AI recommendation'}
-          </button>
+      {/* Automation settings */}
+      <section className="space-y-4">
+        <div>
+          <h3 className="text-title-lg text-on-surface">Automation</h3>
+          <p className="text-body-md text-on-surface-variant">Switches save immediately. Schedules are in the server's local time.</p>
         </div>
 
-        {aiPlan && (
-          <div className="card-outlined p-4 mb-4">
-            {aiPlan.source === 'error' || !aiPlan.plan ? (
-              <p className="text-sm text-on-surface-variant">Couldn’t reach the AI service. Try again in a moment.</p>
-            ) : (
-              <>
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <p className="flex items-center gap-2 text-title-sm text-on-surface"><Icon name="auto_awesome" size={18} className="text-primary" />Suggested automation plan</p>
-                  <span className="text-label-sm px-1.5 rounded bg-primary-container text-on-primary-container">
-                    {aiPlan.source === 'ai' ? 'AI' : 'Auto'}
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  {planRows.map(([label, cur, next]) => (
-                    <div key={label} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="text-on-surface-variant">{label}</span>
-                      <span className="text-on-surface-variant">
-                        <span className="text-on-surface-variant">{String(cur)}</span>
-                        <Icon name="arrow_forward" size={14} className="mx-1.5 align-middle" />
-                        <span className="font-medium text-on-surface">{String(next)}</span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {aiPlan.rationale?.length > 0 && (
-                  <ul className="mt-3 space-y-1 text-xs text-on-surface-variant list-disc list-inside">
-                    {aiPlan.rationale.map((r, i) => <li key={i}>{r.text}</li>)}
-                  </ul>
-                )}
-                {configError && (
-                  <p role="alert" className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mt-3">{configError}</p>
-                )}
-                <div className="flex justify-end gap-2 mt-4">
-                  <button
-                    onClick={() => setAiPlan(null)}
-                    className="btn-text"
-                  >
-                    Dismiss
-                  </button>
-                  <button
-                    onClick={() => applyAiPlan(aiPlan.plan)}
-                    className="btn-filled"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+        <ToggleSetting
+          icon="water_drop"
+          title="Water automation"
+          subtitle="Water when moisture drops below the threshold, and on a daily schedule"
+          value={autoWater}
+          busy={savingToggle.autoWateringEnabled}
+          onChange={(v) => { setAutoWater(v); saveToggle({ autoWateringEnabled: v }, () => setAutoWater(!v)) }}
+        >
+          <TextField label="Threshold (%)" type="number" value={waterThresh} onChange={(e) => setWaterThresh(e.target.value)} placeholder="e.g. 30" />
+          <TextField label="Daily time" value={waterSched} onChange={(e) => setWaterSched(e.target.value)} placeholder="07:00" support="24-hour, e.g. 07:00" />
+          <TextField label="Duration (s)" type="number" value={waterDuration} onChange={(e) => setWaterDuration(e.target.value)} placeholder="300" />
+        </ToggleSetting>
+
+        {hasLight && (
+          <ToggleSetting
+            icon="light_mode"
+            title="Light automation"
+            subtitle="Keep the grow light on for a daily window"
+            value={autoLight}
+            busy={savingToggle.autoLightingEnabled}
+            onChange={(v) => { setAutoLight(v); saveToggle({ autoLightingEnabled: v }, () => setAutoLight(!v)) }}
+          >
+            <TextField label="Schedule" value={lightSched} onChange={(e) => setLightSched(e.target.value)} placeholder="08:00–18:00" support="Start–end, e.g. 08:00–18:00" />
+          </ToggleSetting>
         )}
 
-        <div className="space-y-3">
+        {hasFert && (
           <ToggleSetting
-            title="Water automation"
-            subtitle="Trigger at moisture threshold or daily schedule"
-            value={autoWater}
-            busy={savingToggle.autoWateringEnabled}
-            onChange={(v) => { setAutoWater(v); saveToggle({ autoWateringEnabled: v }, () => setAutoWater(!v)) }}
+            icon="compost"
+            title="Fertilizer automation"
+            subtitle="Feed once a week"
+            value={autoFert}
+            busy={savingToggle.autoFertilizingEnabled}
+            onChange={(v) => { setAutoFert(v); saveToggle({ autoFertilizingEnabled: v }, () => setAutoFert(!v)) }}
           >
-            <label className="block text-label-lg text-on-surface-variant mb-1">Moisture threshold (%)</label>
-            <input
-              type="number"
-              value={waterThresh}
-              onChange={(e) => setWaterThresh(e.target.value)}
-              className={inputCls}
-              placeholder="e.g. 30"
-            />
-            <label className="block text-label-lg text-on-surface-variant mb-1 mt-3">Daily schedule (e.g. 07:00)</label>
-            <input
-              type="text"
-              value={waterSched}
-              onChange={(e) => setWaterSched(e.target.value)}
-              className={inputCls}
-              placeholder="07:00"
-            />
-            <label className="block text-label-lg text-on-surface-variant mb-1 mt-3">Duration (seconds)</label>
-            <input
-              type="number"
-              value={waterDuration}
-              onChange={(e) => setWaterDuration(e.target.value)}
-              className={inputCls}
-              placeholder="300"
-            />
+            <TextField label="Weekly schedule" value={fertSched} onChange={(e) => setFertSched(e.target.value)} placeholder="MON 06:00" support="Day and time, e.g. MON 06:00" />
+            <TextField label="Duration (s)" type="number" value={fertDuration} onChange={(e) => setFertDuration(e.target.value)} placeholder="600" />
           </ToggleSetting>
-
-          {hasLight && (
-            <ToggleSetting
-              title="Light automation"
-              subtitle="Schedule lighting times"
-              value={autoLight}
-              busy={savingToggle.autoLightingEnabled}
-              onChange={(v) => { setAutoLight(v); saveToggle({ autoLightingEnabled: v }, () => setAutoLight(!v)) }}
-            >
-              <label className="block text-label-lg text-on-surface-variant mb-1">Schedule (e.g. 08:00–18:00)</label>
-              <input
-                type="text"
-                value={lightSched}
-                onChange={(e) => setLightSched(e.target.value)}
-                className={inputCls}
-                placeholder="08:00–18:00"
-              />
-            </ToggleSetting>
-          )}
-
-          {hasFert && (
-            <ToggleSetting
-              title="Fertilizer automation"
-              subtitle="Trigger on schedule"
-              value={autoFert}
-              busy={savingToggle.autoFertilizingEnabled}
-              onChange={(v) => { setAutoFert(v); saveToggle({ autoFertilizingEnabled: v }, () => setAutoFert(!v)) }}
-            >
-              <label className="block text-label-lg text-on-surface-variant mb-1">Weekly schedule (e.g. MON 06:00)</label>
-              <input
-                type="text"
-                value={fertSched}
-                onChange={(e) => setFertSched(e.target.value)}
-                className={inputCls}
-                placeholder="MON 06:00"
-              />
-              <label className="block text-label-lg text-on-surface-variant mb-1 mt-3">Duration (seconds)</label>
-              <input
-                type="number"
-                value={fertDuration}
-                onChange={(e) => setFertDuration(e.target.value)}
-                className={inputCls}
-                placeholder="600"
-              />
-            </ToggleSetting>
-          )}
-        </div>
+        )}
 
         {configError && !aiPlan?.plan && (
-          <p role="alert" className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mt-4">{configError}</p>
+          <p role="alert" className="banner banner-error"><Icon name="error" />{configError}</p>
         )}
 
         {isDirty && (
-          <div className="flex justify-end gap-2 mt-4">
-            <button
-              onClick={cancelTextConfig}
-              className="btn-text"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={saveTextConfig}
-              className="btn-filled"
-            >
-              Save
-            </button>
+          <div className="sticky bottom-4 flex items-center gap-2 pl-5 pr-3 h-16 rounded-2xl bg-inverse-surface text-inverse-on-surface shadow-elevation-3 animate-fade-in">
+            <Icon name="edit" size={20} />
+            <span className="flex-1 text-body-md">You have unsaved schedule changes</span>
+            <button onClick={cancelTextConfig} className="btn-text text-inverse-primary">Cancel</button>
+            <button onClick={saveTextConfig} className="btn-filled">Save</button>
           </div>
         )}
-      </div>
+      </section>
     </div>
   )
 }

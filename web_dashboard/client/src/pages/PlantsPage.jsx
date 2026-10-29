@@ -1,139 +1,78 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { uploadZonePhoto } from '../lib/photoUpload'
 import Icon from '../components/ui/Icon'
-
-function AddZoneModal({ userId, onClose }) {
-  const [zoneName, setZoneName] = useState('')
-  const [zoneType, setZoneType] = useState('indoor')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [photoFile, setPhotoFile] = useState(null)
-  const [photoPreview, setPhotoPreview] = useState(null)
-
-  function handlePhotoPick(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPhotoFile(file)
-    setPhotoPreview(URL.createObjectURL(file))
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (!zoneName.trim()) return
-    setLoading(true)
-    setError('')
-    try {
-      const zoneRef = doc(collection(db, 'zones'))
-      await setDoc(zoneRef, {
-        userId,
-        zoneName: zoneName.trim(),
-        zoneType,
-        status: 'healthy',
-        totalPlantSlots: 0,
-        zonePhotoUrl: null,
-        createdAt: serverTimestamp(),
-      })
-      if (photoFile) {
-        const { error: photoErr } = await uploadZonePhoto(zoneRef.id, photoFile)
-        if (photoErr) console.warn('Zone created, but photo upload failed:', photoErr)
-      }
-      onClose()
-    } catch {
-      setError('Failed to create zone. Please try again.')
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
-      <div className="dialog w-full max-w-md p-6">
-        <h2 className="text-headline-sm text-on-surface mb-5">Add Zone</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-16 h-16 rounded-xl bg-surface-container-highest flex items-center justify-center overflow-hidden shrink-0">
-              {photoPreview ? (
-                <img src={photoPreview} alt="Zone preview" className="w-full h-full object-cover" />
-              ) : (
-                <Icon name="add_photo_alternate" className="text-on-surface-variant" />
-              )}
-            </div>
-            <label className="btn-text cursor-pointer">
-              {photoFile ? 'Change photo' : 'Add photo'} <span className="text-on-surface-variant font-normal">(optional)</span>
-              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
-            </label>
-          </div>
-
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Zone name</label>
-            <input
-              className="field w-full"
-              value={zoneName}
-              onChange={(e) => setZoneName(e.target.value)}
-              placeholder="e.g. Tomato bed"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Zone type</label>
-            <select
-              className="field w-full"
-              value={zoneType}
-              onChange={(e) => setZoneType(e.target.value)}
-            >
-              <option value="indoor">Indoor</option>
-              <option value="outdoor">Outdoor</option>
-            </select>
-          </div>
-          <p className="text-xs text-on-surface-variant">
-            You can assign a device to this zone after creation from the zone's Overview tab.
-          </p>
-          {error && <p className="text-sm text-error">{error}</p>}
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-text"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-filled"
-            >
-              {loading ? 'Creating…' : 'Create zone'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
+import StatusLabel from '../components/ui/StatusLabel'
+import Loading from '../components/ui/Loading'
+import EmptyState from '../components/ui/EmptyState'
+import PageHeader from '../components/layout/PageHeader'
 
 const MAX_PLANTS = 4
 const FILTERS = ['All', 'Indoor', 'Outdoor']
 
-function SensorPill({ label, value }) {
+function Reading({ icon, value }) {
   return (
-    <div>
-      <p className="text-label-sm text-on-surface-variant">{label}</p>
-      <p className="text-title-sm text-on-surface">{value ?? '—'}</p>
-    </div>
+    <span className="flex items-center gap-1 text-body-md text-on-surface">
+      <Icon name={icon} size={18} className="text-on-surface-variant" />{value ?? '–'}
+    </span>
+  )
+}
+
+function ZoneTile({ z, plantCount }) {
+  const navigate = useNavigate()
+  const isFull = plantCount >= MAX_PLANTS
+  const offline = z.deviceOnline === false
+  const v = (val, unit) => (!offline && val != null ? `${val}${unit}` : null)
+
+  return (
+    <button onClick={() => navigate(`/zones/${z.id}`)} className="card card-link overflow-hidden flex flex-col">
+      <div className="relative h-32 w-full bg-surface-container-highest grid place-items-center">
+        {z.zonePhotoUrl
+          ? <img src={z.zonePhotoUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          : <Icon name={z.zoneType === 'outdoor' ? 'park' : 'yard'} size={40} className="text-on-surface-variant/60" />}
+        <StatusLabel status={z.status} className="absolute top-3 right-3" />
+      </div>
+      <div className="p-4 flex flex-col gap-3 w-full flex-1">
+        <div>
+          <h2 className="text-title-md text-on-surface truncate">{z.zoneName}</h2>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <span className="tag bg-surface-container-high text-on-surface-variant capitalize">
+              <Icon name={z.zoneType === 'outdoor' ? 'park' : 'home'} />{z.zoneType}
+            </span>
+            <span className={`tag ${isFull ? 'bg-warning-container text-on-warning-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
+              <Icon name="potted_plant" />{plantCount}/{MAX_PLANTS} plants
+            </span>
+            <span className={`tag ${z.deviceId
+              ? offline ? 'bg-error-container text-on-error-container' : 'bg-primary-container text-on-primary-container'
+              : 'bg-surface-container-high text-on-surface-variant'}`}>
+              <Icon name={z.deviceId ? (offline ? 'wifi_off' : 'wifi') : 'link_off'} />
+              {z.deviceId ? (offline ? 'Offline' : 'Connected') : 'No device'}
+            </span>
+          </div>
+        </div>
+        {z.deviceId && (
+          <div className="flex items-center gap-4 flex-wrap pt-3 border-t border-outline-variant">
+            <Reading icon="thermostat" value={v(z.latestTemp, '°C')} />
+            <Reading icon="humidity_percentage" value={v(z.latestHumid, '%')} />
+            <Reading icon="water_drop" value={v(z.latestMoisture, '%')} />
+            <Reading icon="light_mode" value={v(z.latestLight, '%')} />
+          </div>
+        )}
+      </div>
+    </button>
   )
 }
 
 export default function PlantsPage() {
   const { user } = useAuth()
-  const navigate = useNavigate()
+  const { openAddZone } = useOutletContext()
   const [zones,       setZones]       = useState([])
   const [plantCounts, setPlantCounts] = useState({})
   const [loading,     setLoading]     = useState(true)
   const [filter,      setFilter]      = useState('All')
-  const [showAdd,     setShowAdd]     = useState(false)
+  const [search,      setSearch]      = useState('')
 
   // Subscribe to zones
   useEffect(() => {
@@ -165,110 +104,58 @@ export default function PlantsPage() {
     )
   }, [zoneIdsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filteredZones = filter === 'All'
-    ? zones
-    : zones.filter((z) => z.zoneType?.toLowerCase() === filter.toLowerCase())
-
-  if (loading) {
-    return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
-  }
+  const term = search.trim().toLowerCase()
+  const filteredZones = zones
+    .filter((z) => filter === 'All' || z.zoneType?.toLowerCase() === filter.toLowerCase())
+    .filter((z) => !term || z.zoneName?.toLowerCase().includes(term))
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-headline-sm text-on-surface">Plant zones</h1>
-        <button onClick={() => setShowAdd(true)} className="btn-filled">
-          <Icon name="add" />
-          Add zone
-        </button>
-      </div>
+      <PageHeader
+        title="Plant zones"
+        subtitle={loading ? null : `${zones.length} zone${zones.length === 1 ? '' : 's'}`}
+        actions={<button onClick={openAddZone} className="btn-filled"><Icon name="add" />Add zone</button>}
+      />
 
-      {/* Filter row */}
-      <div className="flex items-center gap-2 mb-6 flex-wrap">
-        <span className="text-body-md text-on-surface-variant mr-1">Filter zones by type</span>
-        {FILTERS.map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            aria-pressed={filter === f}
-            className={`chip ${filter === f ? 'chip-selected' : ''}`}
-          >
-            {filter === f && <Icon name="check" />}
-            {f}
-          </button>
-        ))}
-      </div>
-
-      {filteredZones.length === 0 ? (
-        <p className="text-body-md text-on-surface-variant">
-          {zones.length === 0
-            ? 'No zones found yet. Add a zone to get started.'
-            : `No ${filter.toLowerCase()} zones found.`}
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredZones.map((z) => {
-            const plantCount = plantCounts[z.id] ?? 0
-            const isFull     = plantCount >= MAX_PLANTS
-            const connected  = !!z.deviceId
-
-            return (
-              <button
-                key={z.id}
-                onClick={() => navigate(`/zones/${z.id}`)}
-                className="card state-layer text-left p-5"
-              >
-                {/* Header row */}
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <h2 className="text-title-lg text-on-surface">{z.zoneName}</h2>
-                  <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
-                    {isFull && (
-                      <span className="inline-flex items-center h-6 px-2.5 rounded-lg text-label-md bg-warning-container text-on-warning-container">
-                        Full
-                      </span>
-                    )}
-                    <span className={`inline-flex items-center h-6 px-2.5 rounded-lg text-label-md ${
-                      connected ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high text-on-surface-variant'
-                    }`}>
-                      {connected ? 'Connected' : 'No device'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Subline */}
-                <p className="text-body-md text-on-surface-variant mb-1 capitalize">
-                  {z.zoneType}
-                </p>
-                <p className={`text-xs font-medium mb-4 ${isFull ? 'text-warning' : 'text-on-surface-variant'}`}>
-                  Plants: {plantCount}/{MAX_PLANTS}
-                </p>
-
-                {/* Sensor pills */}
-                {(() => {
-                  const offline = z.deviceOnline === false
-                  return (
-                    <>
-                      <div className="flex gap-6">
-                        <SensorPill label="Temp"     value={!offline && z.latestTemp     != null ? `${z.latestTemp}°C`     : null} />
-                        <SensorPill label="Humidity" value={!offline && z.latestHumid    != null ? `${z.latestHumid}%`    : null} />
-                        <SensorPill label="Moisture" value={!offline && z.latestMoisture != null ? `${z.latestMoisture}%` : null} />
-                        <SensorPill label="Light"    value={!offline && z.latestLight    != null ? `${z.latestLight}%`  : null} />
-                      </div>
-                      <p className="text-xs text-on-surface-variant mt-3">
-                        {offline ? 'Device is offline.' : (z.alertSummary ?? 'Summary unavailable')}
-                      </p>
-                    </>
-                  )
-                })()}
-
-                <p className="flex items-center gap-1 text-label-lg text-primary mt-3">Tap to view zone <Icon name="arrow_forward" size={18} /></p>
+      {loading ? <Loading /> : (
+        <>
+          <div className="flex items-center gap-2 mb-6 flex-wrap">
+            {FILTERS.map((f) => (
+              <button key={f} onClick={() => setFilter(f)} aria-pressed={filter === f} className={`chip ${filter === f ? 'chip-selected' : ''}`}>
+                {filter === f && <Icon name="check" />}
+                {f}
               </button>
-            )
-          })}
-        </div>
-      )}
+            ))}
+            <label className="ml-auto flex items-center gap-2 h-10 w-full sm:w-72 px-4 rounded-full bg-surface-container-high text-on-surface-variant focus-within:outline focus-within:outline-2 focus-within:outline-primary">
+              <Icon name="search" size={20} />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search zones"
+                aria-label="Search zones"
+                className="flex-1 min-w-0 bg-transparent outline-none text-body-lg text-on-surface placeholder:text-on-surface-variant"
+              />
+            </label>
+          </div>
 
-      {showAdd && <AddZoneModal userId={user.uid} onClose={() => setShowAdd(false)} />}
+          {filteredZones.length === 0 ? (
+            zones.length === 0 ? (
+              <EmptyState
+                icon="potted_plant"
+                title="No zones yet"
+                body="A zone is a group of up to four plants watched by one sensor node."
+                action={<button onClick={openAddZone} className="btn-filled"><Icon name="add" />Add zone</button>}
+              />
+            ) : (
+              <EmptyState icon="search_off" title="No matching zones" body="Try a different filter or search." />
+            )
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {filteredZones.map((z) => <ZoneTile key={z.id} z={z} plantCount={plantCounts[z.id] ?? 0} />)}
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

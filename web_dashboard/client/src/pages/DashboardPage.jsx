@@ -1,11 +1,22 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useOutletContext } from 'react-router-dom'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
+import { useNotifications, formatRelative } from '../hooks/useNotifications'
 import Icon from '../components/ui/Icon'
 import StatusLabel from '../components/ui/StatusLabel'
+import Loading from '../components/ui/Loading'
+import EmptyState from '../components/ui/EmptyState'
+import PageHeader from '../components/layout/PageHeader'
 
+const STATUS_ORDER = { critical: 0, attention: 1 }
+const SEVERITY = {
+  info:     'bg-secondary-container text-on-secondary-container',
+  warn:     'bg-warning-container text-on-warning-container',
+  critical: 'bg-error-container text-on-error-container',
+}
+const TYPE_ICON = { threshold: 'warning', actuator: 'water_drop', daily: 'bedtime' }
 
 function defaultAlertMessage(status) {
   const s = status?.toLowerCase() || ''
@@ -14,15 +25,29 @@ function defaultAlertMessage(status) {
   return 'Review the latest sensor readings for this zone.'
 }
 
-function ZoneCard({ zone, onViewDetails }) {
+function greeting() {
+  const h = new Date().getHours()
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
+}
+
+function StatTile({ icon, label, value, tone }) {
+  return (
+    <div className={`rounded-xl p-4 flex items-center gap-4 ${tone}`}>
+      <span className="grid place-items-center w-12 h-12 rounded-full bg-surface/40"><Icon name={icon} filled /></span>
+      <div>
+        <p className="text-headline-md leading-none">{value}</p>
+        <p className="text-label-lg mt-1 opacity-90">{label}</p>
+      </div>
+    </div>
+  )
+}
+
+function ZoneCard({ zone }) {
+  const navigate = useNavigate()
   const deviceOffline = zone.deviceOnline === false
   const hasSensorData = !deviceOffline && (
-    zone.latestTemp != null ||
-    zone.latestHumid != null ||
-    zone.latestLight != null ||
-    zone.latestMoisture != null
+    zone.latestTemp != null || zone.latestHumid != null || zone.latestLight != null || zone.latestMoisture != null
   )
-
   const readings = [
     { label: 'Temp',     icon: 'thermostat',          value: zone.latestTemp,     unit: '°C' },
     { label: 'Humidity', icon: 'humidity_percentage', value: zone.latestHumid,    unit: '%' },
@@ -31,45 +56,83 @@ function ZoneCard({ zone, onViewDetails }) {
   ]
 
   return (
-    <div className="card p-4 flex flex-col">
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <h3 className="text-title-lg text-on-surface truncate">{zone.zoneName}</h3>
+    <button onClick={() => navigate(`/zones/${zone.id}`)} className="card card-link p-4 flex flex-col gap-4">
+      <div className="flex items-start gap-3 w-full">
+        <div className="w-11 h-11 rounded-lg bg-surface-container-highest overflow-hidden grid place-items-center shrink-0">
+          {zone.zonePhotoUrl
+            ? <img src={zone.zonePhotoUrl} alt="" className="w-full h-full object-cover" />
+            : <Icon name={zone.zoneType === 'outdoor' ? 'park' : 'home'} className="text-on-surface-variant" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-title-md text-on-surface truncate">{zone.zoneName}</h3>
+          <p className="text-body-sm text-on-surface-variant capitalize">{zone.zoneType}</p>
+        </div>
         <StatusLabel status={zone.status} />
       </div>
 
       {hasSensorData ? (
-        <>
-          <div className="grid grid-cols-4 gap-2 mb-3">
-            {readings.map(({ label, icon, value, unit }) => (
-              <div key={label} className="bg-surface-container rounded-lg px-2 py-3 flex flex-col items-center gap-1">
-                <Icon name={icon} size={20} className="text-primary" />
-                <p className="text-title-md text-on-surface">{value != null ? `${Math.round(value)}${unit}` : '--'}</p>
-                <p className="text-label-sm text-on-surface-variant">{label}</p>
-              </div>
-            ))}
-          </div>
-          <p className="text-body-md text-on-surface-variant mb-4">
-            {zone.alertSummary || defaultAlertMessage(zone.status)}
-          </p>
-        </>
+        <div className="grid grid-cols-4 gap-1 w-full">
+          {readings.map(({ label, icon, value, unit }) => (
+            <div key={label} className="flex flex-col items-center gap-0.5 py-2 rounded-lg bg-surface-container">
+              <Icon name={icon} size={18} className="text-primary" />
+              <p className="text-title-sm text-on-surface">{value != null ? `${Math.round(value)}${unit}` : '–'}</p>
+              <p className="text-label-sm text-on-surface-variant">{label}</p>
+            </div>
+          ))}
+        </div>
       ) : (
-        <p className="flex items-center gap-2 text-body-md text-on-surface-variant mb-4">
+        <p className="flex items-center gap-2 h-[68px] px-3 rounded-lg bg-surface-container text-body-md text-on-surface-variant w-full">
           <Icon name={deviceOffline ? 'cloud_off' : 'hourglass_empty'} size={20} />
-          {deviceOffline ? 'Device is offline.' : 'No sensor data available yet.'}
+          {deviceOffline ? 'Device is offline.' : zone.deviceId ? 'Waiting for the first reading.' : 'No device assigned.'}
         </p>
       )}
 
-      <button onClick={onViewDetails} className="btn-tonal self-end mt-auto">
-        View details
-        <Icon name="arrow_forward" />
-      </button>
-    </div>
+      {hasSensorData && (
+        <p className="text-body-sm text-on-surface-variant line-clamp-2 w-full">
+          {zone.alertSummary || defaultAlertMessage(zone.status)}
+        </p>
+      )}
+    </button>
+  )
+}
+
+function RecentActivity() {
+  const { items, markRead } = useNotifications()
+  const navigate = useNavigate()
+  const recent = items.slice(0, 8)
+  return (
+    <section className="card-outlined self-start">
+      <h2 className="card-title px-4 pt-4 pb-2">Recent activity</h2>
+      {recent.length === 0 ? (
+        <p className="px-4 pb-6 pt-2 text-body-md text-on-surface-variant">Nothing yet. Alerts and automation runs show up here.</p>
+      ) : (
+        <ul className="pb-2">
+          {recent.map((n) => (
+            <li key={n.id}>
+              <button
+                onClick={() => { markRead(n.id); if (n.zoneId) navigate(`/zones/${n.zoneId}`) }}
+                className="state-layer list-row w-full items-start"
+              >
+                <span className={`list-icon w-9 h-9 ${SEVERITY[n.severity] ?? SEVERITY.info}`}>
+                  <Icon name={TYPE_ICON[n.type] ?? 'info'} size={18} />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className={`block text-body-md truncate ${n.isRead ? 'text-on-surface-variant' : 'text-on-surface font-medium'}`}>{n.title}</span>
+                  <span className="block text-body-sm text-on-surface-variant line-clamp-2">{n.message}</span>
+                </span>
+                <span className="text-label-sm text-on-surface-variant shrink-0 pt-0.5">{formatRelative(n.createdAt)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 
 export default function DashboardPage() {
   const { user } = useAuth()
-  const navigate = useNavigate()
+  const { openAddZone } = useOutletContext()
   const [zones, setZones] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -87,55 +150,48 @@ export default function DashboardPage() {
 
   const healthyZones = zones.filter((z) => z.status?.toLowerCase().includes('healthy')).length
   const attentionZones = zones.filter((z) => ['attention', 'critical'].includes(z.status)).length
-
-  if (loading) {
-    return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
-  }
+  const offlineZones = zones.filter((z) => z.deviceId && z.deviceOnline === false).length
+  const sorted = [...zones].sort((a, b) => (STATUS_ORDER[a.status] ?? 2) - (STATUS_ORDER[b.status] ?? 2))
+  const name = user?.displayName?.split(' ')[0]
 
   return (
     <div>
-      <h1 className="text-headline-md text-on-surface">Dashboard</h1>
-      <p className="text-body-lg text-on-surface-variant mt-1 mb-6">Here is today's plant performance overview.</p>
+      <PageHeader
+        title={`${greeting()}${name ? `, ${name}` : ''}`}
+        subtitle={new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+      />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        <div className="bg-primary-container text-on-primary-container rounded-xl p-5 flex items-center gap-4">
-          <Icon name="check_circle" filled size={40} />
-          <div>
-            <p className="text-label-lg">Healthy zones</p>
-            <p className="text-headline-sm">
-              {healthyZones} healthy zone{healthyZones !== 1 ? 's' : ''}
-            </p>
-          </div>
-        </div>
-        <div className="bg-warning-container text-on-warning-container rounded-xl p-5 flex items-center gap-4">
-          <Icon name="warning" filled size={40} />
-          <div>
-            <p className="text-label-lg">Attention</p>
-            <p className="text-headline-sm">
-              {attentionZones} {attentionZones === 1 ? 'zone requires' : 'zones require'} attention
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {zones.length === 0 ? (
-        <div className="card-outlined p-6 text-center">
-          <Icon name="potted_plant" size={40} className="text-on-surface-variant" />
-          <p className="text-body-md text-on-surface-variant mt-2">
-            No zones found yet. Add a zone first, then the dashboard will show the latest sensor summaries and alerts.
-          </p>
-        </div>
-      ) : (
+      {loading ? <Loading /> : (
         <>
-          <h2 className="text-title-lg text-on-surface mb-3">Zone overview</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {zones.map((zone) => (
-              <ZoneCard
-                key={zone.id}
-                zone={zone}
-                onViewDetails={() => navigate(`/zones/${zone.id}`)}
-              />
-            ))}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+            <StatTile icon="potted_plant" label="Zones" value={zones.length} tone="bg-surface-container-high text-on-surface" />
+            <StatTile icon="check_circle" label="Healthy" value={healthyZones} tone="bg-primary-container text-on-primary-container" />
+            <StatTile icon="warning" label="Need attention" value={attentionZones}
+              tone={attentionZones ? 'bg-warning-container text-on-warning-container' : 'bg-surface-container-high text-on-surface'} />
+            <StatTile icon="cloud_off" label="Devices offline" value={offlineZones}
+              tone={offlineZones ? 'bg-error-container text-on-error-container' : 'bg-surface-container-high text-on-surface'} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-title-lg text-on-surface">Zones</h2>
+                {zones.length > 0 && <Link to="/plants" className="btn-text btn-sm">Manage zones<Icon name="arrow_forward" /></Link>}
+              </div>
+              {zones.length === 0 ? (
+                <EmptyState
+                  icon="potted_plant"
+                  title="No zones yet"
+                  body="Create a zone, then assign a sensor node to see live readings and alerts here."
+                  action={<button onClick={openAddZone} className="btn-filled"><Icon name="add" />New zone</button>}
+                />
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+                  {sorted.map((zone) => <ZoneCard key={zone.id} zone={zone} />)}
+                </div>
+              )}
+            </section>
+            <RecentActivity />
           </div>
         </>
       )}

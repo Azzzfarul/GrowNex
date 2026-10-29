@@ -5,6 +5,10 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import Icon from '../components/ui/Icon'
+import TextField from '../components/ui/TextField'
+import Loading from '../components/ui/Loading'
+import EmptyState from '../components/ui/EmptyState'
+import PageHeader from '../components/layout/PageHeader'
 import { useAuth } from '../context/AuthContext'
 import { fetchAiSummary } from '../lib/aiSummary'
 import { compliancePercent, plantHealth, plantHealthSummary } from '../lib/plantHealth'
@@ -32,11 +36,11 @@ const legendText = (v) => <span className="text-body-sm text-on-surface-variant"
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function MetricCard({ label, value, sub }) {
+function MetricCard({ icon, label, value, sub }) {
   return (
-    <div className="card p-4">
-      <p className="text-label-md text-on-surface-variant mb-1">{label}</p>
-      <p className="text-headline-sm text-on-surface">{value ?? '—'}</p>
+    <div className="card-filled p-4">
+      <p className="flex items-center gap-2 text-label-lg text-on-surface-variant"><Icon name={icon} size={20} className="text-primary" />{label}</p>
+      <p className="text-headline-sm text-on-surface mt-2">{value ?? '–'}</p>
       {sub && <p className="text-body-sm text-on-surface-variant mt-1">{sub}</p>}
     </div>
   )
@@ -44,31 +48,33 @@ function MetricCard({ label, value, sub }) {
 
 function ChartCard({ title, caption, children }) {
   return (
-    <div className="card p-5">
-      <h3 className={`text-title-md text-on-surface ${caption ? 'mb-1' : 'mb-4'}`}>{title}</h3>
-      {caption && <div className="mb-3">{caption}</div>}
+    <section className="card p-5 min-w-0">
+      <h3 className="card-title">{title}</h3>
+      {caption && <div className="mt-1 mb-4">{caption}</div>}
       {children}
-    </div>
+    </section>
+  )
+}
+
+function SourceTag({ isAi }) {
+  return (
+    <span className={`tag h-5 ${isAi ? 'bg-tertiary-container text-on-tertiary-container' : 'bg-surface-container-highest text-on-surface-variant'}`}>
+      {isAi && <Icon name="auto_awesome" />}{isAi ? 'AI' : 'Auto'}
+    </span>
   )
 }
 
 function SummaryLine({ text, isAi, variant }) {
   return (
-    <div className={`flex items-start gap-2 ${variant === 'card' ? 'text-sm text-on-surface-variant' : 'text-xs text-on-surface-variant'}`}>
-      <span
-        className={`shrink-0 text-label-sm px-1.5 rounded ${
-          isAi ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high text-on-surface-variant'
-        }`}
-      >
-        {isAi ? 'AI' : 'Auto'}
-      </span>
+    <div className={`flex items-start gap-2 text-on-surface-variant ${variant === 'card' ? 'text-body-lg' : 'text-body-sm'}`}>
+      <SourceTag isAi={isAi} />
       <span>{text}</span>
     </div>
   )
 }
 
 function EmptyChart() {
-  return <p className="text-sm text-on-surface-variant text-center py-8">No readings in this period.</p>
+  return <p className="h-[220px] grid place-items-center text-body-md text-on-surface-variant">No readings in this period.</p>
 }
 
 function ComplianceBar({ label, value }) {
@@ -76,16 +82,20 @@ function ComplianceBar({ label, value }) {
   const bar = value >= 80 ? 'bg-primary' : value >= 60 ? 'bg-warning' : 'bg-error'
   return (
     <div>
-      <div className="flex justify-between text-sm mb-1">
+      <div className="flex justify-between text-body-md mb-1.5">
         <span className="text-on-surface-variant">{label}</span>
         <span className="font-medium text-on-surface">{value}%</span>
       </div>
-      <div className="h-2 bg-surface-container-high rounded-full overflow-hidden">
+      <div className="h-2 bg-surface-container-highest rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all ${bar}`} style={{ width: `${value}%` }} />
       </div>
     </div>
   )
 }
+
+const Advice = ({ tone, icon, text }) => (
+  <div className={`banner ${tone}`}><Icon name={icon} /><span>{text}</span></div>
+)
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -220,7 +230,7 @@ export default function AnalyticsPage() {
     return () => { cancelled = true }
   }, [loadedFor, user]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loadingZones) return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
+  if (loadingZones) return <div><PageHeader title="Analytics" /><Loading /></div>
 
   const isAllZones   = selectedZoneId === 'all'
   const selectedZone = isAllZones ? null : zones.find(z => z.id === selectedZoneId)
@@ -278,146 +288,119 @@ export default function AnalyticsPage() {
   const aiAdvice = Array.isArray(aiSummaries.advice) ? aiSummaries.advice : []
   const aiActive = !!aiSummaries.source && aiSummaries.source !== 'fallback' && aiSummaries.source !== 'error'
 
+  const chart = (key, color) => (
+    <ResponsiveContainer width="100%" height={220}>
+      <LineChart data={chartData} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
+        <CartesianGrid {...GRID} />
+        <XAxis dataKey="label" {...AXIS} minTickGap={24} />
+        <YAxis {...AXIS} width={40} />
+        <Tooltip {...TOOLTIP} />
+        <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} connectNulls />
+      </LineChart>
+    </ResponsiveContainer>
+  )
+
   return (
-    <div className="space-y-5">
-      {/* Header + controls */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-headline-sm text-on-surface">Analytics</h1>
-          <p className="text-body-md text-on-surface-variant mt-0.5">Track plant health and growing conditions.</p>
-        </div>
-        <select
-          value={selectedZoneId}
-          onChange={e => setSelectedZoneId(e.target.value)}
-          className="field w-auto h-10"
-        >
-          <option value="all">All Zones</option>
-          {zones.map(z => <option key={z.id} value={z.id}>{z.zoneName}</option>)}
-        </select>
-        {/* M3 segmented button */}
-        <div role="group" aria-label="Time range" className="inline-flex h-10 rounded-full border border-outline overflow-hidden">
-          {['today', '7days'].map((t, i) => (
-            <button
-              key={t}
-              onClick={() => setTimeRange(t)}
-              aria-pressed={timeRange === t}
-              className={`state-layer flex items-center gap-2 px-4 text-label-lg ${i ? 'border-l border-outline' : ''} ${
-                timeRange === t ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface'
-              }`}
-            >
-              {timeRange === t && <Icon name="check" size={18} />}
-              {t === 'today' ? 'Today' : '7 Days'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <MetricCard label="Avg Temperature" value={avgTemp     != null ? `${avgTemp}°C`    : null} />
-        <MetricCard label="Avg Humidity"    value={avgHumid    != null ? `${avgHumid}%`    : null} />
-        <MetricCard label="Avg Light"       value={avgLight    != null ? `${avgLight}%`  : null} />
-        <MetricCard label="Avg Moisture"    value={avgMoisture != null ? `${avgMoisture}%` : null} />
-        <MetricCard
-          label="Plants Healthy"
-          value={plantScores.length > 0 ? `${healthyCount} / ${plantScores.length}` : null}
-          sub={plantScores.length === 0 ? 'Set plant preferences first' : undefined}
-        />
-      </div>
-
-      {/* AI Summary */}
-      <div className="card p-5">
-        <h3 className="text-title-md text-on-surface mb-3">AI Summary</h3>
-        <SummaryLine
-          variant="card"
-          text={aiMap.overview ?? overviewRes.text}
-          isAi={aiMap.overview != null}
-        />
-        {aiActive && aiAdvice.length > 0 ? (
-          <div className="space-y-2.5 mt-3">
-            {aiAdvice.map((a, i) => (
-              <div
-                key={i}
-                className={`flex gap-3 text-body-md p-3 rounded-lg ${
-                  a.severity === 'critical' ? 'bg-error-container text-on-error-container' :
-                  a.severity === 'warn' ? 'bg-warning-container text-on-warning-container' :
-                                              'bg-surface-container text-on-surface-variant'
-                }`}
-              >
-                <Icon name={a.severity === 'critical' ? 'error' : a.severity === 'warn' ? 'warning' : 'info'} size={20} />
-                <span>{a.text}</span>
-              </div>
+    <div>
+      <PageHeader
+        title="Analytics"
+        subtitle="Growing conditions and plant health over time"
+        actions={zones.length > 0 && <>
+          <TextField as="select" label="Zone" value={selectedZoneId} onChange={e => setSelectedZoneId(e.target.value)} className="w-52">
+            <option value="all">All zones</option>
+            {zones.map(z => <option key={z.id} value={z.id}>{z.zoneName}</option>)}
+          </TextField>
+          <div role="group" aria-label="Time range" className="segmented">
+            {['today', '7days'].map((t) => (
+              <button key={t} onClick={() => setTimeRange(t)} aria-pressed={timeRange === t}>
+                {timeRange === t && <Icon name="check" />}
+                {t === 'today' ? '24 hours' : '7 days'}
+              </button>
             ))}
           </div>
-        ) : selectedZone && insights.length > 0 ? (
-          <div className="space-y-2.5 mt-3">
-            {insights.map((ins, i) => (
-              <div
-                key={i}
-                className={`flex gap-3 text-body-md p-3 rounded-lg ${
-                  ins.ok === true ? 'bg-primary-container text-on-primary-container' :
-                  ins.ok === false ? 'bg-warning-container text-on-warning-container' :
-                                     'bg-surface-container text-on-surface-variant'
-                }`}
-              >
-                <Icon name={ins.ok === true ? 'check_circle' : ins.ok === false ? 'warning' : 'info'} size={20} />
-                <span>{ins.text}</span>
+        </>}
+      />
+
+      {zones.length === 0 ? (
+        <EmptyState icon="monitoring" title="No data yet" body="Create a zone and assign a sensor node; charts fill in as readings arrive." />
+      ) : (
+      <div className="space-y-6">
+        <div className={`progress-linear -mt-3 ${loadingReadings ? '' : 'invisible'}`} role="progressbar" aria-label="Loading readings" />
+
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+          <MetricCard icon="thermostat"          label="Avg temperature" value={avgTemp     != null ? `${avgTemp}°C` : null} />
+          <MetricCard icon="humidity_percentage" label="Avg humidity"    value={avgHumid    != null ? `${avgHumid}%` : null} />
+          <MetricCard icon="light_mode"          label="Avg light"       value={avgLight    != null ? `${avgLight}%` : null} />
+          <MetricCard icon="water_drop"          label="Avg moisture"    value={avgMoisture != null ? `${avgMoisture}%` : null} />
+          <MetricCard
+            icon="local_florist"
+            label="Plants healthy"
+            value={plantScores.length > 0 ? `${healthyCount} / ${plantScores.length}` : null}
+            sub={plantScores.length === 0 ? 'Set plant preferences first' : undefined}
+          />
+        </div>
+
+        <div className={`grid grid-cols-1 gap-6 ${selectedZone ? 'lg:grid-cols-[minmax(0,1fr)_320px]' : ''}`}>
+          {/* Summary */}
+          <section className="card p-5">
+            <h3 className="card-title mb-3">Summary</h3>
+            <SummaryLine variant="card" text={aiMap.overview ?? overviewRes.text} isAi={aiMap.overview != null} />
+            {aiActive && aiAdvice.length > 0 ? (
+              <div className="grid gap-2 mt-4 xl:grid-cols-2">
+                {aiAdvice.map((a, i) => (
+                  <Advice key={i} text={a.text}
+                    tone={a.severity === 'critical' ? 'banner-error' : a.severity === 'warn' ? 'banner-warning' : 'bg-surface-container text-on-surface-variant'}
+                    icon={a.severity === 'critical' ? 'error' : a.severity === 'warn' ? 'warning' : 'info'} />
+                ))}
               </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
+            ) : selectedZone && insights.length > 0 ? (
+              <div className="grid gap-2 mt-4 xl:grid-cols-2">
+                {insights.map((ins, i) => (
+                  <Advice key={i} text={ins.text}
+                    tone={ins.ok === true ? 'bg-primary-container text-on-primary-container' : ins.ok === false ? 'banner-warning' : 'bg-surface-container text-on-surface-variant'}
+                    icon={ins.ok === true ? 'check_circle' : ins.ok === false ? 'warning' : 'info'} />
+                ))}
+              </div>
+            ) : null}
+          </section>
 
-      {loadingReadings && (
-        <p className="text-sm text-on-surface-variant text-center py-4">Loading readings…</p>
-      )}
+          {/* Zone health score */}
+          {selectedZone && (
+            <section className="card p-5 flex flex-col">
+              <h3 className="card-title mb-3">Zone health</h3>
+              {score == null ? (
+                <p className="text-body-md text-on-surface-variant">Add plants with preferred conditions to compute a health score.</p>
+              ) : (
+                <>
+                  <div className="flex items-end gap-3">
+                    <span className={`text-display-md ${scoreColor(score)}`}>{score}%</span>
+                    <span className={`tag h-7 px-3 mb-2 ${scoreBadge(score)}`}>{scoreLabel(score)}</span>
+                  </div>
+                  <p className="text-body-sm text-on-surface-variant mt-2">Current readings against the plants' preferred conditions.</p>
+                </>
+              )}
+            </section>
+          )}
+        </div>
 
-      {/* Trend charts */}
-      {!loadingReadings && (
-        <div className="space-y-4">
+        {/* Trend charts */}
+        <div className={`grid grid-cols-1 gap-6 lg:grid-cols-2 transition-opacity ${loadingReadings ? 'opacity-50' : ''}`}>
           {[
             { title: 'Temperature (°C)', key: 'temp',     color: 'var(--chart-2)', kind: 'temperature' },
             { title: 'Humidity (%)',     key: 'humidity', color: 'var(--chart-3)', kind: 'humidity' },
-            { title: 'Light (%)',       key: 'light',    color: 'var(--chart-4)', kind: 'light' },
+            { title: 'Light (%)',        key: 'light',    color: 'var(--chart-4)', kind: 'light' },
           ].map(({ title, key, color, kind }) => (
-            <ChartCard
-              key={key}
-              title={title}
-              caption={
-                <SummaryLine
-                  text={aiMap[kind] ?? graphRes[kind].text}
-                  isAi={aiMap[kind] != null}
-                />
-              }
-            >
-              {noReadings ? <EmptyChart /> : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={chartData}>
-                    <CartesianGrid {...GRID} />
-                    <XAxis dataKey="label" {...AXIS} />
-                    <YAxis {...AXIS} width={40} />
-                    <Tooltip {...TOOLTIP} />
-                    <Line type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} connectNulls />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
+            <ChartCard key={key} title={title} caption={<SummaryLine text={aiMap[kind] ?? graphRes[kind].text} isAi={aiMap[kind] != null} />}>
+              {noReadings ? <EmptyChart /> : chart(key, color)}
             </ChartCard>
           ))}
 
-          <ChartCard
-            title="Soil Moisture (%)"
-            caption={
-              <SummaryLine
-                text={aiMap.moisture ?? moistRes.text}
-                isAi={aiMap.moisture != null}
-              />
-            }
-          >
+          <ChartCard title="Soil moisture (%)" caption={<SummaryLine text={aiMap.moisture ?? moistRes.text} isAi={aiMap.moisture != null} />}>
             {noReadings ? <EmptyChart /> : (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={chartData}>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={chartData} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
                   <CartesianGrid {...GRID} />
-                  <XAxis dataKey="label" {...AXIS} />
+                  <XAxis dataKey="label" {...AXIS} minTickGap={24} />
                   <YAxis {...AXIS} width={40} />
                   <Tooltip {...TOOLTIP} />
                   {moistureLines.length > 1 && <Legend formatter={legendText} />}
@@ -429,61 +412,42 @@ export default function AnalyticsPage() {
             )}
           </ChartCard>
         </div>
-      )}
 
-      {/* Zone-specific sections */}
-      {selectedZone && !loadingReadings && (
-        <div className="space-y-4">
-          {/* Health Score */}
-          <div className="card p-5">
-            <h3 className="text-title-md text-on-surface mb-3">Zone Health Score</h3>
-            {score == null ? (
-              <p className="text-sm text-on-surface-variant">Add plants with preferred conditions to compute a health score.</p>
-            ) : (
-              <div className="flex items-center gap-4 flex-wrap">
-                <span className={`text-5xl ${scoreColor(score)}`}>{score}%</span>
-                <span className={`inline-flex items-center h-8 px-3 rounded-lg text-label-lg ${scoreBadge(score)}`}>
-                  {scoreLabel(score)}
-                </span>
-                <p className="text-sm text-on-surface-variant">Based on current readings vs plant preferred conditions.</p>
-              </div>
+        {/* Zone-specific sections */}
+        {selectedZone && !loadingReadings && (compTemp != null || compMoist != null || compHumid != null || ranking.length > 0) && (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
+            {(compTemp != null || compMoist != null || compHumid != null) && (
+              <section className="card p-5">
+                <h3 className="card-title">Time in range</h3>
+                <p className="text-body-sm text-on-surface-variant mb-5">Share of readings inside the plants' averaged preferred range.</p>
+                <div className="space-y-4">
+                  <ComplianceBar label="Temperature"   value={compTemp} />
+                  <ComplianceBar label="Humidity"      value={compHumid} />
+                  <ComplianceBar label="Soil moisture" value={compMoist} />
+                </div>
+              </section>
+            )}
+
+            {ranking.length > 0 && (
+              <section className="card overflow-hidden">
+                <h3 className="card-title p-5 pb-2">Plant ranking</h3>
+                <ol>
+                  {ranking.map(({ plant, health }, i) => (
+                    <li key={plant.id} className="list-row items-start border-t border-outline-variant first:border-t-0">
+                      <span className="list-icon w-8 h-8 text-label-lg bg-surface-container-highest text-on-surface-variant">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-body-lg text-on-surface truncate">{plant.plantName}</p>
+                        <p className="text-body-sm text-on-surface-variant">{plantHealthSummary(health)}</p>
+                      </div>
+                      <span className={`tag ${scoreBadge(health.score)}`}>{health.score}%</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
             )}
           </div>
-
-          {/* Compliance */}
-          {(compTemp != null || compMoist != null || compHumid != null) && (
-            <div className="card p-5">
-              <h3 className="text-title-md text-on-surface mb-1">Compliance Analysis</h3>
-              <p className="text-xs text-on-surface-variant mb-4">% of historical readings within the preferred range averaged across plants.</p>
-              <div className="space-y-4">
-                <ComplianceBar label="Temperature"   value={compTemp} />
-                <ComplianceBar label="Humidity"      value={compHumid} />
-                <ComplianceBar label="Soil Moisture" value={compMoist} />
-              </div>
-            </div>
-          )}
-
-          {/* Plant Ranking */}
-          {ranking.length > 0 && (
-            <div className="card p-5">
-              <h3 className="text-title-md text-on-surface mb-4">Plant Ranking</h3>
-              <div className="space-y-3">
-                {ranking.map(({ plant, health }, i) => (
-                  <div key={plant.id} className="flex items-start gap-3">
-                    <span className="text-sm text-on-surface-variant w-5 text-right pt-0.5">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-on-surface truncate">{plant.plantName}</span>
-                        <span className={`shrink-0 inline-flex items-center h-6 px-2.5 rounded-lg text-label-md ${scoreBadge(health.score)}`}>{health.score}%</span>
-                      </div>
-                      <p className="text-xs text-on-surface-variant mt-0.5">{plantHealthSummary(health)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        )}
+      </div>
       )}
     </div>
   )

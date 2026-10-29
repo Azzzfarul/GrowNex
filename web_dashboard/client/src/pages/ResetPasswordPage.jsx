@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { confirmPasswordReset } from 'firebase/auth'
 import { auth } from '../firebase'
 import Icon from '../components/ui/Icon'
+import TextField from '../components/ui/TextField'
+import AuthLayout from '../components/layout/AuthLayout'
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
@@ -17,20 +19,10 @@ export default function ResetPasswordPage() {
 
   if (!oobCode) {
     return (
-      <div className="min-h-screen bg-surface-container flex items-center justify-center p-4">
-        <div className="card w-full max-w-sm p-8 text-center">
-          <div className="flex items-center justify-center gap-2 mb-8">
-            <Icon name="eco" filled className="text-primary" size={32} />
-            <span className="text-title-lg text-on-surface">GrowNex</span>
-          </div>
-          <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">
-            Invalid or expired reset link. Please request a new one.
-          </p>
-          <Link to="/login" className="text-sm text-primary hover:underline font-medium">
-            Back to login
-          </Link>
-        </div>
-      </div>
+      <AuthLayout title="Link not valid">
+        <p className="banner banner-error mb-6"><Icon name="link_off" />This reset link is invalid or has expired. Request a new one from the sign-in page.</p>
+        <Link to="/login" className="btn-filled">Back to sign in</Link>
+      </AuthLayout>
     )
   }
 
@@ -65,79 +57,27 @@ export default function ResetPasswordPage() {
     }
   }
 
+  if (done) {
+    return (
+      <AuthLayout title="Password updated" subtitle="You can now sign in with your new password.">
+        <Link to="/login" className="btn-filled">Back to sign in</Link>
+      </AuthLayout>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-surface-container flex items-center justify-center p-4">
-      <div className="card w-full max-w-sm p-8">
-        <div className="flex items-center gap-2 mb-8">
-          <Icon name="eco" filled className="text-primary" size={32} />
-          <span className="text-title-lg text-on-surface">GrowNex</span>
+    <AuthLayout title="Set a new password" subtitle="Choose a new password for your account.">
+      {authError && <p className="banner banner-error mb-6"><Icon name="error" />{authError}</p>}
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        <TextField type="password" label="New password" autoFocus value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+          placeholder="At least 6 characters" error={errors.newPassword} autoComplete="new-password" />
+        <TextField type="password" label="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+          placeholder="Re-enter your password" error={errors.confirmPassword} autoComplete="new-password" />
+        <div className="flex items-center justify-between pt-4">
+          <Link to="/login" className="btn-text -ml-3">Back to sign in</Link>
+          <button type="submit" disabled={loading} className="btn-filled">{loading ? 'Updating…' : 'Update password'}</button>
         </div>
-
-        {done ? (
-          <div className="text-center">
-            <h1 className="text-headline-sm text-on-surface mb-2">Password updated!</h1>
-            <p className="text-sm text-on-surface-variant mb-6">You can now sign in with your new password.</p>
-            <Link
-              to="/login"
-              className="btn-filled w-full text-center"
-            >
-              Back to login
-            </Link>
-          </div>
-        ) : (
-          <>
-            <h1 className="text-headline-sm text-on-surface mb-1">Set new password</h1>
-            <p className="text-sm text-on-surface-variant mb-6">Choose a new password for your account.</p>
-
-            {authError && (
-              <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">{authError}</p>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-label-lg text-on-surface-variant mb-1">New password</label>
-                <input
-                  type="password"
-                  autoFocus
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="field w-full"
-                  placeholder="At least 6 characters"
-                />
-                {errors.newPassword && (
-                  <p className="text-xs text-error mt-1">{errors.newPassword}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-label-lg text-on-surface-variant mb-1">Confirm password</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="field w-full"
-                  placeholder="Re-enter your password"
-                />
-                {errors.confirmPassword && (
-                  <p className="text-xs text-error mt-1">{errors.confirmPassword}</p>
-                )}
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-filled w-full"
-              >
-                {loading ? 'Updating…' : 'Update password'}
-              </button>
-            </form>
-
-            <p className="mt-6 text-center text-sm text-on-surface-variant">
-              <Link to="/login" className="text-primary hover:underline font-medium">
-                Back to login
-              </Link>
-            </p>
-          </>
-        )}
-      </div>
-    </div>
+      </form>
+    </AuthLayout>
   )
 }
