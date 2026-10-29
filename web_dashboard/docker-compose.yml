@@ -1,5 +1,6 @@
 # Runs the API + MQTT bridge (:5000) and the built dashboard (:3000).
 # Reads server/.env at runtime and client/.env at build time (see README "Docker").
+name: grownex   # containers grownex-server-1 / grownex-client-1, images grownex-server / grownex-client
 services:
   server:
     build: ./server
