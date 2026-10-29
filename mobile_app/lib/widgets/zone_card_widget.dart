@@ -61,7 +61,7 @@ class ZoneCardWidget extends StatelessWidget {
               children: [
                 _AttributeItem(label: 'Temp', value: '${zone.latestTemp?.toStringAsFixed(0) ?? '--'}°C'),
                 _AttributeItem(label: 'Humidity', value: '${zone.latestHumid?.toStringAsFixed(0) ?? '--'}%'),
-                _AttributeItem(label: 'Light', value: '${zone.latestLight?.toStringAsFixed(0) ?? '--'} lx'),
+                _AttributeItem(label: 'Light', value: '${zone.latestLight?.toStringAsFixed(0) ?? '--'}%'),
                 _AttributeItem(label: 'Moisture', value: '${zone.latestMoisture?.toStringAsFixed(0) ?? '--'}%'),
               ],
             ),

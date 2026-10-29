@@ -378,7 +378,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             children: [
               _MetricCard(label: 'Temperature', value: liveTemp  != null ? '${liveTemp.toStringAsFixed(1)}°C'  : null),
               _MetricCard(label: 'Humidity',    value: liveHumid != null ? '${liveHumid.toStringAsFixed(1)}%'  : null),
-              _MetricCard(label: 'Light',       value: liveLight != null ? '${liveLight.toStringAsFixed(0)} lx' : null),
+              _MetricCard(label: 'Light',       value: liveLight != null ? '${liveLight.toStringAsFixed(0)}%' : null),
               _MetricCard(label: 'Moisture',    value: liveMoisture != null ? '${liveMoisture.toStringAsFixed(1)}%' : null),
             ],
           ),
@@ -446,7 +446,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ),
             const SizedBox(height: 12),
             _ChartCard(
-              title: 'Light (lx)',
+              title: 'Light (%)',
               caption: _SummaryLine(
                 dense: true,
                 text: _aiSummaries['light'] ?? graphRes['light']!.text,

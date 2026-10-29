@@ -256,7 +256,7 @@ export default function PlantsPage() {
                         <SensorPill label="Temp"     value={!offline && z.latestTemp     != null ? `${z.latestTemp}°C`     : null} />
                         <SensorPill label="Humidity" value={!offline && z.latestHumid    != null ? `${z.latestHumid}%`    : null} />
                         <SensorPill label="Moisture" value={!offline && z.latestMoisture != null ? `${z.latestMoisture}%` : null} />
-                        <SensorPill label="Light"    value={!offline && z.latestLight    != null ? `${z.latestLight} lx`  : null} />
+                        <SensorPill label="Light"    value={!offline && z.latestLight    != null ? `${z.latestLight}%`  : null} />
                       </div>
                       <p className="text-xs text-gray-400 mt-3">
                         {offline ? 'Device is offline.' : (z.alertSummary ?? 'Summary unavailable')}

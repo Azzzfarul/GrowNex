@@ -119,19 +119,24 @@ async function handleSensors(deviceId, payload) {
     expiresAt: Timestamp.fromDate(new Date(Date.now() + READING_TTL_MS)),
   }
 
-  const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(assignedZoneId))
+  // After a restart the cache is empty until this zone's first write: fall back to the stored status.
+  const prevStatus = zoneStatusCache.get(assignedZoneId) ??
+    (await db.collection('zones').doc(assignedZoneId).get()).data()?.status
+  const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(assignedZoneId), prevStatus)
+
+  // Hourly stats: the current-hour bucket holds each metric's latest value. A failed DHT11 read
+  // sends null temperature/humidity: leave them out so the merge keeps the hour's last good ones.
+  // Analytics queries this instead of sensorReadings (168 docs/zone/7d vs 10,080).
+  const stats = { ...sensorFields, timestamp: FieldValue.serverTimestamp() }
+  if (temperature == null) delete stats.temperature
+  if (humidity == null) delete stats.humidity
 
   await Promise.all([
     db.collection('zones').doc(assignedZoneId)
       .collection('sensorReadings').add(reading),
 
-    // Hourly stats: overwrite the current-hour bucket with the latest reading.
-    // Analytics queries this instead of sensorReadings (168 docs/zone/7d vs 10,080).
     db.collection('zones').doc(assignedZoneId)
-      .collection('stats').doc(statsDocId).set({
-        ...sensorFields,
-        timestamp: FieldValue.serverTimestamp(),
-      }),
+      .collection('stats').doc(statsDocId).set(stats, { merge: true }),
 
     db.collection('zones').doc(assignedZoneId).update({
       latestMoisture:  moisture,
@@ -306,7 +311,7 @@ function watchPlants() {
           humidity:    zone.latestHumid   ?? null,
           moisture:    zone.latestMoisture ?? null,
         }
-        const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(zoneId))
+        const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(zoneId), zoneStatusCache.get(zoneId) ?? zone.status)
         await db.collection('zones').doc(zoneId).update(
           alertSummary != null ? { status, alertSummary } : { status }
         )
@@ -319,7 +324,8 @@ function watchPlants() {
   }, err => console.error('[MQTT bridge] plants listener stopped:', err.message))
 }
 
-export function computeZoneStatus(sensorFields, plants) {
+// prevStatus: the zone's last computed status, used when a reading is incomplete (see below).
+export function computeZoneStatus(sensorFields, plants, prevStatus) {
   if (!plants || plants.length === 0) return { status: 'unknown', alertSummary: null }
 
   const avg = field => {
@@ -329,9 +335,11 @@ export function computeZoneStatus(sensorFields, plants) {
 
   const { temperature, humidity, moisture } = sensorFields
   const issues = []
+  const missing = []  // metrics the plants have a range for but this reading lacks (e.g. a failed DHT11 read)
 
   const check = (val, min, max, label, unit) => {
-    if (val == null || min == null || max == null) return
+    if (min == null || max == null) return
+    if (val == null) { missing.push(label.toLowerCase()); return }
     const v = Math.round(val * 10) / 10  // moisture is an average, e.g. 41.666…
     if (val < min) issues.push(`${label} too low (${v}${unit}, ideal ≥ ${min.toFixed(1)}${unit})`)
     else if (val > max) issues.push(`${label} too high (${v}${unit}, ideal ≤ ${max.toFixed(1)}${unit})`)
@@ -341,9 +349,20 @@ export function computeZoneStatus(sensorFields, plants) {
   check(humidity,    avg('preferredHumidityMin'),    avg('preferredHumidityMax'),    'Humidity',    '%')
   check(moisture,    avg('preferredMoistureMin'),    avg('preferredMoistureMax'),    'Moisture',    '%')
 
-  if (issues.length === 0) return { status: 'healthy',   alertSummary: 'All conditions are within preferred range.' }
-  if (issues.length === 1) return { status: 'attention', alertSummary: issues[0] }
-  return { status: 'critical', alertSummary: `${issues.length} conditions out of range: ${issues.join('; ')}` }
+  let result
+  if (issues.length === 0)      result = { status: 'healthy',   alertSummary: 'All conditions are within preferred range.' }
+  else if (issues.length === 1) result = { status: 'attention', alertSummary: issues[0] }
+  else                          result = { status: 'critical',  alertSummary: `${issues.length} conditions out of range: ${issues.join('; ')}` }
+
+  if (!missing.length) return result
+  // An incomplete reading can't show the zone recovered: keep a worse previous status, so each
+  // missed DHT11 read doesn't flip it and re-alert. The summary says what's missing.
+  const kept = (STATUS_RANK[prevStatus] ?? 0) > STATUS_RANK[result.status]
+  return {
+    status: kept ? prevStatus : result.status,
+    alertSummary: `No ${missing.join(' or ')} reading${kept ? ', so the last status is kept' : ''}. ` +
+      (issues.length ? `${issues.join('; ')}.` : 'The other conditions are within preferred range.'),
+  }
 }
 
 function watchDeviceActuators() {

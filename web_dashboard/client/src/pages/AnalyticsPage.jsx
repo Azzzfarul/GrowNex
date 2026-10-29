@@ -299,7 +299,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <MetricCard label="Avg Temperature" value={avgTemp     != null ? `${avgTemp}°C`    : null} />
         <MetricCard label="Avg Humidity"    value={avgHumid    != null ? `${avgHumid}%`    : null} />
-        <MetricCard label="Avg Light"       value={avgLight    != null ? `${avgLight} lx`  : null} />
+        <MetricCard label="Avg Light"       value={avgLight    != null ? `${avgLight}%`  : null} />
         <MetricCard label="Avg Moisture"    value={avgMoisture != null ? `${avgMoisture}%` : null} />
         <MetricCard
           label="Plants Healthy"
@@ -361,7 +361,7 @@ export default function AnalyticsPage() {
           {[
             { title: 'Temperature (°C)', key: 'temp',     color: '#f97316', kind: 'temperature' },
             { title: 'Humidity (%)',     key: 'humidity', color: '#22c55e', kind: 'humidity' },
-            { title: 'Light (lx)',       key: 'light',    color: '#eab308', kind: 'light' },
+            { title: 'Light (%)',       key: 'light',    color: '#eab308', kind: 'light' },
           ].map(({ title, key, color, kind }) => (
             <ChartCard
               key={key}

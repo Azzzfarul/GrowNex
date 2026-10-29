@@ -131,6 +131,15 @@ test('computeZoneStatus grades against the averaged plant ranges', () => {
   assert.equal(one.alertSummary, 'Moisture too low (41.7%, ideal ≥ 45.0%)')
 
   assert.equal(computeZoneStatus({ temperature: 35, moisture: 80 }, zonePlants).status, 'critical')
-  // A metric with no reading is skipped, not counted as a problem
-  assert.equal(computeZoneStatus({ temperature: null, moisture: 50 }, zonePlants).status, 'healthy')
+  // A metric with no reading isn't counted as a problem, but the summary says it's missing
+  assert.deepEqual(computeZoneStatus({ temperature: null, moisture: 50 }, zonePlants),
+    { status: 'healthy', alertSummary: 'No temperature reading. The other conditions are within preferred range.' })
+
+  // ...and an incomplete reading can't improve on the previous status (a failed DHT11 read)
+  assert.deepEqual(computeZoneStatus({ temperature: null, moisture: 50 }, zonePlants, 'attention'),
+    { status: 'attention', alertSummary: 'No temperature reading, so the last status is kept. The other conditions are within preferred range.' })
+  assert.deepEqual(computeZoneStatus({ temperature: null, moisture: 30 }, zonePlants, 'healthy'),  // can still worsen
+    { status: 'attention', alertSummary: 'No temperature reading. Moisture too low (30%, ideal ≥ 45.0%).' })
+  assert.equal(computeZoneStatus({ temperature: 25, moisture: 50 }, zonePlants, 'critical').status, 'healthy')     // a full reading recovers
+  assert.equal(computeZoneStatus({ humidity: null, temperature: 25, moisture: 50 }, zonePlants, 'attention').status, 'healthy')  // no humidity range set
 })

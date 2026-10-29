@@ -67,8 +67,8 @@ Type these while it runs:
 | `forget` | clears the boards' retained messages from the broker and exits | use before deleting the simulated devices |
 
 The simulated soil dries about 0.6% a minute and gains about 15% a minute while the irrigation
-relay is on. Temperature and humidity follow the time of day. Light level is the firmware's fixed
-placeholder (300), or 800 while the grow light is on.
+relay is on. Temperature and humidity follow the time of day. Light level is a 0–100 % brightness
+like the firmware's light sensor: 30, or 85 while the grow light is on.
 
 ## Differences from the real boards
 

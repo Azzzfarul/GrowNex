@@ -78,7 +78,7 @@ class _ZoneSummaryCardState extends State<ZoneSummaryCard> {
                     const SizedBox(width: 10),
                     _sensorInfo(cs, 'Humid', deviceOffline ? '--' : (widget.zone.latestHumid != null ? '${widget.zone.latestHumid}%'   : '--')),
                     const SizedBox(width: 10),
-                    _sensorInfo(cs, 'Light', deviceOffline ? '--' : (widget.zone.latestLight != null ? '${widget.zone.latestLight} lx' : '--')),
+                    _sensorInfo(cs, 'Light', deviceOffline ? '--' : (widget.zone.latestLight != null ? '${widget.zone.latestLight}%' : '--')),
                   ],
                 ),
                 const SizedBox(height: 10),

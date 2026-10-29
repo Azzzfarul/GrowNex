@@ -209,8 +209,8 @@ function readSensors() {
     deviceId: sensorId,
     temperature: round1(26 + 4 * day + sim.tempOffset + noise(0.3)),
     humidity: round1(clamp(65 - 10 * day + noise(1), 0, 100)),
-    // The firmware sends a fixed placeholder (300) until an LDR is fitted; here the grow light adds to it.
-    lightLevel: sim.actuators.lightState ? 800 : 300,
+    // Like the firmware's LDR reading: 0–100 % brightness, high under the grow light.
+    lightLevel: sim.actuators.lightState ? 85 : 30,
   }
   sim.moisture.forEach((m, i) => { reading[`soilMoisture${i + 1}`] = round1(clamp(m + noise(0.5), 0, 100)) })
   return reading
@@ -244,13 +244,13 @@ function startSensor() {
     setTimeout(publishReading, FIRST_SEND_DELAY_MS)
   })
 
-  // Same as the firmware's onMessage: apply only the keys present, then confirm the new state.
+  // Same as the firmware's onMessage: apply only the boolean keys present, then confirm the new state.
   sensorClient.on('message', (_topic, buf) => {
     let cmd
     try { cmd = JSON.parse(buf.toString()) } catch { return }
     if (!cmd || typeof cmd !== 'object') return  // e.g. a retained `null`; the firmware ignores it too
     for (const key of ['lightState', 'fertilizerState', 'irrigationState']) {
-      if (key in cmd) sim.actuators[key] = !!cmd[key]
+      if (typeof cmd[key] === 'boolean') sim.actuators[key] = cmd[key]
     }
     publishState()
     const a = sim.actuators

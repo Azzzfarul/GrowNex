@@ -55,7 +55,7 @@ function ZoneCard({ zone, onViewDetails }) {
             <div>
               <p className="text-xs text-gray-400 mb-1">Light</p>
               <p className="font-bold text-sm text-gray-800">
-                {zone.latestLight != null ? `${Math.round(zone.latestLight)} lx` : '--'}
+                {zone.latestLight != null ? `${Math.round(zone.latestLight)}%` : '--'}
               </p>
             </div>
             <div>
