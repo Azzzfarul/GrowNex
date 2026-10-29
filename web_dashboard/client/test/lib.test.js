@@ -55,7 +55,8 @@ test('light gets a trend-only summary', () => {
   const l = (series) => describeTrend({ series, pref: { min: null, max: null }, timeRange: 'today', label: 'light', kind: 'light' })
   assert.equal(l([30, 30, 31, 30]).text, 'Averaging 30% and steady')
   assert.equal(l([10, 20, 40, 60, 70, 80]).text, 'Averaging 47% and rising')
-  assert.equal(l([30]).level, 'none')
+  assert.equal(l([10, 90]).text, 'Averaging 50%')  // two points: no direction claimed
+  assert.equal(l([30]).text, 'Not enough readings yet to summarise light.')
 })
 
 test('overview without enough readings blames the readings, not a missing device', () => {

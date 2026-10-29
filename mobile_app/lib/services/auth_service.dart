@@ -25,8 +25,12 @@ class AuthService {
       );
 
       return credential.user;
-    } on FirebaseAuthException {
-      throw Exception('Invalid email or password.');  // web LoginPage wording
+    } on FirebaseAuthException catch (e) {
+      throw Exception(switch (e.code) {  // web LoginPage wording
+        'network-request-failed' => "Can't reach the server. Check your connection and try again.",
+        'too-many-requests' => 'Too many attempts. Wait a moment and try again.',
+        _ => 'Invalid email or password.',
+      });
     }
   }
 
@@ -62,9 +66,12 @@ class AuthService {
 
       return user;
     } on FirebaseAuthException catch (e) {
-      throw Exception(e.code == 'email-already-in-use'
-          ? 'An account with this email already exists.'
-          : 'Failed to create account. Please try again.');
+      throw Exception(switch (e.code) {  // web RegisterPage wording
+        'email-already-in-use' => 'An account with this email already exists.',
+        'invalid-email' => 'Enter a valid email address.',
+        'network-request-failed' => "Can't reach the server. Check your connection and try again.",
+        _ => 'Failed to create account. Please try again.',
+      });
     }
   }
 

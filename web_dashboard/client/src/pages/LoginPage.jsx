@@ -108,8 +108,11 @@ export default function LoginPage() {
     try {
       await login(email, password)
       navigate('/dashboard')
-    } catch {
-      setAuthError('Invalid email or password.')
+    } catch (err) {
+      setAuthError(
+        err.code === 'auth/network-request-failed' ? "Can't reach the server. Check your connection and try again."
+        : err.code === 'auth/too-many-requests' ? 'Too many attempts. Wait a moment and try again.'
+        : 'Invalid email or password.')
     } finally {
       setLoading(false)
     }

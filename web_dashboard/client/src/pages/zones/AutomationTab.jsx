@@ -160,6 +160,7 @@ export default function AutomationTab({ zone }) {
   }
 
   async function applyAiPlan(plan) {
+    setConfigError(null)
     try {
       await setDoc(doc(db, 'automationConfig', zone.id), { ...plan, aiRecommended: true }, { merge: true })
     } catch (e) {
@@ -283,6 +284,9 @@ export default function AutomationTab({ zone }) {
                     {aiPlan.rationale.map((r, i) => <li key={i}>{r.text}</li>)}
                   </ul>
                 )}
+                {configError && (
+                  <p role="alert" className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mt-3">{configError}</p>
+                )}
                 <div className="flex justify-end gap-2 mt-4">
                   <button
                     onClick={() => setAiPlan(null)}
@@ -383,8 +387,8 @@ export default function AutomationTab({ zone }) {
           )}
         </div>
 
-        {configError && (
-          <p className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mt-4">{configError}</p>
+        {configError && !aiPlan && (
+          <p role="alert" className="text-xs text-on-error-container bg-error-container rounded-lg px-3 py-2 mt-4">{configError}</p>
         )}
 
         {isDirty && (

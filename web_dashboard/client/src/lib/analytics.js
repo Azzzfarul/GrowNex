@@ -124,8 +124,10 @@ export function describeTrend({ series, pref, timeRange, label, kind }) {
     return { level: 'none', text: `Not enough readings yet to summarise ${label}.` }
   // Plants store light only as low/medium/high, so there's no % range to judge: trend only
   if (kind === 'light') {
+    const avg = `Averaging ${Math.round(meanOf(nonNull))}%`
+    if (nonNull.length < 3) return { level: 'none', text: avg }  // seriesDirection needs 3 points
     const dir = { rising: 'rising', falling: 'falling', flat: 'steady' }[seriesDirection(series, { min: 0, max: 100 })]
-    return { level: 'none', text: `Averaging ${Math.round(meanOf(nonNull))}% and ${dir}` }
+    return { level: 'none', text: `${avg} and ${dir}` }
   }
   if (pref.min == null || pref.max == null)
     return { level: 'none', text: `Set plant preferred ${label} range to get a summary.` }

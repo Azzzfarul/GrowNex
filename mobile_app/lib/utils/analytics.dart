@@ -361,12 +361,14 @@ String _trendBad(String kind, bool high, int bound, String dur) =>
   }
   // Plants store light only as low/medium/high, so there's no % range to judge: trend only
   if (kind == 'light') {
+    final avg = 'Averaging ${_meanOf(nonNull)!.round()}%';
+    if (nonNull.length < 3) return (level: 'none', text: avg);  // _seriesDirection needs 3 points
     final dir = switch (_seriesDirection(series, (min: 0, max: 100))) {
       'rising' => 'rising',
       'falling' => 'falling',
       _ => 'steady',
     };
-    return (level: 'none', text: 'Averaging ${_meanOf(nonNull)!.round()}% and $dir');
+    return (level: 'none', text: '$avg and $dir');
   }
   if (pref.min == null || pref.max == null) {
     return (

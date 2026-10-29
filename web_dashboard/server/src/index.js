@@ -13,7 +13,8 @@ import aiRoutes from './routes/ai.js'
 const app = express()
 const PORT = process.env.PORT || 5000
 
-app.use(cors({ origin: (process.env.CLIENT_ORIGIN || 'http://localhost:3000').split(',') }))
+const origins = (process.env.CLIENT_ORIGIN || 'http://localhost:3000').split(',').map(o => o.trim()).filter(Boolean)
+app.use(cors({ origin: origins }))
 app.use(express.json())
 
 app.use('/api/auth',      authRoutes)

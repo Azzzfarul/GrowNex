@@ -113,7 +113,8 @@ void main() {
           series: series, pref: (min: null, max: null), timeRange: 'today', label: 'light', kind: 'light');
       expect(l([30, 30, 31, 30]).text, 'Averaging 30% and steady');
       expect(l([10, 20, 40, 60, 70, 80]).text, 'Averaging 47% and rising');
-      expect(l([30]).level, 'none');
+      expect(l([10, 90]).text, 'Averaging 50%'); // two points: no direction claimed
+      expect(l([30]).text, 'Not enough readings yet to summarise light.');
     });
 
     test('overview without enough readings blames the readings, not a missing device', () {
