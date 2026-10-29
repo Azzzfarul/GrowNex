@@ -55,16 +55,16 @@ class _RootScreenState extends State<RootScreen> {
             stream: NotificationService().watchNotifications(uid),
             builder: (context, snap) {
               final unread = (snap.data ?? const []).where((n) => !n.isRead).length;
-              return Badge.count(
-                count: unread,
-                isLabelVisible: unread > 0,
-                child: IconButton(
-                  icon: const Icon(Icons.notifications_outlined),
-                  tooltip: 'Notifications',
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-                  ),
+              return IconButton(
+                icon: Badge.count(
+                  count: unread,
+                  isLabelVisible: unread > 0,
+                  child: const Icon(Icons.notifications_outlined),
+                ),
+                tooltip: 'Notifications',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NotificationsScreen()),
                 ),
               );
             },

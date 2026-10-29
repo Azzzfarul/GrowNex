@@ -17,7 +17,7 @@ SensorReading reading(DateTime t, {num? temperature, num? moisture, num? s1, num
       soilMoisture2: s2,
     );
 
-Zone zone({num? m1, num? m, num? temp}) => Zone(
+Zone zone({num? m1, num? m, num? temp, String? deviceId}) => Zone(
       id: 'z',
       userId: 'u',
       zoneName: 'Z',
@@ -27,6 +27,7 @@ Zone zone({num? m1, num? m, num? temp}) => Zone(
       latestMoisture1: m1,
       latestMoisture: m,
       latestTemp: temp,
+      deviceId: deviceId,
     );
 
 Plant plant({
@@ -105,6 +106,32 @@ void main() {
       expect(d([32, 33, 34, 25]).text, 'Too hot — above 30°C for about 3 hours');
       expect(d([35, 35]).text, 'Too hot — above 30°C for the whole period');
       expect(d([25]).level, 'none');
+    });
+
+    test('light gets a trend-only summary', () {
+      ({String level, String text}) l(List<double?> series) => describeTrend(
+          series: series, pref: (min: null, max: null), timeRange: 'today', label: 'light', kind: 'light');
+      expect(l([30, 30, 31, 30]).text, 'Averaging 30% and steady');
+      expect(l([10, 20, 40, 60, 70, 80]).text, 'Averaging 47% and rising');
+      expect(l([10, 90]).text, 'Averaging 50%'); // two points: no direction claimed
+      expect(l([30]).text, 'Not enough readings yet to summarise light.');
+    });
+
+    test('overview without enough readings blames the readings, not a missing device', () {
+      const none = (level: 'none', text: '');
+      final plants = [plant(mMin: 40, mMax: 60)];
+      expect(buildOverviewSummary(selectedZone: zone(deviceId: 'd'), plants: plants, temperature: none, humidity: none, moisture: none).text,
+          'Not enough readings yet for a summary.');
+      expect(buildOverviewSummary(selectedZone: zone(), plants: plants, temperature: none, humidity: none, moisture: none).text,
+          contains('connect a device'));
+    });
+
+    test('plant status follows the live health score', () {
+      final p = plant(mMin: 40, mMax: 60, tMin: 20, tMax: 30);
+      expect(plantStatus(zone(m1: 50, temp: 25), p), 'healthy');
+      expect(plantStatus(zone(m1: 90, temp: 25), p), 'needs attention');
+      expect(plantStatus(zone(m1: 90, temp: 40), p), 'critical');
+      expect(plantStatus(zone(), p), null);
     });
 
     test('overview leads with the worst metric', () {

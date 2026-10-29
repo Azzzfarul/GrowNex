@@ -10,6 +10,7 @@ import '../../../services/firestore/plant_service.dart';
 import '../../../services/photo_service.dart';
 import '../../../utils/plant_health.dart';
 import '../../../theme.dart';
+import '../../../widgets/status_label.dart';
 
 class PlantDetailScreen extends StatefulWidget {
   final Plant plant;
@@ -97,8 +98,9 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Changes saved.')));
       }
     } catch (e) {
+      debugPrint('Failed to save: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -160,9 +162,10 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       if (_photoUrl != null) await PhotoService().deletePlantPhotoFile(widget.plant.id).catchError((_) {});
       if (mounted) Navigator.pop(context);
     } catch (e) {
+      debugPrint('Failed to remove plant: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to remove plant: $e')),
+          SnackBar(content: Text('Failed to remove plant. Please try again.')),
         );
       }
     }
@@ -296,8 +299,9 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       final url = await PhotoService().uploadPlantPhoto(widget.plant.id, file);
       if (mounted) setState(() => _photoUrl = url);
     } catch (e) {
+      debugPrint('Failed to upload photo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _photoBusy = false);
@@ -310,8 +314,9 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       await PhotoService().removePlantPhoto(widget.plant.id);
       if (mounted) setState(() => _photoUrl = null);
     } catch (e) {
+      debugPrint('Failed to remove photo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove photo: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to remove photo. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _photoBusy = false);
@@ -494,14 +499,10 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   }
 
   Widget _buildConditionCard(ColorScheme cs) {
-    final app = AppColors.of(context);
     final tt = Theme.of(context).textTheme;
     final h = plantHealth(widget.plant, widget.zone!, _stats!);
     final s = h.score;
-    final (bg, fg) = s == null ? (cs.surfaceContainerHighest, cs.onSurfaceVariant)
-        : s >= 80 ? (cs.primaryContainer, cs.onPrimaryContainer)
-        : s >= 40 ? (app.warningContainer, app.onWarningContainer)
-        : (cs.errorContainer, cs.onErrorContainer);
+    final (:bg, :fg) = scoreColors(context, s);
 
     return Card(
       child: Container(

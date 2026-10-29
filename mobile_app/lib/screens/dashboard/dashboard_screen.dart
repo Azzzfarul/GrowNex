@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 
 import '../../models/zone_model.dart';
 import '../../services/firestore/zone_service.dart';
-import '../../services/auth_service.dart';
 import '../../widgets/zone_card_widget.dart';
 import '../plants/zone_detail/zone_detail_screen.dart';
 import '../../theme.dart';
@@ -18,7 +17,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   static const _contentPadding = EdgeInsets.all(20);
   late final Stream<List<Zone>> _zonesStream;
-  String _username = 'gardener';
 
   @override
   void initState() {
@@ -27,19 +25,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _zonesStream = authUser != null
         ? ZoneService().watchZones(authUser.uid)
         : const Stream.empty();
-    _loadUsername();
-  }
-
-  Future<void> _loadUsername() async {
-    final data = await AuthService().getCurrentUserData();
-    final authUser = FirebaseAuth.instance.currentUser;
-    if (mounted) {
-      setState(() {
-        _username = data?['username'] as String? ??
-            authUser?.displayName ??
-            'gardener';
-      });
-    }
   }
 
   @override
@@ -72,8 +57,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Good morning, $_username', style: tt.titleLarge),
-              const SizedBox(height: 10),
               Text('Here is today\'s plant performance overview.',
                   style: TextStyle(color: cs.onSurfaceVariant)),
               const SizedBox(height: 24),
@@ -84,7 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Expanded(child: _buildSummaryCard('Healthy zones', '$healthyZones healthy zone${healthyZones == 1 ? '' : 's'}',
                         Icons.check_circle, cs.primaryContainer, cs.onPrimaryContainer)),
                     const SizedBox(width: 16),
-                    Expanded(child: _buildSummaryCard('Attention', '$attentionZones zone${attentionZones == 1 ? '' : 's'} require attention',
+                    Expanded(child: _buildSummaryCard('Attention', '$attentionZones ${attentionZones == 1 ? 'zone requires' : 'zones require'} attention',
                         Icons.warning_rounded, app.warningContainer, app.onWarningContainer)),
                   ],
                 ),

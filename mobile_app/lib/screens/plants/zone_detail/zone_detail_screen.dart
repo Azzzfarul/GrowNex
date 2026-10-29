@@ -96,9 +96,10 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
 
       if (mounted) Navigator.pop(context);
     } catch (e) {
+      debugPrint('Failed to delete zone: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete zone: $e')),
+          SnackBar(content: Text('Failed to delete zone. Please try again.')),
         );
       }
     }

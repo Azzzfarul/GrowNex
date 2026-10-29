@@ -96,8 +96,17 @@
   }
 }
 
+/* Material Symbols Rounded (Apache-2.0), self-hosted so icons work offline; includes the FILL axis */
+@font-face {
+  font-family: 'Material Symbols Rounded';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('./assets/fonts/material-symbols-rounded.woff2') format('woff2');
+}
+
 @layer components {
-  /* Material Symbols (font loaded in index.html); see components/ui/Icon.jsx */
+  /* see components/ui/Icon.jsx */
   .icon {
     font-family: 'Material Symbols Rounded';
     font-weight: normal;
@@ -134,7 +143,7 @@
   :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-item):hover::before,
   .nav-item:hover .nav-pill::before { opacity: 0.08; }
   :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab):is(:focus-visible, :active)::before { opacity: 0.1; }
-  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip):disabled::before { opacity: 0; }
+  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .state-layer, .tab):disabled::before { opacity: 0; }
   :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-item, .state-layer, .switch):focus-visible {
     @apply outline outline-2 outline-offset-2 outline-primary;
   }

@@ -177,16 +177,15 @@ class _MonitoringTabState extends State<MonitoringTab> {
                         decoration: BoxDecoration(
                           color: app.warningContainer,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: app.warningContainer),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.warning_amber_rounded, size: 16, color: app.warning),
+                            Icon(Icons.warning_amber_rounded, size: 16, color: app.onWarningContainer),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'Device is offline — readings may be outdated.',
-                                style: tt.labelMedium?.copyWith(color: app.warning),
+                                style: tt.labelMedium?.copyWith(color: app.onWarningContainer),
                               ),
                             ),
                           ],
@@ -442,8 +441,9 @@ class _MonitoringTabState extends State<MonitoringTab> {
     try {
       await PhotoService().uploadZoneSnapshot(widget.zone.id, file);
     } catch (e) {
+      debugPrint('Failed to upload photo: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload photo. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _uploadingSnapshot = false);

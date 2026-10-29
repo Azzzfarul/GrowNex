@@ -39,6 +39,10 @@ export default function RegisterPage() {
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') {
         setAuthError('An account with this email already exists.')
+      } else if (err.code === 'auth/invalid-email') {
+        setAuthError('Enter a valid email address.')
+      } else if (err.code === 'auth/network-request-failed') {
+        setAuthError("Can't reach the server. Check your connection and try again.")
       } else {
         setAuthError('Failed to create account. Please try again.')
       }

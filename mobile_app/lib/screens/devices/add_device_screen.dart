@@ -64,7 +64,8 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         }
       }
     } catch (e) {
-      if (mounted) setState(() => _searchError = 'Search failed: $e');
+      debugPrint('Search failed: $e');
+      if (mounted) setState(() => _searchError = 'Search failed. Please try again.');
     } finally {
       if (mounted) setState(() => _searching = false);
     }
@@ -269,14 +270,13 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   }
 
   Widget _buildManualEntry(bool showManual) {
-    final tt = Theme.of(context).textTheme;
     if (!showManual) {
       return Align(
         alignment: Alignment.centerLeft,
         child: TextButton(
           onPressed: () => setState(() => _showManual = true),
           style: TextButton.styleFrom(padding: EdgeInsets.zero),
-          child: Text("Can't see your device? Enter its ID", style: tt.bodyMedium),
+          child: Text("Can't see your device? Enter its ID"),
         ),
       );
     }

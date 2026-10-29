@@ -108,8 +108,14 @@ export default function LoginPage() {
     try {
       await login(email, password)
       navigate('/dashboard')
-    } catch {
-      setAuthError('Invalid email or password.')
+    } catch (err) {
+      setAuthError(
+        err.code === 'auth/network-request-failed' ? "Can't reach the server. Check your connection and try again."
+        : err.code === 'auth/too-many-requests' ? 'Too many attempts. Wait a moment and try again.'
+        : err.code === 'auth/user-disabled' ? 'This account has been disabled.'
+        : ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'].includes(err.code)
+          ? 'Invalid email or password.'
+          : 'Sign-in failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -123,8 +129,8 @@ export default function LoginPage() {
           <span className="text-title-lg text-on-surface">GrowNex</span>
         </div>
 
-        <h1 className="text-headline-sm text-on-surface mb-1">Welcome back</h1>
-        <p className="text-sm text-on-surface-variant mb-6">Sign in to manage your plants, devices, and analytics.</p>
+        <h1 className="text-headline-sm text-on-surface mb-1">Sign in</h1>
+        <p className="text-sm text-on-surface-variant mb-6">Manage your plants, devices, and analytics.</p>
 
         {authError && (
           <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">{authError}</p>

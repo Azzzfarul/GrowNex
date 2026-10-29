@@ -103,7 +103,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'wrong-password'        => 'Current password is incorrect',
         'invalid-credential'    => 'Current password is incorrect',
         'requires-recent-login' => 'Please log out and log back in, then try again',
-        _                       => e.message ?? 'An error occurred',
+        _                       => 'Something went wrong. Please try again.',
       });
     } catch (e) {
       setState(() => _error = 'An error occurred. Please try again.');

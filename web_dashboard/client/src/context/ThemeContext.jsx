@@ -7,6 +7,8 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
+    const surface = getComputedStyle(document.documentElement).getPropertyValue('--md-surface').trim()
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', `rgb(${surface})`)
     localStorage.setItem('theme', theme)
   }, [theme])
 

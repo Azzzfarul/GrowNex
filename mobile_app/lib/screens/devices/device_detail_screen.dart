@@ -112,10 +112,11 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       );
       if (mounted) Navigator.pop(context);
     } catch (e) {
+      debugPrint('Failed to delete device: $e');
       _deleting = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete device: $e')),
+          SnackBar(content: Text('Failed to delete device. Please try again.')),
         );
       }
     }
@@ -134,7 +135,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       );
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Device updated.')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+      debugPrint('Failed to save: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save. Please try again.')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -207,12 +209,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                     label: 'Fertilizer module',
                     value: _hasFertilizerModule,
                     onChanged: (v) => setState(() => _hasFertilizerModule = v),
-                  ),
-                  const SizedBox(height: 10),
-                  _buildReadOnlyRow(
-                    icon: Icons.camera_alt_outlined,
-                    label: 'Camera module',
-                    trailing: Text('Built-in', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ],
@@ -331,17 +327,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     );
   }
 
-  Widget _buildReadOnlyRow({required IconData icon, required String label, required Widget trailing}) {
-    final cs = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Icon(icon, color: cs.primary, size: 20),
-        const SizedBox(width: 10),
-        Expanded(child: Text(label)),
-        trailing,
-      ],
-    );
-  }
 
   Widget _buildInfoRow(String label, String value, {Color? valueColor}) {
     final cs = Theme.of(context).colorScheme;

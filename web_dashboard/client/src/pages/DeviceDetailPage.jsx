@@ -228,11 +228,6 @@ export default function DeviceDetailPage() {
                   className="w-4 h-4 accent-primary"
                 />
               </label>
-              <div className="flex items-center gap-3">
-                <Icon name="photo_camera" className="text-on-surface-variant" />
-                <span className="flex-1 text-sm text-on-surface">Camera module</span>
-                <span className="text-label-md text-primary">Built-in</span>
-              </div>
             </div>
             )}
           </div>

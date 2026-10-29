@@ -73,8 +73,6 @@ export default function DashboardPage() {
   const [zones, setZones] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const username = user?.displayName || 'gardener'
-
   useEffect(() => {
     if (!user) return
     const unsub = onSnapshot(
@@ -96,7 +94,7 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-headline-md text-on-surface">Good morning, {username}</h1>
+      <h1 className="text-headline-md text-on-surface">Dashboard</h1>
       <p className="text-body-lg text-on-surface-variant mt-1 mb-6">Here is today's plant performance overview.</p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
@@ -114,7 +112,7 @@ export default function DashboardPage() {
           <div>
             <p className="text-label-lg">Attention</p>
             <p className="text-headline-sm">
-              {attentionZones} zone{attentionZones !== 1 ? 's' : ''} require attention
+              {attentionZones} {attentionZones === 1 ? 'zone requires' : 'zones require'} attention
             </p>
           </div>
         </div>

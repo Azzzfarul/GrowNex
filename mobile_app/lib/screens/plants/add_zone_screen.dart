@@ -50,9 +50,10 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
         try {
           await PhotoService().uploadZonePhoto(zone.id, _photoFile!);
         } catch (e) {
+          debugPrint('Zone created, but photo upload failed: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Zone created, but photo upload failed: $e')),
+              SnackBar(content: Text('Zone created, but the photo upload failed.')),
             );
           }
         }
@@ -60,8 +61,9 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
 
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
+      debugPrint('Failed to create zone: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create zone: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create zone. Please try again.')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);

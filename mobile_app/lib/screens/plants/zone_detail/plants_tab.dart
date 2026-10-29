@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../models/plant_model.dart';
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/plant_service.dart';
+import '../../../utils/analytics.dart' show plantStatus;
 import '../add_plant_screen.dart';
 import '../../../widgets/status_label.dart';
 import '../plant_detail/plant_detail_screen.dart';
@@ -31,7 +32,6 @@ class _PlantsTabState extends State<PlantsTab> {
     return StreamBuilder<List<Plant>>(
       stream: _plantsStream,
       builder: (context, snapshot) {
-        final cs = Theme.of(context).colorScheme;
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -63,9 +63,6 @@ class _PlantsTabState extends State<PlantsTab> {
                       ),
               icon: Icon(isFull ? Icons.block : Icons.add),
               label: Text(isFull ? 'Zone full (${plants.length}/$maxPlants)' : 'Add plant'),
-              style: FilledButton.styleFrom(
-                backgroundColor: isFull ? cs.onSurfaceVariant : cs.primary,
-              ),
             ),
             const SizedBox(height: 20),
             if (plants.isEmpty)
@@ -129,7 +126,7 @@ class _PlantsTabState extends State<PlantsTab> {
                         : null,
                   ),
                   Expanded(child: Text(plant.plantName, style: tt.titleMedium)),
-                  StatusLabel(plant.status),
+                  if (plantStatus(widget.zone, plant) case final status?) StatusLabel(status),
                 ],
               ),
               const SizedBox(height: 10),
