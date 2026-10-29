@@ -8,6 +8,21 @@ import { validatePlantProfile } from '../src/services/aiPlant.js'
 // mqttBridge.js calls getFirestore()/getStorage() at import time; nothing connects until used.
 initializeApp({ projectId: 'demo-unit', storageBucket: 'demo-unit.appspot.com' })
 const { dailyCron, lightCron, weeklyCron, computeZoneStatus } = await import('../src/services/mqttBridge.js')
+const { deadTokens } = await import('../src/services/notifications.js')
+
+// ── deadTokens: which FCM tokens notify() prunes ─────────────────────────────
+
+test('deadTokens keeps only tokens FCM says will never work again', () => {
+  const tokens = ['ok', 'gone', 'bad', 'transient']
+  const responses = [
+    { success: true },
+    { success: false, error: { code: 'messaging/registration-token-not-registered' } },
+    { success: false, error: { code: 'messaging/invalid-registration-token' } },
+    { success: false, error: { code: 'messaging/internal-error' } },  // retryable: keep
+  ]
+  assert.deepEqual(deadTokens(tokens, responses), ['gone', 'bad'])
+  assert.deepEqual(deadTokens(['a'], []), [])
+})
 
 const plants = [
   { preferredMoistureMin: 40, preferredMoistureMax: 70, preferredLightCondition: 'high' },

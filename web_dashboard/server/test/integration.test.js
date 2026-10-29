@@ -201,6 +201,8 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
   })
 
   test('a worsening zone alerts once, then the 30-minute cooldown holds', async () => {
+    // FCM isn't emulated, so this push fails or hangs; the in-app notification must land regardless.
+    await db.doc(`users/${users.alice.uid}`).set({ fcmTokens: ['fake-token'] }, { merge: true })
     await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 40, soilMoisture2: 40 })
     const z = await waitFor(async () => {
       const d = await docData(`zones/${ids.zoneA}`)
