@@ -112,9 +112,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       _aiAdvice = [];
     });
 
-    final cutoff = _timeRange == 'today'
+    final from = _timeRange == 'today'
         ? DateTime.now().subtract(const Duration(hours: 24))
         : DateTime.now().subtract(const Duration(days: 7));
+    // Whole hour (stats are hourly buckets): the query stays identical for the hour, so a revisit
+    // resumes it from the cache instead of re-reading every bucket.
+    final cutoff = DateTime(from.year, from.month, from.day, from.hour);
     final cutoffTs = Timestamp.fromDate(cutoff);
 
     final targets = _selectedZoneId == 'all'

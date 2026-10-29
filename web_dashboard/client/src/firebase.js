@@ -1,6 +1,8 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, connectAuthEmulator } from 'firebase/auth'
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
+import {
+  initializeFirestore, memoryLocalCache, memoryLruGarbageCollector, connectFirestoreEmulator,
+} from 'firebase/firestore'
 import { getStorage, connectStorageEmulator } from 'firebase/storage'
 import { getAnalytics } from 'firebase/analytics'
 
@@ -17,7 +19,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
-export const db = getFirestore(app)
+// LRU cache keeps a closed query's resume token, so reopening a page re-reads only changed docs
+// (the default eager cache drops it, and every page visit re-bills the whole result set).
+export const db = initializeFirestore(app, {
+  localCache: memoryLocalCache({ garbageCollector: memoryLruGarbageCollector() }),
+})
 export const storage = getStorage(app)
 
 // VITE_USE_EMULATORS=true → local Firebase emulators (see README "Local test sandbox")

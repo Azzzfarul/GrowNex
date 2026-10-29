@@ -128,6 +128,9 @@ export default function AnalyticsPage() {
     const cutoff = new Date()
     if (timeRange === 'today') cutoff.setHours(cutoff.getHours() - 24)
     else cutoff.setDate(cutoff.getDate() - 7)
+    // Whole hour (stats are hourly buckets): the query stays identical for the hour, so a revisit
+    // resumes it from the cache instead of re-reading every bucket.
+    cutoff.setMinutes(0, 0, 0)
     const cutoffTs = Timestamp.fromDate(cutoff)
 
     const targets = selectedZoneId === 'all' ? zones : zones.filter(z => z.id === selectedZoneId)
