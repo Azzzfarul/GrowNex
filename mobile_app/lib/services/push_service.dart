@@ -15,6 +15,9 @@ class PushService {
   // Set when logout couldn't delete its token (offline): that token still delivers the previous
   // account's pushes, so the next sign-in deletes it before registering anything.
   static const _pendingDeleteKey = 'push.pendingTokenDelete';
+  // A timeout stops the waiting, not the SDK's deleteToken(). Sharing the one in-flight call lets
+  // registration wait for it, so a late-finishing delete can't wipe a token registered after it.
+  static Future<void>? _deleting;
 
   // Call once at startup. authStateChanges also fires for a session restored at launch, which
   // is most launches (the app skips the login screen when already signed in).
@@ -31,9 +34,18 @@ class PushService {
   static Future<void> _register(String uid) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool(_pendingDeleteKey) ?? false) {
-        // Still failing: register nothing, or getToken() would hand this account the old token.
-        if (!await _deleteToken()) return;
+      if (_deleting != null || (prefs.getBool(_pendingDeleteKey) ?? false)) {
+        // No time limit (this runs in the background): getToken() must wait until the old token
+        // is gone, or it would hand this account the previous one's token.
+        try {
+          await _deleteToken();
+        } catch (e) {
+          debugPrint('Push: old token not deleted ($e), retrying in a minute');
+          Timer(const Duration(minutes: 1), () {
+            if (FirebaseAuth.instance.currentUser?.uid == uid) _register(uid);
+          });
+          return;
+        }
         await prefs.remove(_pendingDeleteKey);
       }
       await _messaging.requestPermission();  // Android 13+ system prompt; asked once
@@ -64,7 +76,10 @@ class PushService {
     } catch (e) {
       debugPrint('Push: token not removed from Firestore ($e)');
     }
-    if (!await _deleteToken()) {
+    try {
+      await _deleteToken().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('Push: token not deleted ($e)');
       try {
         await (await SharedPreferences.getInstance()).setBool(_pendingDeleteKey, true);
       } catch (e) {
@@ -73,13 +88,6 @@ class PushService {
     }
   }
 
-  static Future<bool> _deleteToken() async {
-    try {
-      await _messaging.deleteToken().timeout(const Duration(seconds: 5));
-      return true;
-    } catch (e) {
-      debugPrint('Push: token not deleted ($e)');
-      return false;
-    }
-  }
+  static Future<void> _deleteToken() =>
+      _deleting ??= _messaging.deleteToken().whenComplete(() => _deleting = null);
 }
