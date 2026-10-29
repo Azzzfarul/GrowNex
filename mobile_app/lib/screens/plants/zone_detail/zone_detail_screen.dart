@@ -6,6 +6,7 @@ import '../../../services/firestore/device_service.dart';
 import '../../../services/firestore/plant_service.dart';
 import '../../../services/firestore/zone_service.dart';
 import '../../../services/photo_service.dart';
+import '../../../widgets/status_label.dart';
 import 'automation_tab.dart';
 import 'monitoring_tab.dart';
 import 'overview_tab.dart';
@@ -38,6 +39,7 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
   }
 
   Future<void> _confirmDeleteZone(Zone zone) async {
+    final cs = Theme.of(context).colorScheme;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -52,7 +54,7 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             child: const Text('Delete'),
           ),
         ],
@@ -109,7 +111,7 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return Scaffold(
-            appBar: AppBar(backgroundColor: Colors.green[700]),
+            appBar: AppBar(),
             body: const Center(child: CircularProgressIndicator()),
           );
         }
@@ -117,16 +119,20 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
         final zone = snapshot.data;
         if (zone == null) {
           return Scaffold(
-            appBar: AppBar(backgroundColor: Colors.green[700]),
+            appBar: AppBar(),
             body: const Center(child: Text('Zone not found.')),
           );
         }
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(zone.zoneName),
-            backgroundColor: Colors.green[700],
-            foregroundColor: Colors.white,
+            title: Row(
+              children: [
+                Flexible(child: Text(zone.zoneName, overflow: TextOverflow.ellipsis)),
+                const SizedBox(width: 8),
+                StatusLabel(zone.status),
+              ],
+            ),
             actions: [
               IconButton(
                 icon: const Icon(Icons.delete_outline),
@@ -136,9 +142,7 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
             ],
             bottom: TabBar(
               controller: _tabController,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              indicatorColor: Colors.white,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 4),  // "Automation" fits a phone-width quarter
               tabs: const [
                 Tab(text: 'Overview'),
                 Tab(text: 'Plants'),

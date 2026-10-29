@@ -4,7 +4,9 @@ import '../../../models/plant_model.dart';
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/plant_service.dart';
 import '../add_plant_screen.dart';
+import '../../../widgets/status_label.dart';
 import '../plant_detail/plant_detail_screen.dart';
+import '../../../theme.dart';
 
 class PlantsTab extends StatefulWidget {
   final Zone zone;
@@ -29,6 +31,7 @@ class _PlantsTabState extends State<PlantsTab> {
     return StreamBuilder<List<Plant>>(
       stream: _plantsStream,
       builder: (context, snapshot) {
+        final cs = Theme.of(context).colorScheme;
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -44,7 +47,7 @@ class _PlantsTabState extends State<PlantsTab> {
         return ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            ElevatedButton.icon(
+            FilledButton.icon(
               onPressed: isFull
                   ? null
                   : () => Navigator.push(
@@ -60,10 +63,8 @@ class _PlantsTabState extends State<PlantsTab> {
                       ),
               icon: Icon(isFull ? Icons.block : Icons.add),
               label: Text(isFull ? 'Zone full (${plants.length}/$maxPlants)' : 'Add plant'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isFull ? Colors.grey[400] : Colors.green[700],
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              style: FilledButton.styleFrom(
+                backgroundColor: isFull ? cs.onSurfaceVariant : cs.primary,
               ),
             ),
             const SizedBox(height: 20),
@@ -91,6 +92,7 @@ class _PlantsTabState extends State<PlantsTab> {
   }
 
   Widget _buildPlantCard(BuildContext context, Plant plant) {
+    final tt = Theme.of(context).textTheme;
     final cs       = Theme.of(context).colorScheme;
     final moisture = _slotMoisture(plant.slotNumber);
 
@@ -101,64 +103,57 @@ class _PlantsTabState extends State<PlantsTab> {
           builder: (_) => PlantDetailScreen(plant: plant, currentMoisture: moisture, zone: widget.zone),
         ),
       ),
-      child: Container(
+      child: Card(
         margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainer,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  margin: const EdgeInsets.only(right: 12),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(12),
-                    image: plant.photoUrl != null
-                        ? DecorationImage(image: NetworkImage(plant.photoUrl!), fit: BoxFit.cover)
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    margin: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(12),
+                      image: plant.photoUrl != null
+                          ? DecorationImage(image: NetworkImage(plant.photoUrl!), fit: BoxFit.cover)
+                          : null,
+                    ),
+                    child: plant.photoUrl == null
+                        ? Icon(Icons.local_florist, size: 22, color: cs.onSurface.withValues(alpha: 0.38))
                         : null,
                   ),
-                  child: plant.photoUrl == null
-                      ? Icon(Icons.local_florist, size: 22, color: cs.onSurface.withValues(alpha: 0.38))
-                      : null,
-                ),
-                Expanded(child: Text(plant.plantName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(12)),
-                  child: Text(plant.status, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(plant.species, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _InfoChip(label: 'Slot', value: plant.slotNumber.toString()),
-                const SizedBox(width: 8),
-                if (plant.preferredLightCondition != null)
-                  _InfoChip(label: 'Light', value: plant.preferredLightCondition!),
-              ],
-            ),
-            if (moisture != null) ...[
-              const SizedBox(height: 14),
-              _MoistureBar(
-                cs: cs,
-                moisture: moisture,
-                min: plant.preferredMoistureMin,
-                max: plant.preferredMoistureMax,
+                  Expanded(child: Text(plant.plantName, style: tt.titleMedium)),
+                  StatusLabel(plant.status),
+                ],
               ),
+              const SizedBox(height: 10),
+              Text(plant.species, style: TextStyle(color: cs.onSurfaceVariant)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _InfoChip(label: 'Slot', value: plant.slotNumber.toString()),
+                  const SizedBox(width: 8),
+                  if (plant.preferredLightCondition != null)
+                    _InfoChip(label: 'Light', value: plant.preferredLightCondition!),
+                ],
+              ),
+              if (moisture != null) ...[
+                const SizedBox(height: 14),
+                _MoistureBar(
+                  cs: cs,
+                  moisture: moisture,
+                  min: plant.preferredMoistureMin,
+                  max: plant.preferredMoistureMax,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -175,15 +170,17 @@ class _MoistureBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppColors.of(context);
+    final tt = Theme.of(context).textTheme;
     final hasRange = min != null && max != null;
     final inRange  = hasRange && moisture >= min! && moisture <= max!;
     final tooLow   = hasRange && moisture < min!;
 
     final color = !hasRange
-        ? Colors.blue.shade400
-        : inRange  ? Colors.green.shade600
-        : tooLow   ? Colors.orange.shade600
-        : Colors.red.shade500;
+        ? cs.tertiary
+        : inRange  ? cs.primary
+        : tooLow   ? app.warning
+        : cs.error;
 
     final label = !hasRange ? null
         : inRange  ? 'Within preferred range'
@@ -196,9 +193,9 @@ class _MoistureBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Soil moisture', style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
+            Text('Soil moisture', style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
             Text('${moisture.toStringAsFixed(1)}%',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+                style: tt.labelMedium?.copyWith(color: color)),
           ],
         ),
         const SizedBox(height: 6),
@@ -213,7 +210,7 @@ class _MoistureBar extends StatelessWidget {
         ),
         if (label != null) ...[
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 11, color: color)),
+          Text(label, style: tt.labelSmall?.copyWith(color: color)),
         ],
       ],
     );
@@ -228,11 +225,12 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(color: cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(12)),
-      child: Text('$label: $value', style: const TextStyle(fontSize: 12)),
+      child: Text('$label: $value', style: tt.bodySmall),
     );
   }
 }

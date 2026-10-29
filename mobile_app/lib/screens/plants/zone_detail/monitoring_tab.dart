@@ -8,6 +8,7 @@ import '../../../models/zone_model.dart';
 import '../../../services/firestore/device_service.dart';
 import '../../../services/firestore/plant_service.dart';
 import '../../../services/photo_service.dart';
+import '../../../theme.dart';
 
 class MonitoringTab extends StatefulWidget {
   final Zone zone;
@@ -79,55 +80,53 @@ class _MonitoringTabState extends State<MonitoringTab> {
   }
 
   Widget _card({required Widget child}) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: cs.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 6))],
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: child,
       ),
-      child: child,
     );
   }
 
   Widget _buildDeviceStatus() {
+    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Device status', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text('Device status', style: tt.titleMedium),
           const SizedBox(height: 12),
           if (_deviceStream == null)
             Text('No device connected',
-                style: TextStyle(fontSize: 16, color: cs.onSurface.withValues(alpha: 0.55)))
+                style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant))
           else
             StreamBuilder<Device?>(
               stream: _deviceStream,
               builder: (context, snapshot) {
+                final tt = Theme.of(context).textTheme;
                 final device = snapshot.data;
                 if (snapshot.connectionState == ConnectionState.waiting && device == null) {
-                  return const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2));
+                  return SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2));
                 }
                 if (device == null) {
-                  return const Text('Device not found', style: TextStyle(color: Colors.red));
+                  return Text('Device not found', style: TextStyle(color: cs.error));
                 }
 
                 final isOnline = device.status == 'online';
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(device.deviceName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    Text(device.deviceName, style: tt.titleMedium),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        CircleAvatar(radius: 5, backgroundColor: isOnline ? Colors.green[700] : Colors.red[400]),
+                        CircleAvatar(radius: 5, backgroundColor: isOnline ? cs.primary : cs.error),
                         const SizedBox(width: 8),
                         Text(
                           isOnline ? 'Online' : 'Offline',
                           style: TextStyle(
-                            color: isOnline ? Colors.green[700] : Colors.red[400],
+                            color: isOnline ? cs.primary : cs.error,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -146,6 +145,7 @@ class _MonitoringTabState extends State<MonitoringTab> {
     return StreamBuilder<List<Plant>>(
       stream: _plantsStream,
       builder: (context, snapshot) {
+        final tt = Theme.of(context).textTheme;
         final plants  = snapshot.data ?? [];
         final tempMin  = _avg(plants.map((p) => p.preferredTemperatureMin));
         final tempMax  = _avg(plants.map((p) => p.preferredTemperatureMax));
@@ -159,12 +159,14 @@ class _MonitoringTabState extends State<MonitoringTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Latest readings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text('Latest readings', style: tt.titleMedium),
               const SizedBox(height: 14),
               if (_deviceStream != null)
                 StreamBuilder<Device?>(
                   stream: _deviceStream,
                   builder: (context, deviceSnap) {
+                    final app = AppColors.of(context);
+                    final tt = Theme.of(context).textTheme;
                     final device = deviceSnap.data;
                     final isOffline = device != null && device.status != 'online';
                     if (!isOffline) return const SizedBox.shrink();
@@ -173,18 +175,18 @@ class _MonitoringTabState extends State<MonitoringTab> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.orange[50],
+                          color: app.warningContainer,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.orange[100]!),
+                          border: Border.all(color: app.warningContainer),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange[700]),
+                            Icon(Icons.warning_amber_rounded, size: 16, color: app.warning),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'Device is offline — readings may be outdated.',
-                                style: TextStyle(fontSize: 12, color: Colors.orange[800], fontWeight: FontWeight.w500),
+                                style: tt.labelMedium?.copyWith(color: app.warning),
                               ),
                             ),
                           ],
@@ -212,6 +214,7 @@ class _MonitoringTabState extends State<MonitoringTab> {
     return StreamBuilder<List<Plant>>(
       stream: _plantsStream,
       builder: (context, snapshot) {
+        final tt = Theme.of(context).textTheme;
         final plants = snapshot.data ?? [];
         return _card(
           child: Column(
@@ -219,10 +222,10 @@ class _MonitoringTabState extends State<MonitoringTab> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.eco, color: Colors.green[700], size: 20),
+                  Icon(Icons.eco, color: cs.primary, size: 20),
                   const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text('Ideal zone conditions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Expanded(
+                    child: Text('Ideal zone conditions', style: tt.titleMedium),
                   ),
                 ],
               ),
@@ -231,7 +234,7 @@ class _MonitoringTabState extends State<MonitoringTab> {
                 plants.isEmpty
                     ? 'Add plants with preferred conditions to see computed ideals.'
                     : 'Averaged from ${plants.length} plant${plants.length == 1 ? '' : 's'} in this zone. Edit at the plant level.',
-                style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.45)),
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: 14),
               if (plants.isEmpty)
@@ -295,13 +298,14 @@ class _MonitoringTabState extends State<MonitoringTab> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(color: cs.onSurfaceVariant)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
       ],
     );
   }
 
   Widget _buildImagePreview() {
+    final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
     return _card(
       child: Column(
@@ -313,13 +317,14 @@ class _MonitoringTabState extends State<MonitoringTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Camera feed', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text('Camera feed', style: tt.titleMedium),
                     const SizedBox(height: 2),
-                    const Text('Last 48 hours · one photo per 4-hour window', style: TextStyle(fontSize: 11)),
+                    Text('Last 48 hours · one photo per 4-hour window', style: tt.labelSmall),
                     if (_cameraStream != null)
                       StreamBuilder<Device?>(
                         stream: _cameraStream,
                         builder: (context, snapshot) {
+                          final tt = Theme.of(context).textTheme;
                           final camera = snapshot.data;
                           if (camera == null) return const SizedBox.shrink();
                           final isOnline = camera.status == 'online';
@@ -331,11 +336,11 @@ class _MonitoringTabState extends State<MonitoringTab> {
                                 children: [
                                   TextSpan(
                                     text: isOnline ? 'Online' : 'Offline',
-                                    style: TextStyle(color: isOnline ? Colors.green[700] : Colors.red[400]),
+                                    style: TextStyle(color: isOnline ? cs.primary : cs.error),
                                   ),
                                 ],
                               ),
-                              style: const TextStyle(fontSize: 11),
+                              style: tt.labelSmall,
                             ),
                           );
                         },
@@ -353,6 +358,7 @@ class _MonitoringTabState extends State<MonitoringTab> {
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: _snapshotsStream,
             builder: (context, snapshot) {
+              final tt = Theme.of(context).textTheme;
               final docs = snapshot.data?.docs ?? [];
               if (docs.isEmpty) {
                 return SizedBox(
@@ -363,7 +369,7 @@ class _MonitoringTabState extends State<MonitoringTab> {
                       children: [
                         Icon(Icons.camera_alt, size: 36, color: cs.onSurface.withValues(alpha: 0.28)),
                         const SizedBox(height: 6),
-                        Text('No photos yet', style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.45))),
+                        Text('No photos yet', style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
                       ],
                     ),
                   ),
@@ -445,6 +451,7 @@ class _MonitoringTabState extends State<MonitoringTab> {
   }
 
   Widget _sensorValue(ColorScheme cs, String label, String value, {double? min, double? max}) {
+    final app = AppColors.of(context);
     final numVal  = double.tryParse(value.replaceAll(RegExp(r'[^0-9.]'), ''));
     final hasRange = min != null && max != null;
     final inRange  = hasRange && numVal != null && numVal >= min && numVal <= max;
@@ -452,9 +459,9 @@ class _MonitoringTabState extends State<MonitoringTab> {
 
     final Color valueColor = !hasRange || numVal == null
         ? cs.onSurface
-        : inRange  ? Colors.green.shade700
-        : tooLow   ? Colors.orange.shade700
-        : Colors.red.shade600;
+        : inRange  ? cs.primary
+        : tooLow   ? app.warning
+        : cs.error;
 
     final IconData? icon = !hasRange || numVal == null
         ? null
@@ -465,13 +472,13 @@ class _MonitoringTabState extends State<MonitoringTab> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.55))),
+        Text(label, style: TextStyle(color: cs.onSurfaceVariant)),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) Icon(icon, size: 16, color: valueColor),
             if (icon != null) const SizedBox(width: 4),
-            Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: valueColor)),
+            Text(value, style: TextStyle(fontWeight: FontWeight.w500, color: valueColor)),
           ],
         ),
       ],

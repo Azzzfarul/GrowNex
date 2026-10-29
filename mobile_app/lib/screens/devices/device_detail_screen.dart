@@ -78,6 +78,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   }
 
   Future<void> _confirmDelete() async {
+    final cs = Theme.of(context).colorScheme;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -93,7 +94,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             child: const Text('Delete'),
           ),
         ],
@@ -147,9 +148,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     if (_deviceMissing) {
       return Scaffold(
-        appBar: AppBar(backgroundColor: Colors.green[700], foregroundColor: Colors.white),
+        appBar: AppBar(),
         body: const Center(child: Text('Device not found.')),
       );
     }
@@ -161,8 +163,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(device.deviceName),
-        backgroundColor: Colors.green[700],
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline),
@@ -184,12 +184,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.camera_alt_outlined, color: Colors.green[700], size: 20),
+                      Icon(Icons.camera_alt_outlined, color: cs.primary, size: 20),
                       const SizedBox(width: 10),
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           "Camera node — uploads a photo to its zone's Camera feed every 4 hours.",
-                          style: TextStyle(color: Colors.black54),
+                          style: TextStyle(color: cs.onSurfaceVariant),
                         ),
                       ),
                     ],
@@ -212,7 +212,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                   _buildReadOnlyRow(
                     icon: Icons.camera_alt_outlined,
                     label: 'Camera module',
-                    trailing: const Text('Built-in', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
+                    trailing: Text('Built-in', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ],
@@ -256,13 +256,13 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                   _buildInfoRow(
                     'Connection',
                     isOnline ? 'Online' : 'Offline',
-                    valueColor: isOnline ? Colors.green[700] : Colors.red[400],
+                    valueColor: isOnline ? cs.primary : cs.error,
                   )
                 else
                   _buildInfoRow(
                     'Availability',
                     _sensorAvailable ? 'Available' : 'Unavailable',
-                    valueColor: _sensorAvailable ? Colors.green[700] : Colors.red[400],
+                    valueColor: _sensorAvailable ? cs.primary : cs.error,
                   ),
                 const SizedBox(height: 10),
                 _buildInfoRow(
@@ -275,16 +275,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          ElevatedButton(
+          FilledButton(
             onPressed: _loading ? null : _save,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green[700],
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 14),
               child: _loading
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Text('Save changes'),
             ),
           ),
@@ -294,29 +290,29 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   }
 
   Widget _buildSection({required String title, required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12, offset: const Offset(0, 6))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 14),
-          child,
-        ],
+    final tt = Theme.of(context).textTheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: tt.titleSmall),
+            const SizedBox(height: 14),
+            child,
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildField(String label, TextEditingController controller) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.black54, fontSize: 13)),
+        Text(label, style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
         const SizedBox(height: 6),
         TextField(controller: controller, decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true)),
       ],
@@ -324,20 +320,22 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   }
 
   Widget _buildModuleToggle({required IconData icon, required String label, required bool value, required ValueChanged<bool> onChanged}) {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Icon(icon, color: Colors.green[700], size: 20),
+        Icon(icon, color: cs.primary, size: 20),
         const SizedBox(width: 10),
         Expanded(child: Text(label)),
-        Switch(value: value, onChanged: onChanged, activeThumbColor: Colors.green[700]),
+        Switch(value: value, onChanged: onChanged),
       ],
     );
   }
 
   Widget _buildReadOnlyRow({required IconData icon, required String label, required Widget trailing}) {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Icon(icon, color: Colors.green[700], size: 20),
+        Icon(icon, color: cs.primary, size: 20),
         const SizedBox(width: 10),
         Expanded(child: Text(label)),
         trailing,
@@ -346,10 +344,11 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   }
 
   Widget _buildInfoRow(String label, String value, {Color? valueColor}) {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.black54)),
+        Text(label, style: TextStyle(color: cs.onSurfaceVariant)),
         Text(value, style: TextStyle(fontWeight: FontWeight.w600, color: valueColor)),
       ],
     );

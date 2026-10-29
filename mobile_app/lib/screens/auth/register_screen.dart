@@ -78,8 +78,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(  // the keyboard would otherwise cover the form
           child: Padding(
@@ -88,14 +89,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Create account',
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                style: tt.headlineSmall,
               ),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'Register to monitor plants, analytics, and connected devices.',
-                style: TextStyle(fontSize: 16, color: Colors.black54),
+                style: tt.bodyLarge?.copyWith(color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: 32),
               Form(
@@ -164,28 +165,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
+                      child: FilledButton(
                         onPressed: _register,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[700],
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
                         child: _isLoading
-                            ? const SizedBox(
+                            ? SizedBox(
                                 height: 20,
                                 width: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white,
+                                  color: cs.onPrimary,
                                 ),
                               )
-                            : const Text(
-                                'Register',
-                                style: TextStyle(fontSize: 16),
-                              ),
+                            : const Text('Register'),
                       ),
                     ),
                   ],
@@ -195,7 +186,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('Already have an account?', style: TextStyle(color: Colors.black54)),
+                  Text('Already have an account?', style: TextStyle(color: cs.onSurfaceVariant)),
                   TextButton(
                     onPressed: () {
                       Navigator.pop(context);

@@ -25,16 +25,8 @@ class AuthTextField extends StatelessWidget {
       keyboardType: keyboardType,
       obscureText: obscureText,
       validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hintText,
-        filled: true,
-        fillColor: Colors.grey[100],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-      ),
+      // Outlined M3 field; the border comes from the app theme
+      decoration: InputDecoration(labelText: label, hintText: hintText),
     );
   }
 }

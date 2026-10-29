@@ -50,8 +50,6 @@ class _RootScreenState extends State<RootScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_selectedIndex]),
-        backgroundColor: Colors.green[700],
-        elevation: 0,
         actions: [
           StreamBuilder<List<AppNotification>>(
             stream: NotificationService().watchNotifications(uid),

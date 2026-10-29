@@ -114,6 +114,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     if (_loadingInitialData) {
       return Scaffold(
         appBar: AppBar(title: const Text('Edit Profile')),
@@ -130,12 +131,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           // ── Account Info ─────────────────────────────────────────
-          Text('Account Info',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.green[700],
-                  letterSpacing: 0.8)),
+          Text('Account Info', style: tt.titleSmall?.copyWith(color: cs.primary)),
           const SizedBox(height: 10),
 
           TextField(
@@ -156,8 +152,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               labelText: 'Email',
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.email_outlined),
-              filled: true,
-              fillColor: cs.onSurface.withValues(alpha: 0.06),
               helperText: 'Email cannot be changed',
             ),
           ),
@@ -165,16 +159,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const SizedBox(height: 28),
 
           // ── Change Password ───────────────────────────────────────
-          Text('Change Password',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.green[700],
-                  letterSpacing: 0.8)),
+          Text('Change Password', style: tt.titleSmall?.copyWith(color: cs.primary)),
           const SizedBox(height: 4),
           Text('Leave blank to keep your current password',
-              style: TextStyle(
-                  fontSize: 13, color: cs.onSurface.withValues(alpha: 0.55))),
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
           const SizedBox(height: 10),
 
           TextField(
@@ -223,29 +211,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           if (_error != null) ...[
             const SizedBox(height: 14),
             Text(_error!,
-                style: const TextStyle(color: Colors.red, fontSize: 13)),
+                style: tt.bodyMedium?.copyWith(color: cs.error)),
           ],
 
           const SizedBox(height: 28),
 
-          ElevatedButton(
+          FilledButton(
             onPressed: _saving ? null : _save,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green[700],
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: Colors.green[200],
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+            style: FilledButton.styleFrom(
+              disabledBackgroundColor: cs.primaryContainer,
             ),
             child: _saving
                 ? const SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : const Text('Save Changes',
-                    style: TextStyle(fontSize: 16)),
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Save Changes'),
           ),
         ],
       ),

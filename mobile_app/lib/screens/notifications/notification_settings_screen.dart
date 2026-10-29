@@ -20,12 +20,12 @@ class NotificationSettingsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
-        backgroundColor: Colors.green[700],
-        foregroundColor: Colors.white,
       ),
       body: StreamBuilder<Map<String, dynamic>>(
         stream: svc.watchPrefs(uid),
         builder: (context, snap) {
+          final tt = Theme.of(context).textTheme;
+          final cs = Theme.of(context).colorScheme;
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -35,15 +35,14 @@ class NotificationSettingsScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
-              const Padding(
+              Padding(
                 padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
                 child: Text('Choose what you get notified about.',
-                    style: TextStyle(color: Colors.black54, fontSize: 13)),
+                    style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
               ),
               for (final (key, label, hint) in _types)
                 SwitchListTile(
                   value: on(key),
-                  activeThumbColor: Colors.green[700],
                   title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text(hint),
                   onChanged: (v) => svc.savePrefs(uid, {
