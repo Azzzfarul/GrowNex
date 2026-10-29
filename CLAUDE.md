@@ -121,9 +121,11 @@ The two clients implement the same features separately, and some logic is hand-p
 | `lib/analytics.js` (`buildChartData`, `describeTrend`, `buildOverviewSummary`, …) | `utils/analytics.dart` (`groupByTime`, same names otherwise) |
 | `AddDeviceModal` discovery + transactional claim in `pages/DevicesPage.jsx` | `screens/devices/add_device_screen.dart` + `watchUnclaimedDevices` / `claimDevice` in `services/firestore/device_service.dart` |
 | `CameraCard` in `pages/zones/OverviewTab.jsx` | `_CameraCard` in `screens/plants/zone_detail/overview_tab.dart` |
+| M3 tokens in `index.css` (`--md-*`, `--chart-*`) | `theme.dart` (`seedColor`, `AppColors`) |
+| `components/ui/StatusLabel.jsx` | `widgets/status_label.dart` |
 
-- **Web** has no data layer: pages subscribe with `onSnapshot` and write inline. Routes are in `App.jsx` behind `PrivateRoute`. Dark mode is Tailwind's `class` strategy toggled by `ThemeContext`; the `brand` palette is in `tailwind.config.js`.
-- **Mobile** uses `models/*` (`fromDocument` / `toMap`) plus `services/firestore/*` streams consumed with `StreamBuilder` (no state-management package), though the analytics, plant-detail, add-plant and zone-detail screens also query Firestore directly. `RootScreen` hosts the five bottom-nav tabs; the theme is the global `themeNotifier`.
+- **Web** has no data layer: pages subscribe with `onSnapshot` and write inline. Routes are in `App.jsx` behind `PrivateRoute`. Styling follows Material Design 3: `src/index.css` holds the M3 color roles as CSS variables (light + `.dark`, toggled by `ThemeContext`; generated from the mobile seed, so keep both in step) plus component classes (`.btn-filled|tonal|outlined|text|error`, `.card`, `.field`, `.chip`, `.tab`, `.switch`, `.dialog`, `.nav-item`); `tailwind.config.js` maps the roles to color names (`bg-primary`, `text-on-surface-variant`, …) and adds the M3 type scale (`text-title-lg`, …). Use roles, not raw palette colors. Icons are Material Symbols via `components/ui/Icon.jsx` (font from Google Fonts in `index.html`).
+- **Mobile** uses `models/*` (`fromDocument` / `toMap`) plus `services/firestore/*` streams consumed with `StreamBuilder` (no state-management package), though the analytics, plant-detail, add-plant and zone-detail screens also query Firestore directly. `RootScreen` hosts the five `NavigationBar` tabs; light/dark is the global `themeNotifier`. The M3 theme is `lib/theme.dart` (`buildTheme`, seed color, and the `AppColors` extension for the warning role and chart series, which `ColorScheme` lacks); use `Theme.of(context).colorScheme` / `AppColors.of(context)`, not `Colors.*`.
 
 ### Environment gotchas
 
