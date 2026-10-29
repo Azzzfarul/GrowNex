@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext'
 import { fetchPlantProfile } from '../../lib/aiSummary'
 import { zoneFitHint } from '../../lib/zoneFit'
 import { plantHealth, plantHealthSummary } from '../../lib/plantHealth'
+import { scoreBadge } from '../../lib/analytics'
 import { uploadPlantPhoto, removePlantPhoto, removePlantPhotoFile } from '../../lib/photoUpload'
 
 const MAX_PLANTS = 4
@@ -418,13 +419,7 @@ function AddPlantModal({ zone, takenSlots, onClose }) {
 }
 
 /* ── Condition block (rule-based per-plant health) ───────────────────── */
-function statScoreBadge(s) {
-  if (s == null) return 'bg-surface-container-high text-on-surface-variant'
-  if (s >= 80) return 'bg-primary-container text-on-primary-container'
-  if (s >= 60) return 'bg-warning-container text-on-warning-container'
-  if (s >= 40) return 'bg-warning-container text-on-warning-container'
-  return 'bg-error-container text-on-error-container'
-}
+const statScoreBadge = (s) => s == null ? 'bg-surface-container-high text-on-surface-variant' : scoreBadge(s)
 
 function ConditionCard({ plant, zone }) {
   const [readings, setReadings] = useState(null)

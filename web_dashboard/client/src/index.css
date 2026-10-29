@@ -134,7 +134,7 @@
   :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-item):hover::before,
   .nav-item:hover .nav-pill::before { opacity: 0.08; }
   :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab):is(:focus-visible, :active)::before { opacity: 0.1; }
-  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip):disabled::before { opacity: 0; }
+  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .state-layer, .tab):disabled::before { opacity: 0; }
   :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-item, .state-layer, .switch):focus-visible {
     @apply outline outline-2 outline-offset-2 outline-primary;
   }

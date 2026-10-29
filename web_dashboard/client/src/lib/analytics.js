@@ -266,14 +266,14 @@ export function generateInsights(zone, plants, readings) {
 
 export function scoreColor(s) {
   if (s >= 80) return 'text-primary'
-  if (s >= 60) return 'text-warning'
+  if (s >= 60) return 'text-secondary'
   if (s >= 40) return 'text-warning'
   return 'text-error'
 }
 
 export function scoreBadge(s) {
   if (s >= 80) return 'bg-primary-container text-on-primary-container'
-  if (s >= 60) return 'bg-warning-container text-on-warning-container'
+  if (s >= 60) return 'bg-secondary-container text-on-secondary-container'
   if (s >= 40) return 'bg-warning-container text-on-warning-container'
   return 'bg-error-container text-on-error-container'
 }

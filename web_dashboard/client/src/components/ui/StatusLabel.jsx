@@ -10,8 +10,8 @@ function tone(status) {
 
 export default function StatusLabel({ status, className = '' }) {
   return (
-    <span className={`inline-flex items-center h-6 px-2.5 rounded-lg text-label-md capitalize shrink-0 ${tone(status)} ${className}`}>
-      {status || 'Unknown'}
+    <span className={`inline-flex items-center h-6 px-2.5 rounded-lg text-label-md shrink-0 ${tone(status)} ${className}`}>
+      {status ? status[0].toUpperCase() + status.slice(1) : 'Unknown'}
     </span>
   )
 }

@@ -122,14 +122,18 @@ export default function AutomationTab({ zone }) {
     if (bad(ls, lightSchedOrig, LIGHT_RE))             return setConfigError('Lighting schedule must look like 08:00–18:00.')
     if (bad(fs, fertSchedOrig.toUpperCase(), FERT_RE)) return setConfigError('Fertilizing schedule must look like MON 06:00.')
     setConfigError(null)
-    await setDoc(doc(db, 'automationConfig', zone.id), {
-      wateringThreshold:   waterThresh    ? parseFloat(waterThresh)   : null,
-      wateringSchedule:    ws             || null,
-      wateringDuration:    waterDuration  ? parseInt(waterDuration)   : null,
-      lightingSchedule:    ls             || null,
-      fertilizingSchedule: fs             || null,
-      fertilizingDuration: fertDuration   ? parseInt(fertDuration)    : null,
-    }, { merge: true })
+    try {
+      await setDoc(doc(db, 'automationConfig', zone.id), {
+        wateringThreshold:   waterThresh    ? parseFloat(waterThresh)   : null,
+        wateringSchedule:    ws             || null,
+        wateringDuration:    waterDuration  ? parseInt(waterDuration)   : null,
+        lightingSchedule:    ls             || null,
+        fertilizingSchedule: fs             || null,
+        fertilizingDuration: fertDuration   ? parseInt(fertDuration)    : null,
+      }, { merge: true })
+    } catch (e) {
+      return setConfigError(`Failed to save: ${e.message}`)  // keeps the edits so the user can retry
+    }
     setWaterThreshOrig(waterThresh); setWaterSchedOrig(waterSched)
     setWaterDurOrig(waterDuration);  setLightSchedOrig(lightSched)
     setFertSchedOrig(fertSched);     setFertDurOrig(fertDuration)
@@ -154,7 +158,11 @@ export default function AutomationTab({ zone }) {
   }
 
   async function applyAiPlan(plan) {
-    await setDoc(doc(db, 'automationConfig', zone.id), { ...plan, aiRecommended: true }, { merge: true })
+    try {
+      await setDoc(doc(db, 'automationConfig', zone.id), { ...plan, aiRecommended: true }, { merge: true })
+    } catch (e) {
+      return setConfigError(`Failed to save: ${e.message}`)
+    }
     setAutoWater(!!plan.autoWateringEnabled)
     setAutoLight(!!plan.autoLightingEnabled)
     setAutoFert(!!plan.autoFertilizingEnabled)
