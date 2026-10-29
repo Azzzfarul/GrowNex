@@ -13,6 +13,7 @@ import '../../services/firestore/zone_service.dart';
 import '../../utils/analytics.dart';
 import '../../utils/plant_health.dart';
 import '../../theme.dart';
+import '../../widgets/status_label.dart';
 
 List<FlSpot> _toSpots(List<({String label, double? value})> entries) {
   final spots = <FlSpot>[];
@@ -45,14 +46,6 @@ List<({int slot, String label, Color color})> _getMoistureLines(
 
 // ── Score utils ───────────────────────────────────────────────────────────────
 
-// Container + on-container colors for a health score badge
-({Color bg, Color fg}) _scoreTone(BuildContext context, int s) {
-  final cs = Theme.of(context).colorScheme;
-  final app = AppColors.of(context);
-  if (s >= 80) return (bg: cs.primaryContainer, fg: cs.onPrimaryContainer);
-  if (s >= 40) return (bg: app.warningContainer, fg: app.onWarningContainer);
-  return (bg: cs.errorContainer, fg: cs.onErrorContainer);
-}
 
 String _scoreLabel(int s) {
   if (s >= 80) return 'Excellent';
@@ -466,11 +459,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: _scoreTone(context, score).bg,
+                            color: scoreColors(context, score).bg,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(_scoreLabel(score),
-                              style: tt.labelLarge?.copyWith(color: _scoreTone(context, score).fg)),
+                              style: tt.labelLarge?.copyWith(color: scoreColors(context, score).fg)),
                         ),
                       ]),
               ),
@@ -520,11 +513,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: _scoreTone(context, s).bg,
+                                          color: scoreColors(context, s).bg,
                                           borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Text('$s%',
-                                            style: tt.labelMedium?.copyWith(color: _scoreTone(context, s).fg)),
+                                            style: tt.labelMedium?.copyWith(color: scoreColors(context, s).fg)),
                                       ),
                                     ],
                                   ),

@@ -10,6 +10,7 @@ import '../../../services/firestore/plant_service.dart';
 import '../../../services/photo_service.dart';
 import '../../../utils/plant_health.dart';
 import '../../../theme.dart';
+import '../../../widgets/status_label.dart';
 
 class PlantDetailScreen extends StatefulWidget {
   final Plant plant;
@@ -494,14 +495,10 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
   }
 
   Widget _buildConditionCard(ColorScheme cs) {
-    final app = AppColors.of(context);
     final tt = Theme.of(context).textTheme;
     final h = plantHealth(widget.plant, widget.zone!, _stats!);
     final s = h.score;
-    final (bg, fg) = s == null ? (cs.surfaceContainerHighest, cs.onSurfaceVariant)
-        : s >= 80 ? (cs.primaryContainer, cs.onPrimaryContainer)
-        : s >= 40 ? (app.warningContainer, app.onWarningContainer)
-        : (cs.errorContainer, cs.onErrorContainer);
+    final (:bg, :fg) = scoreColors(context, s);
 
     return Card(
       child: Container(

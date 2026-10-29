@@ -31,7 +31,6 @@ class _PlantsTabState extends State<PlantsTab> {
     return StreamBuilder<List<Plant>>(
       stream: _plantsStream,
       builder: (context, snapshot) {
-        final cs = Theme.of(context).colorScheme;
         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -63,9 +62,6 @@ class _PlantsTabState extends State<PlantsTab> {
                       ),
               icon: Icon(isFull ? Icons.block : Icons.add),
               label: Text(isFull ? 'Zone full (${plants.length}/$maxPlants)' : 'Add plant'),
-              style: FilledButton.styleFrom(
-                backgroundColor: isFull ? cs.onSurfaceVariant : cs.primary,
-              ),
             ),
             const SizedBox(height: 20),
             if (plants.isEmpty)

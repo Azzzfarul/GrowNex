@@ -76,6 +76,7 @@ class _PlantScreenState extends State<PlantScreen> {
                 )
               else
                 ...filteredZones.map((zone) => ZoneSummaryCard(
+                      key: ValueKey(zone.id),  // the card holds a per-zone stream
                       zone: zone,
                       onTap: () => Navigator.push(
                         context,

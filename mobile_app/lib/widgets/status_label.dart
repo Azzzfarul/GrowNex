@@ -14,6 +14,17 @@ import '../theme.dart';
   return (bg: cs.surfaceContainerHighest, fg: cs.onSurfaceVariant);
 }
 
+/// Container colors for a 0–100 health score: Excellent / Good / Fair / Poor (web: lib/analytics.js scoreBadge).
+({Color bg, Color fg}) scoreColors(BuildContext context, int? score) {
+  final cs = Theme.of(context).colorScheme;
+  final app = AppColors.of(context);
+  if (score == null) return (bg: cs.surfaceContainerHighest, fg: cs.onSurfaceVariant);
+  if (score >= 80) return (bg: cs.primaryContainer, fg: cs.onPrimaryContainer);
+  if (score >= 60) return (bg: cs.secondaryContainer, fg: cs.onSecondaryContainer);
+  if (score >= 40) return (bg: app.warningContainer, fg: app.onWarningContainer);
+  return (bg: cs.errorContainer, fg: cs.onErrorContainer);
+}
+
 /// M3 label chip for a zone/plant status (same mapping as the web's StatusLabel).
 class StatusLabel extends StatelessWidget {
   final String status;
