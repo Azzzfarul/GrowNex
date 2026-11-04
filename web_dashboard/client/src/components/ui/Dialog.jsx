@@ -59,7 +59,7 @@ export function Sheet({ title, onClose, headerActions, actions, children, busy =
         <div className="flex items-center gap-1 h-16 pl-6 pr-3 shrink-0">
           <h2 id={titleId} className="flex-1 text-title-lg text-on-surface truncate">{title}</h2>
           {headerActions}
-          <button onClick={onClose} className="icon-btn" aria-label="Close" data-tip="Close"><Icon name="close" /></button>
+          <button onClick={onClose} disabled={busy} className="icon-btn" aria-label="Close" data-tip="Close"><Icon name="close" /></button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 pb-6">{children}</div>
         {actions && <div className="flex justify-end gap-2 px-6 py-4 border-t border-outline-variant shrink-0">{actions}</div>}
