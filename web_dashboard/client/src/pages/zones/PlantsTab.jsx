@@ -464,7 +464,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
       }
       actions={<>
         {saved && <span className="flex items-center gap-1 mr-auto text-body-md text-primary"><Icon name="check" size={18} />Saved</span>}
-        <button onClick={onClose} disabled={deleting || showDelConfirm} className="btn-text">Close</button>
+        <button onClick={onClose} className="btn-text">Close</button>
         <button onClick={handleSave} disabled={loading} className="btn-filled">{loading ? 'Saving…' : 'Save changes'}</button>
       </>}
     >

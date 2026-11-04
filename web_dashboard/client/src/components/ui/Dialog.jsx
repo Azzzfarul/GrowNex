@@ -27,7 +27,7 @@ function useModalFocus() {
 const WIDTH = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-xl', xl: 'max-w-4xl' }
 
 // M3 basic dialog: optional hero icon, headline, scrolling content, right-aligned actions.
-// Clicking the scrim or pressing Escape closes it unless `busy`.
+// Clicking the scrim or pressing Escape closes it unless `busy`, which also disables the action buttons.
 export default function Dialog({ title, icon, children, actions, onClose, size = 'sm', busy = false }) {
   useEscape(onClose, busy)
   const titleId = useId()
@@ -40,7 +40,7 @@ export default function Dialog({ title, icon, children, actions, onClose, size =
           <h2 id={titleId} className="text-headline-sm text-on-surface">{title}</h2>
         </div>
         <div className="px-6 overflow-y-auto text-body-md text-on-surface-variant">{children}</div>
-        {actions && <div className="flex justify-end gap-2 px-6 pt-6 pb-6">{actions}</div>}
+        {actions && <fieldset disabled={busy} className="flex justify-end gap-2 px-6 pt-6 pb-6">{actions}</fieldset>}
       </div>
     </div>,
     document.body,
@@ -62,7 +62,7 @@ export function Sheet({ title, onClose, headerActions, actions, children, busy =
           <button onClick={onClose} disabled={busy} className="icon-btn" aria-label="Close" data-tip="Close"><Icon name="close" /></button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 pb-6">{children}</div>
-        {actions && <div className="flex justify-end gap-2 px-6 py-4 border-t border-outline-variant shrink-0">{actions}</div>}
+        {actions && <fieldset disabled={busy} className="flex justify-end gap-2 px-6 py-4 border-t border-outline-variant shrink-0">{actions}</fieldset>}
       </aside>
     </>,
     document.body,

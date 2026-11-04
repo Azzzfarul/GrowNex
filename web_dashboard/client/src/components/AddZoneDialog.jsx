@@ -17,6 +17,7 @@ export default function AddZoneDialog({ onClose }) {
   const [error, setError] = useState('')
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
+  const [zoneId, setZoneId] = useState(null)  // set once the zone exists but its photo didn't upload
 
   function handlePhotoPick(e) {
     const file = e.target.files?.[0]
@@ -25,32 +26,47 @@ export default function AddZoneDialog({ onClose }) {
     setPhotoPreview(URL.createObjectURL(file))
   }
 
+  function finish(id) {
+    onClose()
+    navigate(`/zones/${id}`)
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!zoneName.trim()) return
     setLoading(true)
     setError('')
-    try {
-      const zoneRef = doc(collection(db, 'zones'))
-      await setDoc(zoneRef, {
-        userId: user.uid,
-        zoneName: zoneName.trim(),
-        zoneType,
-        status: 'healthy',
-        totalPlantSlots: 0,
-        zonePhotoUrl: null,
-        createdAt: serverTimestamp(),
-      })
-      if (photoFile) {
-        const { error: photoErr } = await uploadZonePhoto(zoneRef.id, photoFile)
-        if (photoErr) console.warn('Zone created, but photo upload failed:', photoErr)
+    let id = zoneId
+    if (!id) {
+      try {
+        const zoneRef = doc(collection(db, 'zones'))
+        await setDoc(zoneRef, {
+          userId: user.uid,
+          zoneName: zoneName.trim(),
+          zoneType,
+          status: 'healthy',
+          totalPlantSlots: 0,
+          zonePhotoUrl: null,
+          createdAt: serverTimestamp(),
+        })
+        id = zoneRef.id
+      } catch {
+        setError('Failed to create zone. Please try again.')
+        setLoading(false)
+        return
       }
-      onClose()
-      navigate(`/zones/${zoneRef.id}`)
-    } catch {
-      setError('Failed to create zone. Please try again.')
-      setLoading(false)
     }
+    if (photoFile) {
+      const { error: photoErr } = await uploadZonePhoto(id, photoFile)
+      if (photoErr) {
+        // The zone exists now: a retry only uploads the photo again, to this same zone.
+        setZoneId(id)
+        setError("Zone created, but the photo didn't upload. Try again, or skip and add it later from the zone's Overview.")
+        setLoading(false)
+        return
+      }
+    }
+    finish(id)
   }
 
   return (
@@ -60,20 +76,22 @@ export default function AddZoneDialog({ onClose }) {
       onClose={onClose}
       busy={loading}
       actions={<>
-        <button type="button" onClick={onClose} className="btn-text">Cancel</button>
+        {zoneId
+          ? <button type="button" onClick={() => finish(zoneId)} className="btn-text">Skip</button>
+          : <button type="button" onClick={onClose} className="btn-text">Cancel</button>}
         <button type="submit" form="add-zone-form" disabled={loading} className="btn-filled">
-          {loading ? 'Creating…' : 'Create zone'}
+          {zoneId ? (loading ? 'Uploading…' : 'Retry photo') : (loading ? 'Creating…' : 'Create zone')}
         </button>
       </>}
     >
       <form id="add-zone-form" onSubmit={handleSubmit} className="space-y-5 pt-1">
-        <TextField label="Zone name" value={zoneName} onChange={(e) => setZoneName(e.target.value)} placeholder="e.g. Tomato bed" required autoFocus />
+        <TextField label="Zone name" value={zoneName} onChange={(e) => setZoneName(e.target.value)} placeholder="e.g. Tomato bed" required autoFocus disabled={!!zoneId} />
 
         <div>
           <p className="text-label-lg text-on-surface-variant mb-2">Zone type</p>
           <div role="group" aria-label="Zone type" className="segmented">
             {[['indoor', 'Indoor', 'home'], ['outdoor', 'Outdoor', 'park']].map(([v, l, ic]) => (
-              <button key={v} type="button" aria-pressed={zoneType === v} onClick={() => setZoneType(v)}>
+              <button key={v} type="button" aria-pressed={zoneType === v} onClick={() => setZoneType(v)} disabled={!!zoneId}>
                 <Icon name={zoneType === v ? 'check' : ic} />{l}
               </button>
             ))}

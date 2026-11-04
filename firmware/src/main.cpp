@@ -78,7 +78,7 @@ struct Pump {
   bool          cmd;       // last command
   unsigned long onSince;   // millis() at which the current "on" would have started
   bool          timedOut;
-  unsigned long savedMs;   // run time last written to flash
+  unsigned long savedMs;   // run time in flash: kept up to a minute ahead of the real one
 };
 Pump irrigation = {"irrigation", "irrigationRan", 20UL * 60000, false, 0, false, 0};
 Pump fertilizer = {"fertilizer", "fertilizerRan", 40UL * 60000, false, 0, false, 0};
@@ -144,7 +144,9 @@ void checkPumpLimit(Pump& p) {
   if (!p.cmd || p.timedOut) return;
   unsigned long ran = millis() - p.onSince;
   if (ran < p.maxOnMs) {
-    if (ran - p.savedMs >= 60000) saveRan(p, ran);  // at most one flash write a minute
+    // Saved ahead of time, once a minute: after a reboot the countdown carries on from at least the
+    // real run time, so the pump can stop up to a minute early but never run past its limit.
+    if (ran >= p.savedMs) saveRan(p, min(ran + 60000UL, p.maxOnMs));
     return;
   }
   setTimedOut(p, true);
