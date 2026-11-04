@@ -23,27 +23,32 @@ const int   MQTT_PORT   = 8883;
 const char* MQTT_USER   = MQTT_USERNAME;
 const char* MQTT_PASS   = MQTT_PASSWORD;
 
-const unsigned long PUBLISH_INTERVAL_MS = 60000; // 60 seconds
+const unsigned long PUBLISH_INTERVAL_MS = 60000;          // 60 seconds
+const unsigned long RETRY_MS            = 10000;          // WiFi / MQTT reconnect attempt gap
+const unsigned long REBOOT_AFTER_MS     = 10UL * 60000;   // offline this long → restart (unwedges the WiFi/TLS stack)
 
 // ─── Sensors ──────────────────────────────────────────────────────────────────
 // Power the analog modules from 3.3V, not 5V: the ESP32 ADC pins take at most 3.3V.
 // Analog pins must be ADC1 (GPIO 32–39); ADC2 pins don't work while WiFi is on.
 #define DHT_PIN      4    // DHT11 data pin
 #define DHT_TYPE     DHT11
-#define MOISTURE_PIN 34   // Soil moisture module AO pin
 #define LIGHT_PIN    35   // Light sensor (LDR) module AO pin
+// Capacitive soil moisture sensor v1.2 AOUT pins for plant slots 1–4 (soilMoisture1..4).
+const int MOISTURE_PINS[4] = {34, 32, 33, 36};
 
 // Calibrate these to your modules: read the raw values in the Serial Monitor
-// (soil: in dry air vs. in a glass of water; light: covered vs. under the grow light).
-#define MOISTURE_DRY 4095
-#define MOISTURE_WET 1500
+// (soil: each probe in dry air vs. in a glass of water, since every probe reads a bit differently;
+//  light: covered vs. under the grow light).
+const int MOISTURE_DRY[4] = {2800, 2800, 2800, 2800};
+const int MOISTURE_WET[4] = {1200, 1200, 1200, 1200};
 #define LIGHT_DARK   4095  // LDR modules read high in the dark
 #define LIGHT_BRIGHT 0
 
-// ─── Relay module pins ────────────────────────────────────────────────────────
-#define PIN_LIGHT       25
-#define PIN_FERTILIZER  26
-#define PIN_IRRIGATION  27
+// ─── 4-channel relay module pins ──────────────────────────────────────────────
+#define PIN_LIGHT       25  // IN1
+#define PIN_FERTILIZER  26  // IN2
+#define PIN_IRRIGATION  27  // IN3
+#define PIN_SPARE       13  // IN4: no actuator for it in the app yet, so it's held off
 // Match the relay module's trigger jumper: H = switches on when IN is HIGH, L = when LOW.
 #define RELAY_ON  HIGH
 #define RELAY_OFF (RELAY_ON == LOW ? HIGH : LOW)
@@ -60,6 +65,8 @@ bool fertilizerState = false;
 bool irrigationState = false;
 
 unsigned long lastPublish = 0;
+unsigned long lastRetry   = 0;
+unsigned long lastOnline  = 0;
 
 WiFiClientSecure wifiClient;
 PubSubClient     mqtt(wifiClient);
@@ -117,48 +124,56 @@ void publishSensors() {
   // Still publish on a failed DHT read: soil moisture drives threshold watering.
   if (isnan(temperature) || isnan(humidity)) Serial.println("[DHT11] read failed — sending null temp/humidity");
 
-  int rawMoisture = readAdc(MOISTURE_PIN);
-  int rawLight    = readAdc(LIGHT_PIN);
-  int moisture    = toPercent(rawMoisture, MOISTURE_DRY, MOISTURE_WET);
-  int lightLevel  = toPercent(rawLight, LIGHT_DARK, LIGHT_BRIGHT);  // 0 = dark, 100 = bright
+  int rawLight   = readAdc(LIGHT_PIN);
+  int lightLevel = toPercent(rawLight, LIGHT_DARK, LIGHT_BRIGHT);  // 0 = dark, 100 = bright
 
   JsonDocument doc;
   doc["deviceId"] = DEVICE_ID;
   if (isnan(temperature)) doc["temperature"] = nullptr; else doc["temperature"] = temperature;
   if (isnan(humidity))    doc["humidity"]    = nullptr; else doc["humidity"]    = humidity;
-  doc["lightLevel"]    = lightLevel;
-  doc["soilMoisture1"] = moisture;
+  doc["lightLevel"] = lightLevel;
 
-  char buf[256];
+  Serial.printf("[MQTT] sensors → temp=%.1f°C  humid=%.1f%%  light=%d%% (raw %d)  soil:",
+                temperature, humidity, lightLevel, rawLight);
+  for (int i = 0; i < 4; i++) {
+    int raw      = readAdc(MOISTURE_PINS[i]);
+    int moisture = toPercent(raw, MOISTURE_DRY[i], MOISTURE_WET[i]);
+    doc["soilMoisture" + String(i + 1)] = moisture;
+    Serial.printf("  %d=%d%% (raw %d)", i + 1, moisture, raw);
+  }
+  Serial.println();
+
+  char buf[256];  // max payload ≈ 180 bytes, inside PubSubClient's default 256-byte packet
   serializeJson(doc, buf);
   mqtt.publish(TOPIC_SENSORS.c_str(), buf);
-  Serial.printf("[MQTT] sensors → temp=%.1f°C  humid=%.1f%%  soil=%d%% (raw %d)  light=%d%% (raw %d)\n",
-                temperature, humidity, moisture, rawMoisture, lightLevel, rawLight);
 }
 
 // ─── Connection ───────────────────────────────────────────────────────────────
-void connectWiFi() {
-  Serial.printf("Connecting to %s", SSID);
-  WiFi.begin(SSID, PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
-  Serial.printf("\nWiFi OK — IP: %s\n", WiFi.localIP().toString().c_str());
+// Single attempts only; loop() retries every RETRY_MS so nothing blocks forever.
+void connectMQTT() {
+  Serial.printf("Connecting to MQTT %s ...\n", MQTT_BROKER);
+  bool ok = mqtt.connect(
+    DEVICE_ID.c_str(), MQTT_USER, MQTT_PASS,
+    TOPIC_STATUS.c_str(), 1, true, "offline"
+  );
+  if (ok) {
+    mqtt.publish(TOPIC_STATUS.c_str(), "online", true);
+    mqtt.subscribe(TOPIC_ACTUATOR_CMD.c_str());  // the broker re-sends the retained command, restoring the intended state
+    Serial.printf("MQTT OK — device: %s\n", DEVICE_ID.c_str());
+  } else {
+    Serial.printf("MQTT failed (rc=%d), retrying\n", mqtt.state());
+  }
 }
 
-void connectMQTT() {
-  while (!mqtt.connected()) {
-    Serial.printf("Connecting to MQTT %s ...\n", MQTT_BROKER);
-    bool ok = mqtt.connect(
-      DEVICE_ID.c_str(), MQTT_USER, MQTT_PASS,
-      TOPIC_STATUS.c_str(), 1, true, "offline"
-    );
-    if (ok) {
-      mqtt.publish(TOPIC_STATUS.c_str(), "online", true);
-      mqtt.subscribe(TOPIC_ACTUATOR_CMD.c_str());
-      Serial.printf("MQTT OK — device: %s\n", DEVICE_ID.c_str());
-    } else {
-      Serial.printf("MQTT failed (rc=%d), retry in 3s\n", mqtt.state());
-      delay(3000);
-    }
+// Offline = no commands can reach us (including the bridge's auto-off), so nothing may keep running.
+void failSafe() {
+  // Drop the session without a DISCONNECT packet: the broker still publishes our "offline" will,
+  // and the reconnect re-delivers the retained command even if the TCP link survived a short WiFi blip.
+  if (mqtt.connected()) wifiClient.stop();
+  if (lightState || fertilizerState || irrigationState) {
+    lightState = fertilizerState = irrigationState = false;
+    applyActuators();
+    Serial.println("[SAFE] offline — all actuators off");
   }
 }
 
@@ -189,21 +204,34 @@ void setup() {
   pinMode(PIN_LIGHT,      OUTPUT);
   pinMode(PIN_FERTILIZER, OUTPUT);
   pinMode(PIN_IRRIGATION, OUTPUT);
+  pinMode(PIN_SPARE,      OUTPUT);
+  digitalWrite(PIN_SPARE, RELAY_OFF);
   applyActuators();
 
   mqtt.setServer(MQTT_BROKER, MQTT_PORT);
   mqtt.setCallback(onMessage);
 
-  connectWiFi();
-  connectMQTT();
+  Serial.printf("Connecting to %s\n", SSID);
+  WiFi.begin(SSID, PASSWORD);  // non-blocking; loop() connects MQTT once WiFi is up
 }
 
 void loop() {
-  if (WiFi.status() != WL_CONNECTED) connectWiFi();
-  if (!mqtt.connected())             connectMQTT();
+  unsigned long now = millis();
+  bool wifiUp = WiFi.status() == WL_CONNECTED;
+
+  if (wifiUp && mqtt.connected()) {
+    lastOnline = now;
+  } else {
+    failSafe();
+    if (now - lastOnline >= REBOOT_AFTER_MS) { Serial.println("Offline too long — restarting"); ESP.restart(); }
+    if (now - lastRetry >= RETRY_MS) {
+      lastRetry = now;
+      if (wifiUp) connectMQTT();
+      else        WiFi.reconnect();  // the core's auto-reconnect gives up for good after e.g. "AP not found"
+    }
+  }
   mqtt.loop();
 
-  unsigned long now = millis();
   if (now - lastPublish >= PUBLISH_INTERVAL_MS) {
     lastPublish = now;
     publishSensors();
