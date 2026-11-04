@@ -490,6 +490,24 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await db.doc(`automationConfig/${ids.zoneS}`).delete()
   })
 
+  test('a board that loses its zone, or is deleted, switches everything off', async () => {
+    // T2's grow light is still on from the schedule test; the app removes it from its zone
+    assert.equal((await docData('devices/ESP32-T2')).lightActive, true)
+    const t0 = Date.now()
+    await db.doc('devices/ESP32-T2').update({ assignedZoneId: null })
+    await waitFor(() => commandsFor('ESP32-T2', t0).some(c => !c.state.lightState), 'all-off command')
+    assert.deepEqual(commandsFor('ESP32-T2', t0).at(-1).state, { irrigationState: false, fertilizerState: false, lightState: false })
+    await waitFor(async () => (await docData('devices/ESP32-T2')).lightActive === false, 'intent reset')
+
+    // T3 (assigned in the safety-stop test) is deleted while its light is on
+    await db.doc('devices/ESP32-T3').update({ lightActive: true })
+    await waitFor(() => commandsFor('ESP32-T3', t0).some(c => c.state.lightState), 'light on')
+    const t1 = Date.now()
+    await db.doc('devices/ESP32-T3').delete()
+    await waitFor(() => commandsFor('ESP32-T3', t1).some(c => !c.state.lightState), 'all-off after delete')
+    await db.doc('devices/ESP32-T2').update({ assignedZoneId: ids.zoneS })  // back, for the tests below
+  })
+
   test('nightly job: per-user summary, opt-out respected, retention prunes', async () => {
     const A = users.alice.uid, B = users.bob.uid
     const zB = db.collection('zones').doc()

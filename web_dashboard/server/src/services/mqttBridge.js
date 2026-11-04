@@ -456,12 +456,13 @@ function watchDeviceActuators() {
       })
       devicesListenerInitialized = true
       console.log(`[MQTT bridge] device actuator cache initialized (${actuatorCache.size} devices)`)
+      snapshot.docs.forEach(d => switchOffIfNoZone(d.id, d.data()))
       reconcileCommands()
       return
     }
 
     snapshot.docChanges().forEach(change => {
-      if (change.type === 'removed') return
+      if (change.type === 'removed') { switchOffIfNoZone(change.doc.id, null); return }
 
       const deviceId = change.doc.id
       const data     = change.doc.data()
@@ -477,8 +478,8 @@ function watchDeviceActuators() {
 
       // The bridge's own write coming back (applyActuator already published it): not a manual toggle.
       if (isOwnEcho(deviceId, data)) return
+      if (!data.assignedZoneId) { switchOffIfNoZone(deviceId, data); return }
       if (!changed.length) return
-      if (!data.assignedZoneId) return
 
       const ons = manualOns.get(deviceId) ?? new Set()
       for (const a of changed) data[`${a}Active`] ? ons.add(a) : ons.delete(a)
@@ -493,6 +494,24 @@ function watchDeviceActuators() {
       }, DEBOUNCE_MS))
     })
   }, err => console.error('[MQTT bridge] devices listener stopped:', err.message))
+}
+
+// A sensor board without a zone has nothing that may run it: its zone's schedules are gone, and
+// nothing here sends it commands. So when it loses its zone (removed from it, zone deleted) or its
+// doc is deleted (device or account deleted), switch everything off, or its last retained command
+// (say, the grow light on) would stay in force with no way left to stop it.
+// data: the device doc, or null once it's deleted.
+const ALL_OFF = { irrigationActive: false, fertilizerActive: false, lightActive: false }
+function switchOffIfNoZone(deviceId, data) {
+  if (isCameraId(deviceId) || data?.assignedZoneId) return
+  const intent = data ?? actuatorCache.get(deviceId) ?? {}
+  if (!ACTUATORS.some(a => intent[`${a}Active`])) return
+  console.log(`[MQTT bridge] ${deviceId} ${data ? 'has no zone' : 'was deleted'} — switching everything off`)
+  publishCommand(deviceId, ALL_OFF)  // syncs the cache first, so the write's echo below is no change
+  if (data) {
+    db.collection('devices').doc(deviceId).update(ALL_OFF)
+      .catch(e => console.error(`[MQTT bridge] ${deviceId} intent reset failed:`, e.message))
+  }
 }
 
 // ─── Startup: re-send intent that changed while the bridge was down ──────────
