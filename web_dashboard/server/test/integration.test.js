@@ -303,6 +303,19 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal((await docData(`zones/${ids.zoneA}`)).deviceOnline, true)
   })
 
+  test('a quick reconnect (old session\'s "offline" will, then "online") ends online', async () => {
+    const done = () => logs.filter(l => /ESP32-T1 → (online|offline)/.test(l)).length
+    const before = done()
+    const flips = []
+    for (let i = 0; i < 5; i++) flips.push(  // repeated, so out-of-order handling shows up reliably
+      publish('grownex/ESP32-T1/status', 'offline', { retain: true }),
+      publish('grownex/ESP32-T1/status', 'online', { retain: true }))
+    await Promise.all(flips)
+    await waitFor(() => done() === before + 10, 'all status messages handled')
+    assert.equal((await docData(`zones/${ids.zoneA}`)).deviceOnline, true)
+    assert.equal((await docData('devices/ESP32-T1')).status, 'online')
+  })
+
   test('camera JPEGs land in Storage + the snapshots feed; junk is rejected', async () => {
     await publish('grownex/ESP32CAM-T1/camera', Buffer.from('not a jpeg'))
     await waitForLog(/rejected camera payload/)

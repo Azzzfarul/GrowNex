@@ -420,13 +420,16 @@ const COOLDOWN_MS    = 30 * 60 * 1000  // 30 minutes
 // Calls publishCommand directly (no debounce) — schedule/threshold should fire immediately.
 // Runs one at a time per zone: same-minute schedules (e.g. light 06:00 + fertilizer MON 06:00)
 // would otherwise each read the old state and overwrite each other's change.
-// shortcut: in-process queue, fine while only one bridge runs (the MQTT client ID already forces that).
 const actuatorQueues = new Map()  // Map<zoneId, Promise>
 function triggerActuator(zoneId, actuator, state) {
-  const run = (actuatorQueues.get(zoneId) ?? Promise.resolve())
-    .catch(() => {})
-    .then(() => applyActuator(zoneId, actuator, state))
-  actuatorQueues.set(zoneId, run)
+  return enqueue(actuatorQueues, zoneId, () => applyActuator(zoneId, actuator, state))
+}
+
+// Runs fn once every earlier fn queued under the same key has settled.
+// shortcut: in-process queue, fine while only one bridge runs (the MQTT client ID already forces that).
+function enqueue(queues, key, fn) {
+  const run = (queues.get(key) ?? Promise.resolve()).catch(() => {}).then(fn)
+  queues.set(key, run)
   return run
 }
 
@@ -574,6 +577,8 @@ function watchAutomationConfig() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
+const deviceQueues = new Map()  // Map<deviceId, Promise>
+
 export function init() {
   client = mqtt.connect({
     host:     BROKER,
@@ -621,8 +626,10 @@ export function init() {
 
     const raw = buf.toString()
 
+    // A device's status/state messages are applied in arrival order: a quick reconnect delivers the
+    // old session's "offline" will right before "online", and parallel handlers can land them swapped.
     if (parts[2] === 'status') {
-      handleStatus(deviceId, raw)
+      enqueue(deviceQueues, deviceId, () => handleStatus(deviceId, raw))
         .catch(e => console.error(`[MQTT bridge] ${deviceId} status update failed:`, e.message))
       return
     }
@@ -636,7 +643,7 @@ export function init() {
       handleSensors(deviceId, payload)
         .catch(e => console.error(`[MQTT bridge] ${deviceId} sensor write failed:`, e.message))
     } else if (parts[2] === 'actuators' && parts[3] === 'state') {
-      handleActuatorState(deviceId, payload)
+      enqueue(deviceQueues, deviceId, () => handleActuatorState(deviceId, payload))
         .catch(e => console.error(`[MQTT bridge] ${deviceId} actuator state failed:`, e.message))
     }
   })
