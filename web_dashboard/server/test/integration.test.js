@@ -473,6 +473,23 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await db.doc(`automationConfig/${ids.zoneS}`).delete()
   })
 
+  test('an auto-off that changes nothing does not swallow the next manual "off"', async () => {
+    const dev = db.doc('devices/ESP32-T2')
+    await db.doc(`automationConfig/${ids.zoneS}`).set({ autoWateringEnabled: true, wateringThreshold: 50, wateringDuration: 2 })
+    const t0 = Date.now()
+    await sensors('ESP32-T2', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 10 })
+    await waitFor(() => commandsFor('ESP32-T2', t0).some(c => c.state.irrigationState), 'threshold watering on')
+    const t1 = Date.now()
+    await dev.update({ irrigationActive: false })  // the user stops it, so the auto-off then writes no change
+    await waitFor(() => commandsFor('ESP32-T2', t1).filter(c => !c.state.irrigationState).length >= 2, 'manual off + auto-off', 6000)
+    const t2 = Date.now()
+    await dev.update({ irrigationActive: true })
+    await waitFor(() => commandsFor('ESP32-T2', t2).some(c => c.state.irrigationState), 'manual on')
+    await dev.update({ irrigationActive: false })
+    await waitFor(() => commandsFor('ESP32-T2', t2).at(-1).state.irrigationState === false, 'manual off published', 3000)
+    await db.doc(`automationConfig/${ids.zoneS}`).delete()
+  })
+
   test('nightly job: per-user summary, opt-out respected, retention prunes', async () => {
     const A = users.alice.uid, B = users.bob.uid
     const zB = db.collection('zones').doc()

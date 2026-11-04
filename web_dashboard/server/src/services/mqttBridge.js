@@ -563,9 +563,11 @@ async function applyActuator(zoneId, actuator, state, onDevice = null) {
   confirmTimers.delete(`${deviceId}/${actuator}`)
 
   // Recorded before the write, since its Firestore echo can beat update() back: watchDeviceActuators
-  // then knows it's ours, so it neither re-publishes it nor treats it as a manual toggle.
+  // then knows it's ours, so it neither re-publishes it nor treats it as a manual toggle. Not when
+  // nothing changes: such a write may have no echo, and the leftover would swallow the user's next
+  // toggle back to these values.
   const own = { intent: merged, at: Date.now() }
-  ownWrites.set(deviceId, [...(ownWrites.get(deviceId) ?? []), own])
+  if (!sameIntent(merged, deviceData)) ownWrites.set(deviceId, [...(ownWrites.get(deviceId) ?? []), own])
   try {
     await db.collection('devices').doc(deviceId).update({
       irrigationActive: merged.irrigationActive,

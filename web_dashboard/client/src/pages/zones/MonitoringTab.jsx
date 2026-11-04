@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { doc, onSnapshot, collection, query, where, orderBy, limit } from 'firebase/firestore'
 import { db } from '../../firebase'
 import Icon from '../../components/ui/Icon'
+import Dialog from '../../components/ui/Dialog'
 import { uploadZoneSnapshot } from '../../lib/photoUpload'
 
 // Current value coloured against the plants' averaged preferred range
@@ -207,7 +208,7 @@ export default function MonitoringTab({ zone }) {
               >
                 <img src={s.imageUrl} alt="Zone snapshot" className="absolute inset-0 w-full h-full object-cover" />
                 {s.capturedAt?.toDate && (
-                  <span className="absolute inset-x-0 bottom-0 px-2 py-1 text-left text-label-sm text-white bg-gradient-to-t from-black/70 to-transparent">
+                  <span className="absolute inset-x-0 bottom-0 px-2 py-1 text-left text-label-sm text-white bg-gradient-to-t from-scrim/70 to-transparent">
                     {s.capturedAt.toDate().toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 )}
@@ -218,11 +219,14 @@ export default function MonitoringTab({ zone }) {
       </section>
 
       {viewerUrl && (
-        <div className="fixed inset-0 bg-scrim/80 z-50 flex flex-col items-center justify-center p-6 animate-fade-in" onClick={() => setViewerUrl(null)}>
-          <button className="icon-btn absolute top-4 right-4 text-white" aria-label="Close"><Icon name="close" /></button>
-          <img src={viewerUrl} alt="Zone snapshot full size" className="max-w-full max-h-[85vh] rounded-xl" />
-          {viewer?.capturedAt?.toDate && <p className="mt-3 text-body-md text-white/90">{viewer.capturedAt.toDate().toLocaleString()}</p>}
-        </div>
+        <Dialog
+          size="xl"
+          title={viewer?.capturedAt?.toDate ? viewer.capturedAt.toDate().toLocaleString() : 'Zone snapshot'}
+          onClose={() => setViewerUrl(null)}
+          actions={<button onClick={() => setViewerUrl(null)} className="btn-text">Close</button>}
+        >
+          <img src={viewerUrl} alt="Zone snapshot full size" className="w-full max-h-[70vh] object-contain rounded-xl" />
+        </Dialog>
       )}
     </div>
   )

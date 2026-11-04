@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { createContext, createElement, useContext, useEffect, useState } from 'react'
 import {
   collection, query, where, orderBy, limit, onSnapshot,
   doc, updateDoc, writeBatch,
@@ -6,8 +6,12 @@ import {
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 
-// Live feed of the current user's notifications (newest 50) + read helpers.
-export function useNotifications() {
+const NotificationsContext = createContext(null)
+
+// Live feed of the current user's notifications (newest 50) + read helpers, shared by everything
+// inside Layout: one listener per session instead of one per page, since each page renders its own
+// PageHeader (and bell), and re-opening it on every navigation re-read up to 50 docs.
+export function NotificationsProvider({ children }) {
   const { user } = useAuth()
   const [items, setItems] = useState([])
 
@@ -37,8 +41,10 @@ export function useNotifications() {
     await batch.commit().catch(() => {})
   }
 
-  return { items, unreadCount, markRead, markAllRead }
+  return createElement(NotificationsContext.Provider, { value: { items, unreadCount, markRead, markAllRead } }, children)
 }
+
+export const useNotifications = () => useContext(NotificationsContext)
 
 // "3m ago" / "2h ago" / "5d ago" from a Firestore Timestamp (no date lib in the project)
 export function formatRelative(ts) {
