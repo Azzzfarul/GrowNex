@@ -553,6 +553,55 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(commands.filter(c => c.at >= t0).length, 1, `devices already in sync get nothing (got ${JSON.stringify(commands.filter(c => c.at >= t0))})`)
   })
 
+  // Both apps talk to Firestore and Storage directly, so the security rules (web_dashboard/*.rules,
+  // which the emulators load through firebase.json) are what keep one user out of another's data.
+  test('security rules keep each user to their own data and boards', async () => {
+    const FS = `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${PROJECT}/databases/(default)/documents`
+    const as = (who, path, { method = 'GET', fields } = {}) => {
+      const mask = method === 'PATCH' ? '?' + Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&') : ''
+      return fetch(`${FS}/${path}${mask}`, {
+        method,
+        headers: { Authorization: `Bearer ${users[who].token}`, 'Content-Type': 'application/json' },
+        body: fields ? JSON.stringify({ fields }) : undefined,
+      }).then(r => r.status)
+    }
+    const str = v => ({ stringValue: v }), bool = v => ({ booleanValue: v })
+    const upload = (who, path) => fetch(`http://${process.env.FIREBASE_STORAGE_EMULATOR_HOST}/v0/b/${BUCKET}/o?name=${encodeURIComponent(path)}`, {
+      method: 'POST', headers: { Authorization: `Firebase ${users[who].token}`, 'Content-Type': 'image/jpeg' }, body: Buffer.from('jpg'),
+    }).then(r => r.status)
+
+    // Alice uses her own zone and board as before
+    assert.equal(await as('alice', `zones/${ids.zoneA}`), 200)
+    assert.equal(await as('alice', 'devices/ESP32-T1', { method: 'PATCH', fields: { deviceName: str('Herb node') } }), 200)
+    assert.equal(await upload('alice', `zonePhotos/${ids.zoneA}.jpg`), 200)
+
+    // Bob reaches none of it...
+    assert.equal(await as('bob', `zones/${ids.zoneA}`), 403, "read alice's zone")
+    assert.equal(await as('bob', `zones/${ids.zoneA}/stats/x`), 403, "read alice's readings")
+    assert.equal(await as('bob', `users/${users.alice.uid}`), 403, "read alice's profile")
+    assert.equal(await as('bob', 'devices/ESP32-T1'), 403, "read alice's board")
+    assert.equal(await as('bob', 'devices/ESP32-T1', { method: 'PATCH', fields: { irrigationActive: bool(true) } }), 403, "switch alice's pump")
+    assert.equal(await as('bob', `automationConfig/${ids.zoneA}`, { method: 'PATCH', fields: { wateringSchedule: str('07:00') } }), 403, "change alice's schedule")
+    assert.equal(await upload('bob', `zonePhotos/${ids.zoneA}.jpg`), 403, "replace alice's zone photo")
+    const notifQuery = await fetch(`${FS}:runQuery`, {
+      method: 'POST', headers: { Authorization: `Bearer ${users.bob.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'notifications' }],
+        where: { fieldFilter: { field: { fieldPath: 'userId' }, op: 'EQUAL', value: str(users.alice.uid) } } } }),
+    })
+    assert.equal(notifQuery.status, 403, "list alice's notifications")
+    // ...not even through his own zone or board (the bridge acts on zones.deviceId / devices.assignedZoneId)
+    assert.equal(await as('bob', 'zones?documentId=bob-zone', { method: 'POST',
+      fields: { userId: str(users.bob.uid), zoneName: str('Mine'), deviceId: str('ESP32-T1') } }), 403, "point his zone at alice's board")
+    assert.equal(await as('bob', 'devices/ESP32-BURST', { method: 'PATCH', fields: { assignedZoneId: str(ids.zoneA) } }), 403, "assign his board to alice's zone")
+
+    // Unclaimed boards stay visible and claimable; once claimed they're the new owner's only
+    await publish('grownex/ESP32-FREE/status', 'online', { retain: true })
+    await waitFor(() => docData('devices/ESP32-FREE'), 'unclaimed board registered')
+    assert.equal(await as('bob', 'devices/ESP32-FREE'), 200)
+    assert.equal(await as('bob', 'devices/ESP32-FREE', { method: 'PATCH', fields: { userId: str(users.bob.uid) } }), 200, 'claim')
+    assert.equal(await as('alice', 'devices/ESP32-FREE'), 403, "now bob's")
+  })
+
   test('account deletion removes all of the user’s data and nobody else’s', async () => {
     const A = users.alice.uid
     await db.doc(`zones/${ids.zoneA}/aiCache/today`).set({ payload: {} })

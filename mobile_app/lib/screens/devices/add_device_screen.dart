@@ -63,6 +63,8 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
           _selectDevice(device);
         }
       }
+    } on DeviceClaimException catch (e) {
+      if (mounted) setState(() => _searchError = e.message);
     } catch (e) {
       debugPrint('Search failed: $e');
       if (mounted) setState(() => _searchError = 'Search failed. Please try again.');

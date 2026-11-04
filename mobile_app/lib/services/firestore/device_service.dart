@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/device_model.dart';
 
-/// Why [DeviceService.claimDevice] refused a claim. [message] is shown to the user as-is.
+/// Why [DeviceService.getDevice] / [DeviceService.claimDevice] refused. [message] is shown to the user as-is.
 class DeviceClaimException implements Exception {
   final String message;
   const DeviceClaimException(this.message);
@@ -14,8 +14,17 @@ class DeviceClaimException implements Exception {
 class DeviceService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // The security rules refuse another account's device (firestore.rules), so a refusal means it's taken.
   Future<Device?> getDevice(String deviceId) async {
-    final doc = await _firestore.collection('devices').doc(deviceId).get();
+    final DocumentSnapshot<Map<String, dynamic>> doc;
+    try {
+      doc = await _firestore.collection('devices').doc(deviceId).get();
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        throw const DeviceClaimException('This device is already registered to another account.');
+      }
+      rethrow;
+    }
     if (!doc.exists) return null;
     return Device.fromDocument(doc);
   }
@@ -115,19 +124,27 @@ class DeviceService {
     bool hasFertilizerModule = false,
   }) async {
     final ref = _firestore.collection('devices').doc(deviceId);
-    await _firestore.runTransaction((tx) async {
-      final snap = await tx.get(ref);
-      if (!snap.exists) throw const DeviceClaimException('This device no longer exists.');
-      final owner = snap.data()?['userId'] as String? ?? '';
-      if (owner.isNotEmpty && owner != userId) {
+    try {
+      await _firestore.runTransaction((tx) async {
+        final snap = await tx.get(ref);
+        if (!snap.exists) throw const DeviceClaimException('This device no longer exists.');
+        final owner = snap.data()?['userId'] as String? ?? '';
+        if (owner.isNotEmpty && owner != userId) {
+          throw const DeviceClaimException('This device was just claimed by another account.');
+        }
+        tx.update(ref, {
+          'userId': userId,
+          'hasLightingModule': hasLightingModule,
+          'hasFertilizerModule': hasFertilizerModule,
+        });
+      });
+    } on FirebaseException catch (e) {
+      // Claimed by someone else first: the security rules then refuse it to us.
+      if (e.code == 'permission-denied') {
         throw const DeviceClaimException('This device was just claimed by another account.');
       }
-      tx.update(ref, {
-        'userId': userId,
-        'hasLightingModule': hasLightingModule,
-        'hasFertilizerModule': hasFertilizerModule,
-      });
-    });
+      rethrow;
+    }
   }
 
   Future<void> assignDeviceToZone(String deviceId, String zoneId, String userId) async {

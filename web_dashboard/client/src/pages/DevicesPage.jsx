@@ -70,8 +70,11 @@ function AddDeviceModal({ user, onClose }) {
           selectDevice(d)
         }
       }
-    } catch {
-      setSearchError('Search failed. Please try again.')
+    } catch (e) {
+      // The security rules refuse another account's device, so a refusal means it's taken.
+      setSearchError(e?.code === 'permission-denied'
+        ? 'This device is already registered to another account.'
+        : 'Search failed. Please try again.')
     } finally {
       setSearching(false)
     }
@@ -93,8 +96,8 @@ function AddDeviceModal({ user, onClose }) {
       })
       onClose()
     } catch (err) {
-      setClaimError(err?.message?.startsWith('This device')
-        ? err.message
+      setClaimError(err?.message?.startsWith('This device') ? err.message
+        : err?.code === 'permission-denied' ? 'This device was just claimed by another account.'  // claimed first
         : 'Failed to claim device. Please try again.')
       setClaiming(false)
     }
