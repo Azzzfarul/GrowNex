@@ -158,8 +158,9 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
+      // Photo first: the Storage rules check the plant doc to see whose photo it is.
+      if (_photoUrl != null) await PhotoService().deletePlantPhotoFile(widget.plant.id);
       await PlantService().deletePlant(widget.plant.id);
-      if (_photoUrl != null) await PhotoService().deletePlantPhotoFile(widget.plant.id).catchError((_) {});
       if (mounted) Navigator.pop(context);
     } catch (e) {
       debugPrint('Failed to remove plant: $e');

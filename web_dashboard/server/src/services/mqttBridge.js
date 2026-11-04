@@ -526,7 +526,15 @@ function reconcileCommands() {
   for (const [deviceId, cmd] of retainedCommands) {
     retainedCommands.delete(deviceId)
     const want = actuatorCache.get(deviceId)
-    if (!want || !cmd || typeof cmd !== 'object') continue
+    if (!cmd || typeof cmd !== 'object') continue
+    if (!want) {
+      // No device doc: deleted while the bridge was down, so nothing switched the board off.
+      if (!isCameraId(deviceId) && ['irrigationState', 'fertilizerState', 'lightState'].some(k => cmd[k])) {
+        console.log(`[MQTT bridge] ${deviceId} has no device doc but a retained "on" — switching everything off`)
+        publishCommand(deviceId, ALL_OFF)
+      }
+      continue
+    }
     if (cmd.irrigationState === want.irrigationActive &&
         cmd.fertilizerState === want.fertilizerActive &&
         cmd.lightState      === want.lightActive) continue
@@ -570,6 +578,14 @@ async function applyActuator(zoneId, actuator, state, onDevice = null) {
   if (!deviceSnap.exists) return z
 
   const deviceData = deviceSnap.data()
+
+  // Only switch something on for a board whose own record points back at this zone. A zone can
+  // outlive its link (board removed or deleted, zone being deleted, an assign half done), and a
+  // stale pointer must not run a board that may now be someone else's. Off is always allowed.
+  if (state && deviceData.assignedZoneId !== zoneId) {
+    console.warn(`[MQTT bridge] not switching ${actuator} on: ${deviceId} isn't assigned to zone ${zoneId}`)
+    return z
+  }
 
   const merged = {
     irrigationActive: actuator === 'irrigation' ? state : !!deviceData.irrigationActive,

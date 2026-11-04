@@ -86,22 +86,28 @@ export default function PlantsPage() {
     )
   }, [user])
 
-  // Subscribe to plant counts per zone (single query, grouped client-side)
+  // Subscribe to plant counts per zone, 10 zones per query: the security rules look up each plant's
+  // zone, and Firestore refuses a query that needs more than 10 such lookups.
   const zoneIdsKey = zones.map((z) => z.id).sort().join(',')
   useEffect(() => {
     if (zones.length === 0) { setPlantCounts({}); return }
     const ids = zones.map((z) => z.id)
-    return onSnapshot(
-      query(collection(db, 'plants'), where('zoneId', 'in', ids.slice(0, 30))),
+    const chunks = []
+    for (let i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10))
+    const perChunk = chunks.map(() => ({}))
+    const unsubs = chunks.map((chunk, i) => onSnapshot(
+      query(collection(db, 'plants'), where('zoneId', 'in', chunk)),
       (snap) => {
         const counts = {}
         snap.docs.forEach((d) => {
           const zid = d.data().zoneId
           counts[zid] = (counts[zid] || 0) + 1
         })
-        setPlantCounts(counts)
+        perChunk[i] = counts
+        setPlantCounts(Object.assign({}, ...perChunk))
       }
-    )
+    ))
+    return () => unsubs.forEach((unsub) => unsub())
   }, [zoneIdsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const term = search.trim().toLowerCase()

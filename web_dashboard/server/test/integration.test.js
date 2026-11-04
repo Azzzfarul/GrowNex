@@ -508,6 +508,24 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await db.doc('devices/ESP32-T2').update({ assignedZoneId: ids.zoneS })  // back, for the tests below
   })
 
+  test('a zone never switches on a board that is not assigned back to it', async () => {
+    // Zone Q points at board Q2, but Q2's own record says it has no zone (removed, re-claimed by
+    // someone else, an assign half done). Dry soil reported by Q1, which is in Q, must not water Q2.
+    for (const id of ['ESP32-Q1', 'ESP32-Q2']) await publish(`grownex/${id}/status`, 'online', { retain: true })
+    await waitFor(async () => (await docData('devices/ESP32-Q1')) && (await docData('devices/ESP32-Q2')), 'Q1, Q2 registered')
+    const zoneRef = db.collection('zones').doc()
+    await zoneRef.set({ userId: users.alice.uid, zoneName: 'Stale link', deviceId: 'ESP32-Q2' })
+    await db.doc('devices/ESP32-Q1').update({ userId: users.alice.uid, assignedZoneId: zoneRef.id })
+    await db.doc(`automationConfig/${zoneRef.id}`).set({ autoWateringEnabled: true, wateringThreshold: 50, wateringDuration: 1 })
+    const t0 = Date.now()
+    await sensors('ESP32-Q1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 10 })
+    await waitForLog(/not switching irrigation on: ESP32-Q2 isn't assigned/)
+    await sleep(500)
+    assert.equal(commandsFor('ESP32-Q2', t0).filter(c => c.state.irrigationState).length, 0)
+    assert.equal(!!(await docData('devices/ESP32-Q2')).irrigationActive, false)
+    await db.doc(`automationConfig/${zoneRef.id}`).delete()
+  })
+
   test('nightly job: per-user summary, opt-out respected, retention prunes', async () => {
     const A = users.alice.uid, B = users.bob.uid
     const zB = db.collection('zones').doc()
@@ -569,6 +587,17 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(sent.length, 1, `sent once (got ${sent.length})`)
     assert.equal(sent[0].state.lightState, light)
     assert.equal(commands.filter(c => c.at >= t0).length, 1, `devices already in sync get nothing (got ${JSON.stringify(commands.filter(c => c.at >= t0))})`)
+  })
+
+  test('after a restart: a board deleted while the bridge was down is switched off', async () => {
+    // Its doc is gone (deleted during the outage, e.g. by the mobile account-deletion fallback),
+    // but the broker still holds its last "light on"
+    await publish('grownex/ESP32-GHOST/actuators/command', { irrigationState: false, fertilizerState: false, lightState: true }, { retain: true })
+    await stopServer()
+    const t0 = Date.now()
+    await startServer()
+    await waitFor(() => commandsFor('ESP32-GHOST', t0).some(c => !c.state.lightState), 'all-off for the deleted board')
+    assert.ok(!(await docData('devices/ESP32-GHOST')), 'no device doc is created for it')
   })
 
   // Both apps talk to Firestore and Storage directly, so the security rules (web_dashboard/*.rules,
