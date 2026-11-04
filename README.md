@@ -77,7 +77,13 @@ AI_CACHE_TTL_MS=1800000
 # Nightly summary notification + data cleanup (cron expression + IANA timezone)
 DAILY_SUMMARY_CRON=0 20 * * *
 DAILY_SUMMARY_TZ=Asia/Kuala_Lumpur
+
+# Server local time: automation schedules run in it (Docker and most hosts default to UTC)
+TZ=Asia/Kuala_Lumpur
 ```
+
+> Set `TZ` to the growers' timezone. Watering, lighting and fertilizing schedules fire in the server's
+> local time, so on a UTC server (the Docker image) a "07:00" watering runs at 15:00 in Malaysia.
 
 > `FIREBASE_STORAGE_BUCKET` is required — the server won't start the MQTT bridge without it.
 > Keep `FIREBASE_PRIVATE_KEY` on one line with literal `\n` sequences, wrapped in double quotes.
