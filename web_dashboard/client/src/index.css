@@ -91,6 +91,7 @@
 }
 
 @layer base {
+  html { --tf-bg: rgb(var(--md-surface)); }
   body {
     @apply bg-surface text-on-surface font-sans antialiased;
   }
@@ -126,11 +127,13 @@
   }
   .icon-fill { font-variation-settings: 'FILL' 1; }
 
-  /* State layer: an overlay of the content color at M3 opacities (hover 8%, focus/pressed 10%) */
-  .state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-pill, .nav-item {
+  /* ── State layer: an overlay of the content color (hover 8%, focus/pressed 10%) ── */
+  .state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated, .icon-btn, .fab,
+  .chip, .tab, .nav-item, .segmented > button, .card-link, .menu-item {
     position: relative;
   }
-  :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-pill, .nav-item)::before {
+  :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated, .icon-btn, .fab,
+      .chip, .tab, .nav-item, .segmented > button, .card-link, .menu-item)::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -140,85 +143,206 @@
     pointer-events: none;
     transition: opacity 150ms;
   }
-  :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-item):hover::before,
-  .nav-item:hover .nav-pill::before { opacity: 0.08; }
-  :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab):is(:focus-visible, :active)::before { opacity: 0.1; }
-  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .state-layer, .tab):disabled::before { opacity: 0; }
-  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .icon-btn, .chip, .tab, .nav-item, .state-layer, .switch):focus-visible {
+  :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated, .icon-btn, .fab,
+      .chip, .tab, .nav-item, .segmented > button, .card-link, .menu-item):hover::before { opacity: 0.08; }
+  :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated, .icon-btn, .fab,
+      .chip, .tab, .nav-item, .segmented > button, .card-link, .menu-item):is(:focus-visible, :active)::before { opacity: 0.1; }
+  :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated, .icon-btn,
+      .chip, .tab, .segmented > button, .menu-item):disabled::before { opacity: 0; }
+  :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated, .icon-btn, .fab,
+      .chip, .tab, .nav-item, .segmented > button, .card-link, .menu-item, .switch, .checkbox):focus-visible {
     @apply outline outline-2 outline-offset-2 outline-primary;
   }
 
-  /* Buttons (M3 common buttons: 40px tall, fully rounded) */
-  .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error {
-    @apply inline-flex items-center justify-center gap-2 h-10 px-6 rounded-full text-label-lg whitespace-nowrap select-none transition-shadow disabled:cursor-not-allowed;
+  /* ── Buttons: 40px, fully rounded, sized to their label ── */
+  .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated {
+    @apply inline-flex items-center justify-center gap-2 h-10 px-6 rounded-full text-label-lg whitespace-nowrap select-none
+      transition-shadow duration-200 ease-standard cursor-pointer disabled:cursor-not-allowed;
   }
   .btn-filled { @apply bg-primary text-on-primary hover:shadow-elevation-1; }
   .btn-tonal { @apply bg-secondary-container text-on-secondary-container hover:shadow-elevation-1; }
   .btn-error { @apply bg-error text-on-error hover:shadow-elevation-1; }
+  .btn-elevated { @apply bg-surface-container-low text-primary shadow-elevation-1 hover:shadow-elevation-2; }
   .btn-outlined { @apply border border-outline text-primary; }
   .btn-text { @apply px-3 text-primary; }
-  :is(.btn-filled, .btn-tonal, .btn-error):disabled { @apply bg-on-surface/[.12] text-on-surface/[.38] shadow-none; }
+  :is(.btn-filled, .btn-tonal, .btn-error, .btn-elevated):disabled { @apply bg-on-surface/[.12] text-on-surface/[.38] shadow-none; }
   :is(.btn-outlined, .btn-text):disabled { @apply text-on-surface/[.38]; }
   .btn-outlined:disabled { @apply border-on-surface/[.12]; }
-  .btn-sm { @apply h-8 px-4 gap-1 text-label-md; }
-  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error) .icon { font-size: 18px; }
+  .btn-sm { @apply h-8 px-4 gap-1.5 text-label-md; }
+  .btn-text.btn-sm { @apply px-2; }
+  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated) .icon { font-size: 18px; }
+  :is(.btn-filled, .btn-tonal, .btn-outlined, .btn-error, .btn-elevated):has(> .icon:first-child) { @apply pl-4; }
+  .btn-danger { @apply text-error border-outline-variant; }
 
+  /* ── Icon buttons: standard, filled, tonal, outlined ── */
   .icon-btn {
-    @apply inline-grid place-items-center w-10 h-10 shrink-0 rounded-full text-on-surface-variant disabled:text-on-surface/[.38];
+    @apply inline-grid place-items-center w-10 h-10 shrink-0 rounded-full text-on-surface-variant cursor-pointer
+      disabled:text-on-surface/[.38] disabled:cursor-not-allowed;
+  }
+  .icon-btn-filled { @apply bg-primary text-on-primary; }
+  .icon-btn-tonal { @apply bg-secondary-container text-on-secondary-container; }
+  .icon-btn-outlined { @apply border border-outline-variant; }
+  .icon-btn-sm { @apply w-8 h-8; }
+  .icon-btn-sm .icon { font-size: 20px; }
+
+  /* Plain tooltip on icon buttons: <button class="icon-btn" data-tip="…"> */
+  .icon-btn[data-tip]::after {
+    content: attr(data-tip);
+    @apply absolute top-full left-1/2 mt-1 px-2 h-6 leading-6 rounded bg-inverse-surface text-inverse-on-surface text-body-sm
+      whitespace-nowrap pointer-events-none opacity-0 transition-opacity duration-150 z-[60];
+    transform: translateX(-50%);
+  }
+  .icon-btn[data-tip]:is(:hover, :focus-visible)::after { @apply opacity-100 delay-500; }
+
+  /* ── FAB (extended on the drawer, icon-only in the rail) ── */
+  .fab {
+    @apply inline-flex items-center justify-center gap-3 h-14 min-w-14 px-4 rounded-2xl bg-primary-container text-on-primary-container
+      text-label-lg shadow-elevation-3 hover:shadow-elevation-4 transition-shadow duration-200 cursor-pointer;
   }
 
-  /* Cards: elevated (default), filled, outlined */
-  .card { @apply bg-surface-container-low rounded-xl shadow-elevation-1; }
-  .card-filled { @apply bg-surface-container-highest rounded-xl; }
-  .card-outlined { @apply bg-surface rounded-xl border border-outline-variant; }
+  /* ── Cards: elevated, filled, outlined; .card-link adds hover lift for clickable cards ── */
+  .card { @apply bg-surface-container-low rounded-xl shadow-elevation-1; --tf-bg: rgb(var(--md-surface-container-low)); }
+  .card-filled { @apply bg-surface-container-highest rounded-xl; --tf-bg: rgb(var(--md-surface-container-highest)); }
+  .card-outlined { @apply bg-surface rounded-xl border border-outline-variant; --tf-bg: rgb(var(--md-surface)); }
+  .card-link { @apply cursor-pointer text-left transition-shadow duration-200 hover:shadow-elevation-2; }
+  .card-title { @apply text-title-md text-on-surface; }
+  .card-header { @apply flex items-center gap-3 min-h-10 mb-4; }
 
-  /* Outlined text field (label sits above it) */
-  .field {
-    @apply block w-full h-12 px-4 rounded bg-transparent border border-outline text-body-lg text-on-surface
-      placeholder:text-on-surface-variant/70 outline-none transition-colors
-      hover:border-on-surface focus:border-primary focus:ring-1 focus:ring-primary
-      disabled:border-on-surface/[.12] disabled:text-on-surface/[.38];
+  /* Small M3 label tag (status, slot, module) */
+  .tag { @apply inline-flex items-center gap-1 h-6 px-2 rounded-lg text-label-md shrink-0 whitespace-nowrap; }
+  .tag .icon { font-size: 16px; }
+
+  /* Inline status message (error / warning / info banner) */
+  .banner { @apply flex items-start gap-3 rounded-lg px-4 py-3 text-body-md; }
+  .banner .icon { font-size: 20px; }
+  .banner-error { @apply bg-error-container text-on-error-container; }
+  .banner-warning { @apply bg-warning-container text-on-warning-container; }
+  .banner-info { @apply bg-secondary-container text-on-secondary-container; }
+
+  /* ── Outlined text field with floating label (see components/ui/TextField.jsx).
+     The label sits on the border, painted over it with --tf-bg, which each container sets. ── */
+  .tf { @apply relative block; }
+  .tf-input {
+    @apply block w-full h-12 px-4 rounded bg-transparent border border-outline text-body-lg text-on-surface outline-none
+      appearance-none transition-colors duration-150
+      placeholder:text-transparent focus:placeholder:text-on-surface-variant/70
+      hover:border-on-surface focus:border-primary focus:shadow-[inset_0_0_0_1px_rgb(var(--md-primary))]
+      disabled:border-on-surface/[.12] disabled:text-on-surface/[.38] read-only:hover:border-outline;
   }
-  textarea.field { @apply h-auto py-3; }
-  select.field { @apply pr-8; }
-  .field-error { @apply border-error hover:border-error focus:border-error focus:ring-error; }
+  textarea.tf-input { @apply h-auto py-3 resize-none; }
+  select.tf-input { @apply pr-10 cursor-pointer; }
+  .tf-label {
+    @apply absolute left-3 top-6 -translate-y-1/2 px-1 text-body-lg text-on-surface-variant pointer-events-none max-w-[calc(100%-1.5rem)] truncate
+      transition-all duration-150 ease-standard;
+    background: var(--tf-bg);
+  }
+  :is(.tf-input:focus, .tf-input:not(:placeholder-shown), select.tf-input, .tf-input[type='time'], .tf-input[type='date']) ~ .tf-label {
+    @apply top-0 text-body-sm;
+  }
+  .tf-input:focus ~ .tf-label { @apply text-primary; }
+  .tf-trailing { @apply absolute right-3 top-6 -translate-y-1/2 text-on-surface-variant pointer-events-none; }
+  .tf-support { @apply block px-4 pt-1 text-body-sm text-on-surface-variant; }
+  .tf-invalid .tf-input { @apply border-error hover:border-error focus:border-error focus:shadow-[inset_0_0_0_1px_rgb(var(--md-error))]; }
+  .tf-invalid :is(.tf-label, .tf-support) { @apply text-error; }
+  .tf-invalid .tf-input:focus ~ .tf-label { @apply text-error; }
 
-  /* Dialog */
-  .dialog { @apply bg-surface-container-high text-on-surface rounded-4xl shadow-elevation-3; }
+  /* ── Dialog, side sheet ── */
+  .scrim { @apply fixed inset-0 z-50 bg-scrim/[.32] animate-fade-in; }
+  .dialog {
+    @apply bg-surface-container-high text-on-surface rounded-4xl shadow-elevation-3 animate-dialog-in;
+    --tf-bg: rgb(var(--md-surface-container-high));
+  }
+  .sheet {
+    @apply fixed inset-y-0 right-0 z-50 flex flex-col w-full max-w-[440px] bg-surface-container-low text-on-surface
+      sm:rounded-l-2xl shadow-elevation-3 animate-sheet-in;
+    --tf-bg: rgb(var(--md-surface-container-low));
+  }
 
-  /* Filter chip */
+  /* ── Menu ── */
+  .menu { @apply absolute z-50 min-w-[200px] py-2 rounded bg-surface-container shadow-elevation-2 animate-fade-in; }
+  .menu-item { @apply w-full flex items-center gap-3 h-12 px-3 text-label-lg text-on-surface text-left; }
+  .menu-item .icon { @apply text-on-surface-variant; }
+
+  /* ── Chips ── */
   .chip {
-    @apply inline-flex items-center gap-2 h-8 px-4 rounded-lg border border-outline-variant text-label-lg text-on-surface-variant select-none;
+    @apply inline-flex items-center gap-2 h-8 px-4 rounded-lg border border-outline-variant text-label-lg text-on-surface-variant select-none cursor-pointer;
   }
   .chip-selected { @apply bg-secondary-container text-on-secondary-container border-transparent pl-2; }
   .chip .icon { font-size: 18px; }
 
-  /* Primary tabs */
-  .tab { @apply h-12 px-4 text-title-sm text-on-surface-variant whitespace-nowrap; }
+  /* ── Segmented button ── */
+  .segmented { @apply inline-flex h-10 rounded-full border border-outline overflow-hidden; }
+  .segmented > button { @apply flex items-center gap-2 px-4 text-label-lg text-on-surface whitespace-nowrap; }
+  .segmented > button + button { @apply border-l border-outline; }
+  .segmented > button[aria-pressed='true'] { @apply bg-secondary-container text-on-secondary-container; }
+  .segmented .icon { font-size: 18px; }
+
+  /* ── Primary tabs ── */
+  .tab { @apply flex items-center gap-2 h-12 px-4 text-title-sm text-on-surface-variant whitespace-nowrap; }
+  .tab .icon { font-size: 20px; }
   .tab[aria-selected='true'] { @apply text-primary; }
   .tab[aria-selected='true']::after {
     content: '';
-    @apply absolute bottom-0 inset-x-4 h-[3px] rounded-t-full bg-primary;
+    @apply absolute bottom-0 inset-x-2 h-[3px] rounded-t-full bg-primary;
   }
 
-  /* Switch (see components/ui/Switch.jsx) */
+  /* ── Switch (see components/ui/Switch.jsx) ── */
   .switch {
     @apply relative inline-flex items-center shrink-0 w-[52px] h-8 rounded-full border-2 border-outline bg-surface-container-highest
-      transition-colors disabled:opacity-[.38] disabled:cursor-not-allowed;
+      transition-colors duration-200 disabled:opacity-[.38] disabled:cursor-not-allowed;
   }
-  .switch-handle { @apply absolute left-[6px] w-4 h-4 rounded-full bg-outline transition-all; }
+  .switch-handle { @apply absolute left-[6px] w-4 h-4 rounded-full bg-outline transition-all duration-200 ease-emphasized; }
   .switch[aria-checked='true'] { @apply bg-primary border-primary; }
   .switch[aria-checked='true'] .switch-handle { @apply left-[22px] w-6 h-6 bg-on-primary; }
+  .switch:not(:disabled):active .switch-handle { @apply w-7 h-7 left-[2px]; }
+  .switch[aria-checked='true']:not(:disabled):active .switch-handle { @apply left-[18px]; }
 
-  /* Navigation: a rail below lg, a drawer from lg up (see components/layout/Sidebar.jsx).
-     The state layer sits on the pill in the rail and on the whole item in the drawer. */
+  /* ── Checkbox: <input type="checkbox" class="checkbox"> ── */
+  .checkbox {
+    @apply relative appearance-none w-[18px] h-[18px] shrink-0 rounded-sm border-2 border-on-surface-variant cursor-pointer
+      transition-colors duration-150;
+  }
+  .checkbox:checked { @apply bg-primary border-primary; }
+  .checkbox:checked::after {
+    content: '';
+    @apply absolute inset-0;
+    background: rgb(var(--md-on-primary));
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center / 14px no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z'/%3E%3C/svg%3E") center / 14px no-repeat;
+  }
+
+  /* ── Lists ── */
+  .list-row { @apply flex items-center gap-4 min-h-14 px-4 py-2 text-left; }
+  .list-icon { @apply grid place-items-center w-10 h-10 rounded-full shrink-0 bg-secondary-container text-on-secondary-container; }
+
+  /* ── Data table ── */
+  .table { @apply w-full text-body-md text-on-surface; }
+  .table th { @apply h-12 px-4 text-left text-label-lg text-on-surface-variant font-medium border-b border-outline-variant whitespace-nowrap; }
+  .table td { @apply h-14 px-4 border-b border-outline-variant; }
+  .table tbody tr:last-child td { @apply border-b-0; }
+  .table tbody tr { @apply transition-colors; }
+  .table tbody tr[role='link'] { @apply cursor-pointer hover:bg-on-surface/[.04]; }
+
+  /* ── Linear progress (indeterminate) ── */
+  .progress-linear { @apply relative h-1 w-full overflow-hidden rounded-full bg-secondary-container; }
+  .progress-linear::after {
+    content: '';
+    @apply absolute inset-y-0 w-2/5 rounded-full bg-primary animate-progress-indeterminate;
+  }
+
+  /* ── Navigation: rail below lg, standard drawer from lg up (components/layout/Sidebar.jsx).
+     The state layer sits on the pill in the rail and on the whole item in the drawer. ── */
   .nav-item { @apply flex flex-col items-center gap-1 text-label-md text-on-surface-variant; }
   .nav-item.active { @apply text-on-surface; }
   .nav-item::before { display: none; }
-  .nav-pill { @apply grid place-items-center w-14 h-8 rounded-full; }
+  .nav-pill { @apply relative grid place-items-center w-14 h-8 rounded-full; }
+  .nav-pill::before {
+    content: ''; @apply absolute inset-0 rounded-full bg-current opacity-0 transition-opacity;
+  }
+  .nav-item:hover .nav-pill::before { opacity: 0.08; }
   .nav-item.active .nav-pill { @apply bg-secondary-container text-on-secondary-container; }
   @screen lg {
-    .nav-item { @apply flex-row gap-3 h-14 px-4 rounded-full text-label-lg; }
+    .nav-item { @apply flex-row gap-3 h-14 pl-4 pr-6 rounded-full text-label-lg; }
     .nav-item::before { display: block; }
     .nav-item.active { @apply bg-secondary-container text-on-secondary-container; }
     .nav-pill, .nav-item.active .nav-pill { @apply w-6 h-6 bg-transparent; }

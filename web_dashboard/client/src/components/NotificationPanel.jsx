@@ -32,7 +32,7 @@ export default function NotificationBell() {
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(o => !o)} className="icon-btn" aria-label="Notifications" aria-expanded={open}>
+      <button onClick={() => setOpen(o => !o)} className={`icon-btn ${open ? 'icon-btn-tonal' : ''}`} aria-label="Notifications" aria-expanded={open} data-tip={open ? undefined : 'Notifications'}>
         <Icon name="notifications" filled={open} />
         {unreadCount > 0 && (
           <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-error text-on-error text-label-sm flex items-center justify-center">
@@ -42,15 +42,15 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-1 w-96 max-w-[90vw] bg-surface-container rounded-xl shadow-elevation-2 z-50 overflow-hidden">
-          <div className="flex items-center justify-between pl-4 pr-2 h-14">
+        <div className="absolute right-0 mt-2 w-[400px] max-w-[90vw] bg-surface-container rounded-2xl shadow-elevation-2 z-50 overflow-hidden animate-fade-in">
+          <div className="flex items-center justify-between pl-4 pr-2 h-14 border-b border-outline-variant">
             <p className="text-title-md text-on-surface">Notifications</p>
             {unreadCount > 0 && (
-              <button onClick={markAllRead} className="btn-text">Mark all as read</button>
+              <button onClick={markAllRead} className="btn-text btn-sm">Mark all as read</button>
             )}
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto pb-2">
+          <div className="max-h-[480px] overflow-y-auto py-1">
             {items.length === 0 ? (
               <p className="text-body-md text-on-surface-variant text-center py-10">You’re all caught up.</p>
             ) : (

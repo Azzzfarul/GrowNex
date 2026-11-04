@@ -10,44 +10,11 @@ import {
 import { db } from '../firebase'
 import Icon from '../components/ui/Icon'
 import Switch from '../components/ui/Switch'
+import TextField from '../components/ui/TextField'
+import Dialog from '../components/ui/Dialog'
+import PageHeader from '../components/layout/PageHeader'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-
-function ThemeDialog({ currentTheme, onSelect, onClose }) {
-  return (
-    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
-      <div className="dialog w-full max-w-xs p-6">
-        <h2 className="text-headline-sm text-on-surface mb-4">App Theme</h2>
-        <div className="space-y-2 mb-5">
-          {[
-            { value: 'light', label: 'Light Mode' },
-            { value: 'dark',  label: 'Dark Mode'  },
-          ].map(({ value, label }) => (
-            <label
-              key={value}
-              onClick={() => { onSelect(value); onClose() }}
-              className="flex items-center gap-3 p-3 rounded-xl cursor-pointer state-layer"
-            >
-              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                currentTheme === value
-                  ? 'border-primary'
-                  : 'border-outline'
-              }`}>
-                {currentTheme === value && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-primary" />
-                )}
-              </span>
-              <span className="text-body-lg text-on-surface">{label}</span>
-            </label>
-          ))}
-        </div>
-        <div className="flex justify-end">
-          <button onClick={onClose} className="btn-text">Cancel</button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function EditProfileModal({ user, initialUsername, onClose, onSaved }) {
   const [username,    setUsername]    = useState(initialUsername)
@@ -109,96 +76,36 @@ function EditProfileModal({ user, initialUsername, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
-      <div className="dialog w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-headline-sm text-on-surface mb-4">Edit Profile</h2>
-        <form onSubmit={handleSave} className="space-y-5">
+    <Dialog
+      title="Edit account"
+      size="md"
+      onClose={onClose}
+      busy={saving}
+      actions={<>
+        <button type="button" onClick={onClose} className="btn-text">Cancel</button>
+        <button type="submit" form="edit-profile-form" disabled={saving} className="btn-filled">{saving ? 'Saving…' : 'Save changes'}</button>
+      </>}
+    >
+      <form id="edit-profile-form" onSubmit={handleSave} className="space-y-4 pt-1">
+        <TextField label="Username" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
+        <TextField label="Email" value={user.email} readOnly disabled support="Email can't be changed." />
 
-          {/* Account Info */}
-          <div>
-            <p className="text-xs font-medium text-primary uppercase tracking-wide mb-3">Account Info</p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-label-lg text-on-surface-variant mb-1">Username</label>
-                <input
-                  className="field w-full"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-label-lg text-on-surface-variant mb-1">Email</label>
-                <input
-                  className="w-full border border-outline-variant rounded-xl px-3 py-2.5 text-sm bg-surface-container text-on-surface-variant cursor-not-allowed"
-                  value={user.email}
-                  readOnly
-                />
-                <p className="text-xs text-on-surface-variant mt-1">Email cannot be changed.</p>
-              </div>
-            </div>
+        <div className="pt-2">
+          <p className="text-title-sm text-on-surface">Change password</p>
+          <p className="text-body-sm text-on-surface-variant mb-4">Leave blank to keep your current password.</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField type="password" label="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+            <TextField type="password" label="Confirm password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
           </div>
-
-          {/* Change Password */}
-          <div>
-            <p className="text-xs font-medium text-primary uppercase tracking-wide mb-1">Change Password</p>
-            <p className="text-xs text-on-surface-variant mb-3">Leave blank to keep your current password.</p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-label-lg text-on-surface-variant mb-1">New password</label>
-                <input
-                  type="password"
-                  className="field w-full"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-label-lg text-on-surface-variant mb-1">Confirm password</label>
-                <input
-                  type="password"
-                  className="field w-full"
-                  value={confirmPw}
-                  onChange={(e) => setConfirmPw(e.target.value)}
-                />
-              </div>
-              {passwordChanging && (
-                <div>
-                  <label className="block text-label-lg text-on-surface-variant mb-1">Current password</label>
-                  <input
-                    type="password"
-                    className="field w-full"
-                    value={currentPw}
-                    onChange={(e) => setCurrentPw(e.target.value)}
-                  />
-                  <p className="text-xs text-on-surface-variant mt-1">Required to confirm password change.</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {error && (
-            <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2">{error}</p>
+          {passwordChanging && (
+            <TextField type="password" label="Current password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)}
+              support="Required to confirm the change." className="mt-4" autoComplete="current-password" />
           )}
+        </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-text"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="btn-filled"
-            >
-              {saving ? 'Saving…' : 'Save changes'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {error && <p className="banner banner-error"><Icon name="error" />{error}</p>}
+      </form>
+    </Dialog>
   )
 }
 
@@ -231,46 +138,21 @@ function DeleteAccountModal({ onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
-      <div className="dialog w-full max-w-sm p-6">
-        <h2 className="text-headline-sm text-on-surface mb-4">Delete account</h2>
-        <p className="text-sm text-on-surface-variant mb-5">
-          This action is permanent and cannot be undone. All your data will be deleted.
-        </p>
-        <form onSubmit={handleDelete} className="space-y-4">
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Your password</label>
-            <input
-              type="password"
-              autoFocus
-              className="field w-full"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          {error && (
-            <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2">{error}</p>
-          )}
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={deleting}
-              className="btn-text"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={deleting}
-              className="btn-error"
-            >
-              {deleting ? 'Deleting…' : 'Delete account'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Dialog
+      icon="warning"
+      title="Delete account?"
+      onClose={onClose}
+      busy={deleting}
+      actions={<>
+        <button type="button" onClick={onClose} disabled={deleting} className="btn-text">Cancel</button>
+        <button type="submit" form="delete-account-form" disabled={deleting} className="btn-error">{deleting ? 'Deleting…' : 'Delete account'}</button>
+      </>}
+    >
+      <p className="mb-5">Your zones, plants, readings, photos and notifications are deleted for good. This can't be undone.</p>
+      <form id="delete-account-form" onSubmit={handleDelete}>
+        <TextField type="password" label="Your password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} error={error || undefined} />
+      </form>
+    </Dialog>
   )
 }
 
@@ -280,7 +162,19 @@ const NOTIF_TYPES = [
   { key: 'daily',     label: 'Daily summary',     hint: 'An evening recap of every zone' },
 ]
 
-function NotificationSettingsDialog({ user, onClose }) {
+function SectionTitle({ icon, title, subtitle }) {
+  return (
+    <div className="flex items-center gap-4 px-4 pt-3 pb-2">
+      <span className="list-icon"><Icon name={icon} /></span>
+      <div>
+        <h2 className="card-title">{title}</h2>
+        {subtitle && <p className="text-body-sm text-on-surface-variant">{subtitle}</p>}
+      </div>
+    </div>
+  )
+}
+
+function NotificationSettings({ user }) {
   const [prefs, setPrefs] = useState(null)
 
   useEffect(() => {
@@ -297,63 +191,20 @@ function NotificationSettingsDialog({ user, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
-      <div className="dialog w-full max-w-sm p-6">
-        <h2 className="text-headline-sm text-on-surface mb-4">Notifications</h2>
-        <p className="text-sm text-on-surface-variant mb-5">Choose what you get notified about.</p>
-
-        {prefs == null ? (
-          <p className="text-sm text-on-surface-variant py-6 text-center">Loading…</p>
-        ) : (
-          <div className="space-y-3 mb-5">
-            {NOTIF_TYPES.map(({ key, label, hint }) => {
-              const on = prefs[key] !== false
-              return (
-                <div key={key} className="flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-body-lg text-on-surface">{label}</p>
-                    <p className="text-body-md text-on-surface-variant">{hint}</p>
-                  </div>
-                  <Switch checked={on} onChange={() => toggle(key)} label={label} />
-                </div>
-              )
-            })}
+    <section className="card py-2">
+      <SectionTitle icon="notifications" title="Notifications" subtitle="Shown in the app and pushed to your phone" />
+      {NOTIF_TYPES.map(({ key, label, hint }) => (
+        <div key={key} className="list-row">
+          <div className="flex-1 min-w-0">
+            <p className="text-body-lg text-on-surface">{label}</p>
+            <p className="text-body-md text-on-surface-variant">{hint}</p>
           </div>
-        )}
-
-        <div className="flex justify-end">
-
-          <button onClick={onClose} className="btn-text">Done</button>
-
+          <Switch checked={prefs ? prefs[key] !== false : false} disabled={!prefs} onChange={() => toggle(key)} label={label} />
         </div>
-      </div>
-    </div>
+      ))}
+    </section>
   )
 }
-
-const MENU_ITEMS = [
-  {
-    id: 'account',
-    label: 'Account details',
-    subtitle: 'Update your username and password',
-    icon: 'manage_accounts',
-    active: true,
-  },
-  {
-    id: 'notifications',
-    label: 'Notifications',
-    subtitle: 'Manage alerts and reminders',
-    icon: 'notifications',
-    active: true,
-  },
-  {
-    id: 'theme',
-    label: 'App theme',
-    subtitle: 'Switch between light and dark mode',
-    icon: 'palette',
-    active: true,
-  },
-]
 
 export default function ProfilePage() {
   const { user, logout } = useAuth()
@@ -361,8 +212,6 @@ export default function ProfilePage() {
   const navigate = useNavigate()
   const [username,       setUsername]       = useState(null)
   const [showEdit,       setShowEdit]       = useState(false)
-  const [showTheme,      setShowTheme]      = useState(false)
-  const [showNotif,      setShowNotif]      = useState(false)
   const [showDeleteAcct, setShowDeleteAcct] = useState(false)
 
   useEffect(() => {
@@ -385,64 +234,65 @@ export default function ProfilePage() {
     .toUpperCase()
     .slice(0, 2)
 
-  function handleMenuClick(id) {
-    if (id === 'account')       setShowEdit(true)
-    if (id === 'notifications') setShowNotif(true)
-    if (id === 'theme')         setShowTheme(true)
-  }
-
   return (
     <div>
-      <h1 className="text-headline-sm text-on-surface">Profile</h1>
-      <p className="text-body-lg text-on-surface-variant mt-1 mb-6">Manage your account and app settings.</p>
+      <PageHeader title="Profile" subtitle="Your account and app settings" />
 
-      {/* Profile card */}
-      <div className="card p-6 flex items-center gap-4 mb-6">
-        <div className="w-14 h-14 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-title-lg flex-shrink-0">
-          {initials}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_minmax(0,1fr)] items-start">
+        {/* Account summary */}
+        <section className="card p-6 flex flex-col items-center text-center lg:sticky lg:top-6">
+          <div className="w-24 h-24 rounded-full bg-primary-container text-on-primary-container grid place-items-center text-headline-lg">
+            {initials}
+          </div>
+          <p className="text-title-lg text-on-surface mt-4">{displayName}</p>
+          <p className="text-body-md text-on-surface-variant break-all">{user?.email}</p>
+          <div className="flex gap-2 mt-6">
+            <button onClick={() => setShowEdit(true)} className="btn-tonal"><Icon name="edit" />Edit</button>
+            <button onClick={handleLogout} className="btn-outlined"><Icon name="logout" />Log out</button>
+          </div>
+        </section>
+
+        <div className="space-y-6 min-w-0">
+          <section className="card py-2">
+            <SectionTitle icon="manage_accounts" title="Account" />
+            {[
+              ['Username', displayName, true],
+              ['Email', user?.email, false],
+              ['Password', '••••••••', true],
+            ].map(([label, value, editable]) => (
+              <button key={label} onClick={() => setShowEdit(true)} disabled={!editable}
+                className="state-layer list-row w-full disabled:cursor-default">
+                <span className="w-32 shrink-0 text-body-md text-on-surface-variant">{label}</span>
+                <span className="flex-1 min-w-0 text-body-lg text-on-surface truncate">{value}</span>
+                {editable && <Icon name="chevron_right" className="text-on-surface-variant" />}
+              </button>
+            ))}
+          </section>
+
+          <NotificationSettings user={user} />
+
+          <section className="card py-2">
+            <SectionTitle icon="palette" title="Appearance" />
+            <div className="list-row">
+              <p className="flex-1 text-body-lg text-on-surface">Theme</p>
+              <div role="group" aria-label="Theme" className="segmented">
+                {[['light', 'Light', 'light_mode'], ['dark', 'Dark', 'dark_mode']].map(([v, l, ic]) => (
+                  <button key={v} onClick={() => setTheme(v)} aria-pressed={theme === v}>
+                    <Icon name={theme === v ? 'check' : ic} />{l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-error/40 p-5 flex flex-wrap items-center gap-4">
+            <div className="flex-1 min-w-[16rem]">
+              <h2 className="text-title-md text-error">Delete account</h2>
+              <p className="text-body-md text-on-surface-variant">Permanently remove your account and all of its data.</p>
+            </div>
+            <button onClick={() => setShowDeleteAcct(true)} className="btn-outlined btn-danger"><Icon name="delete_forever" />Delete account</button>
+          </section>
         </div>
-        <div>
-          <p className="text-on-surface text-title-md">{displayName}</p>
-          <p className="text-body-md text-on-surface-variant">{user?.email}</p>
-        </div>
-      </div>
-
-      {/* Menu items */}
-      <div className="card py-2 mb-6">
-        {MENU_ITEMS.map(({ id, label, subtitle, icon, active }) => (
-          <button
-            key={id}
-            type="button"
-            disabled={!active}
-            onClick={() => handleMenuClick(id)}
-            className="state-layer w-full text-left flex items-center gap-4 px-4 py-3 disabled:opacity-50"
-          >
-            <span className="w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container grid place-items-center flex-shrink-0">
-              <Icon name={icon} />
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-body-lg text-on-surface">{label}</span>
-              <span className="block text-body-md text-on-surface-variant">{subtitle}</span>
-            </span>
-            {active && <Icon name="chevron_right" className="text-on-surface-variant" />}
-          </button>
-        ))}
-      </div>
-
-      <button onClick={handleLogout} className="btn-tonal w-full">
-        <Icon name="logout" />
-        Logout
-      </button>
-
-      <div className="mt-8">
-        <p className="text-title-sm text-error mb-3">Danger zone</p>
-        <button
-          onClick={() => setShowDeleteAcct(true)}
-          className="btn-outlined w-full text-error border-error"
-        >
-          <Icon name="delete_forever" />
-          Delete account
-        </button>
       </div>
 
       {showEdit && (
@@ -454,21 +304,7 @@ export default function ProfilePage() {
         />
       )}
 
-      {showNotif && (
-        <NotificationSettingsDialog user={user} onClose={() => setShowNotif(false)} />
-      )}
-
-      {showTheme && (
-        <ThemeDialog
-          currentTheme={theme}
-          onSelect={setTheme}
-          onClose={() => setShowTheme(false)}
-        />
-      )}
-
-      {showDeleteAcct && (
-        <DeleteAccountModal onClose={() => setShowDeleteAcct(false)} />
-      )}
+      {showDeleteAcct && <DeleteAccountModal onClose={() => setShowDeleteAcct(false)} />}
     </div>
   )
 }

@@ -4,13 +4,17 @@ import { doc, deleteDoc, updateDoc, onSnapshot, collection, query, where, getDoc
 import { db } from '../firebase'
 import StatusLabel from '../components/ui/StatusLabel'
 import Icon from '../components/ui/Icon'
+import Dialog from '../components/ui/Dialog'
+import Loading from '../components/ui/Loading'
+import EmptyState from '../components/ui/EmptyState'
+import PageHeader from '../components/layout/PageHeader'
 import { deleteFile, removePlantPhotoFile } from '../lib/photoUpload'
 import OverviewTab from './zones/OverviewTab'
 import PlantsTab from './zones/PlantsTab'
 import AutomationTab from './zones/AutomationTab'
 import MonitoringTab from './zones/MonitoringTab'
 
-const TABS = ['Overview', 'Plants', 'Automation', 'Monitoring']
+const TABS = [['Overview', 'info'], ['Plants', 'potted_plant'], ['Automation', 'tune'], ['Monitoring', 'monitor_heart']]
 
 // Clients can't list subcollections, so name them all (automationHistory is legacy data). Keep in
 // step with mobile zone_detail_screen.dart; the server's account deletion uses recursiveDelete.
@@ -76,74 +80,55 @@ export default function ZoneDetailPage() {
     return unsub
   }, [zoneId])
 
-  if (loading) {
-    return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
-  }
+  if (loading) return <Loading />
   if (!zone) {
-    return <p className="text-sm text-on-surface-variant mt-8 text-center">Zone not found.</p>
+    return (
+      <div>
+        <PageHeader title="Zone not found" back="/plants" />
+        <EmptyState icon="search_off" title="This zone doesn't exist" body="It may have been deleted." />
+      </div>
+    )
   }
 
   return (
     <div>
-      {/* Delete confirmation dialog */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
-          <div className="dialog w-full max-w-sm p-6">
-            <h2 className="text-headline-sm text-on-surface mb-4">Delete zone?</h2>
-            <p className="text-sm text-on-surface-variant mb-5">
-              This will permanently delete <span className="font-medium text-on-surface">"{zone.zoneName}"</span> and
-              all its plants. This cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={deleting}
-                className="btn-text"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteZone}
-                disabled={deleting}
-                className="btn-error"
-              >
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <Dialog
+          icon="delete"
+          title="Delete zone?"
+          onClose={() => setShowDeleteConfirm(false)}
+          busy={deleting}
+          actions={<>
+            <button onClick={() => setShowDeleteConfirm(false)} disabled={deleting} className="btn-text">Cancel</button>
+            <button onClick={handleDeleteZone} disabled={deleting} className="btn-error">{deleting ? 'Deleting…' : 'Delete'}</button>
+          </>}
+        >
+          This permanently deletes <span className="font-medium text-on-surface">“{zone.zoneName}”</span>, its plants,
+          readings and photos. This can't be undone.
+        </Dialog>
       )}
 
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <button onClick={() => navigate('/plants')} className="icon-btn text-on-surface" aria-label="Back">
-          <Icon name="arrow_back" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-headline-sm text-on-surface">{zone.zoneName}</h1>
-            <StatusLabel status={zone.status} />
-          </div>
-          <p className="text-body-md text-on-surface-variant capitalize">
-            {zone.zoneType} · {zone.totalPlantSlots} slot{zone.totalPlantSlots !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <button onClick={() => setShowDeleteConfirm(true)} className="btn-text text-error shrink-0">
-          <Icon name="delete" />
-          Delete zone
-        </button>
-      </div>
+      <PageHeader
+        back="/plants"
+        title={zone.zoneName}
+        subtitle={<span className="capitalize">{zone.zoneType} · {zone.totalPlantSlots ?? 0} slot{zone.totalPlantSlots !== 1 ? 's' : ''}</span>}
+        actions={
+          <button onClick={() => setShowDeleteConfirm(true)} className="btn-outlined btn-danger">
+            <Icon name="delete" />Delete zone
+          </button>
+        }
+      >
+        <StatusLabel status={zone.status} />
+      </PageHeader>
 
-      {/* Tab bar */}
-      <div role="tablist" className="flex border-b border-outline-variant mb-6 overflow-x-auto">
-        {TABS.map((t, i) => (
+      <div role="tablist" className="flex border-b border-outline-variant mb-6 overflow-x-auto -mt-2">
+        {TABS.map(([t, icon], i) => (
           <button key={t} role="tab" aria-selected={tab === i} onClick={() => setTab(i)} className="tab">
-            {t}
+            <Icon name={icon} filled={tab === i} />{t}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
       {tab === 0 && <OverviewTab zone={zone} />}
       {tab === 1 && <PlantsTab zone={zone} />}
       {tab === 2 && <AutomationTab zone={zone} />}

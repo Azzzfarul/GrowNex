@@ -1,8 +1,22 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { doc, onSnapshot, updateDoc, deleteDoc, collection, query, where } from 'firebase/firestore'
 import { db } from '../firebase'
 import Icon from '../components/ui/Icon'
+import TextField from '../components/ui/TextField'
+import Dialog from '../components/ui/Dialog'
+import Loading from '../components/ui/Loading'
+import EmptyState from '../components/ui/EmptyState'
+import PageHeader from '../components/layout/PageHeader'
+
+function Fact({ label, children, tone = 'text-on-surface' }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-3 border-b border-outline-variant last:border-0">
+      <span className="text-body-md text-on-surface-variant">{label}</span>
+      <span className={`text-title-sm text-right ${tone}`}>{children}</span>
+    </div>
+  )
+}
 
 function formatLastSync(ts) {
   if (!ts) return 'Never'
@@ -138,159 +152,119 @@ export default function DeviceDetailPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-on-surface-variant mt-8 text-center">Loading…</p>
-  if (!device) return <p className="text-sm text-on-surface-variant mt-8 text-center">Device not found.</p>
+  if (loading) return <Loading />
+  if (!device) {
+    return (
+      <div>
+        <PageHeader title="Device not found" back="/devices" />
+        <EmptyState icon="search_off" title="This device doesn't exist" body="It may have been removed from your account." />
+      </div>
+    )
+  }
 
   const totalSlots = device.totalSlots || 4
   const slotsLeft = Math.max(0, totalSlots - zoneInfo.plantsUsed)
   const sensorAvailable = isSensorAvailable(device.lastSync)
   const isCamera = device.deviceType === 'camera'
+  const online = device.status === 'online'
+  const dirty = Object.keys(edits).length > 0
 
   return (
     <div>
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-scrim/[.32] z-50 flex items-center justify-center p-4">
-          <div className="dialog w-full max-w-sm p-6">
-            <h2 className="text-headline-sm text-on-surface mb-4">Delete device?</h2>
-            <p className="text-sm text-on-surface-variant mb-5">
-              This will permanently remove <span className="font-medium text-on-surface">"{device.deviceName}"</span>.
-              {device.assignedZoneId && ' It will be unassigned from its zone first.'}
-            </p>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={deleting}
-                className="btn-text"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="btn-error"
-              >
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <Dialog
+          icon="delete"
+          title="Remove device?"
+          onClose={() => setShowDeleteConfirm(false)}
+          busy={deleting}
+          actions={<>
+            <button onClick={() => setShowDeleteConfirm(false)} disabled={deleting} className="btn-text">Cancel</button>
+            <button onClick={handleDelete} disabled={deleting} className="btn-error">{deleting ? 'Deleting…' : 'Delete'}</button>
+          </>}
+        >
+          <span className="font-medium text-on-surface">“{device.deviceName}”</span> will be removed from your account.
+          {device.assignedZoneId && ' It will be unassigned from its zone first.'}
+        </Dialog>
       )}
 
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/devices')} className="icon-btn text-on-surface" aria-label="Back">
-          <Icon name="arrow_back" />
-        </button>
-        <h1 className="text-headline-sm text-on-surface flex-1">{device.deviceName}</h1>
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          className="btn-text text-error shrink-0">
-          <Icon name="delete" />
-          Delete device
-        </button>
-      </div>
+      <PageHeader
+        back="/devices"
+        title={device.deviceName}
+        subtitle={device.deviceName !== device.id && <span className="font-mono">{device.id}</span>}
+        actions={<button onClick={() => setShowDeleteConfirm(true)} className="btn-outlined btn-danger"><Icon name="delete" />Delete device</button>}
+      >
+        <span className={`tag ${online ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-highest text-on-surface-variant'}`}>
+          <Icon name={online ? 'wifi' : 'wifi_off'} />{online ? 'Online' : 'Offline'}
+        </span>
+      </PageHeader>
 
-      <div className="flex flex-col gap-4">
-        {/* Device info */}
-        <div className="card p-5">
-          <h2 className="text-title-md text-on-surface mb-4">Device info</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-label-lg text-on-surface-variant mb-1">Device name</label>
-              <input
-                className="field w-full"
-                value={form.deviceName}
-                onChange={(e) => edit('deviceName', e.target.value)}
-              />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
+        {/* Settings */}
+        <section className="card p-5">
+          <h2 className="card-title mb-5">Settings</h2>
+          <TextField label="Device name" value={form.deviceName} onChange={(e) => edit('deviceName', e.target.value)} className="max-w-md" />
+          {isCamera ? (
+            <p className="flex items-center gap-2 text-body-md text-on-surface-variant mt-5">
+              <Icon name="photo_camera" size={20} /> Camera node — uploads a photo to its zone's Camera feed every 4 hours.
+            </p>
+          ) : (
+            <div className="mt-5">
+              <p className="text-title-sm text-on-surface mb-1">Installed modules</p>
+              <p className="text-body-sm text-on-surface-variant mb-2">Controls which automations its zone offers.</p>
+              {[
+                ['light_mode', 'Light module', 'hasLightingModule'],
+                ['science', 'Fertilizer module', 'hasFertilizerModule'],
+              ].map(([icon, label, key]) => (
+                <label key={key} className="state-layer flex items-center gap-4 h-14 px-3 -mx-3 rounded-lg cursor-pointer max-w-md">
+                  <Icon name={icon} className="text-on-surface-variant" />
+                  <span className="flex-1 text-body-lg text-on-surface">{label}</span>
+                  <input type="checkbox" checked={form[key]} onChange={(e) => edit(key, e.target.checked)} className="checkbox" />
+                </label>
+              ))}
             </div>
-            {isCamera ? (
-              <p className="flex items-center gap-2 text-body-md text-on-surface-variant">
-                <Icon name="photo_camera" size={20} /> Camera node — uploads a photo to its zone's Camera feed every 4 hours.
-              </p>
-            ) : (
-            <div className="space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <Icon name="light_mode" className="text-on-surface-variant" />
-                <span className="flex-1 text-sm text-on-surface">Light module</span>
-                <input
-                  type="checkbox"
-                  checked={form.hasLightingModule}
-                  onChange={(e) => edit('hasLightingModule', e.target.checked)}
-                  className="w-4 h-4 accent-primary"
-                />
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <Icon name="science" className="text-on-surface-variant" />
-                <span className="flex-1 text-sm text-on-surface">Fertilizer module</span>
-                <input
-                  type="checkbox"
-                  checked={form.hasFertilizerModule}
-                  onChange={(e) => edit('hasFertilizerModule', e.target.checked)}
-                  className="w-4 h-4 accent-primary"
-                />
-              </label>
-            </div>
-            )}
-          </div>
-        </div>
-
-        {/* Zone assignment */}
-        <div className="card p-5">
-          <h2 className="text-title-md text-on-surface mb-4">Zone assignment</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-sm text-on-surface-variant">Assigned zone</span>
-              <span className="text-sm font-medium text-on-surface">
-                {!zoneInfo.loaded ? '…' : (zoneInfo.zone?.zoneName ?? 'Not assigned')}
+          )}
+          <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-outline-variant">
+            {saveLabel !== 'Save changes' && !saving && (
+              <span className={`text-body-md ${saveLabel === 'Saved!' ? 'text-primary' : 'text-error'}`}>
+                {saveLabel === 'Saved!' ? 'Saved' : "Couldn't save. Try again."}
               </span>
-            </div>
+            )}
+            {dirty && <button onClick={() => setEdits({})} disabled={saving} className="btn-text">Discard</button>}
+            <button onClick={handleSave} disabled={saving} className="btn-filled">{saving ? 'Saving…' : 'Save changes'}</button>
+          </div>
+        </section>
+
+        <div className="space-y-4">
+          {/* Status */}
+          <section className="card p-5">
+            <h2 className="card-title mb-1">{isCamera ? 'Camera status' : 'Sensor status'}</h2>
+            {isCamera
+              ? <Fact label="Connection" tone={online ? 'text-primary' : 'text-error'}>{online ? 'Online' : 'Offline'}</Fact>
+              : <Fact label="Availability" tone={sensorAvailable ? 'text-primary' : 'text-error'}>{sensorAvailable ? 'Available' : 'Unavailable'}</Fact>}
+            <Fact label={isCamera ? 'Last photo' : 'Last sync'}>{formatLastSync(device.lastSync)}</Fact>
+            <Fact label="Type"><span className="capitalize">{device.deviceType ?? '—'}</span></Fact>
+          </section>
+
+          {/* Zone */}
+          <section className="card p-5">
+            <h2 className="card-title mb-1">Zone</h2>
+            <Fact label="Assigned to">
+              {!zoneInfo.loaded ? '…' : zoneInfo.zone
+                ? <Link to={`/zones/${zoneInfo.zone.id}`} className="text-primary hover:underline">{zoneInfo.zone.zoneName}</Link>
+                : 'Not assigned'}
+            </Fact>
             {!isCamera && (
-              <div className="flex justify-between">
-                <span className="text-sm text-on-surface-variant">Plant slots</span>
-                <span className="text-sm font-medium text-on-surface">
-                  {!zoneInfo.loaded
-                    ? '…'
-                    : device.assignedZoneId
-                    ? `${zoneInfo.plantsUsed} used · ${slotsLeft} left (of ${totalSlots})`
-                    : `${totalSlots} total`}
-                </span>
-              </div>
+              <Fact label="Plant slots">
+                {!zoneInfo.loaded ? '…' : device.assignedZoneId
+                  ? `${zoneInfo.plantsUsed} used · ${slotsLeft} free`
+                  : `${totalSlots} total`}
+              </Fact>
             )}
-          </div>
-        </div>
-
-        {/* Sensor / camera status */}
-        <div className="card p-5">
-          <h2 className="text-title-md text-on-surface mb-4">{isCamera ? 'Camera status' : 'Sensor status'}</h2>
-          <div className="space-y-3">
-            {isCamera ? (
-              <div className="flex justify-between">
-                <span className="text-sm text-on-surface-variant">Connection</span>
-                <span className={`text-sm font-medium ${device.status === 'online' ? 'text-primary' : 'text-error'}`}>
-                  {device.status === 'online' ? 'Online' : 'Offline'}
-                </span>
-              </div>
-            ) : (
-              <div className="flex justify-between">
-                <span className="text-sm text-on-surface-variant">Availability</span>
-                <span className={`text-sm font-medium ${sensorAvailable ? 'text-primary' : 'text-error'}`}>
-                  {sensorAvailable ? 'Available' : 'Unavailable'}
-                </span>
-              </div>
+            {!device.assignedZoneId && (
+              <p className="text-body-sm text-on-surface-variant mt-2">Assign it from a zone's Overview tab.</p>
             )}
-            <div className="flex justify-between">
-              <span className="text-sm text-on-surface-variant">{isCamera ? 'Last photo' : 'Last sync'}</span>
-              <span className="text-sm font-medium text-on-surface">{formatLastSync(device.lastSync)}</span>
-            </div>
-          </div>
+          </section>
         </div>
-
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="btn-filled w-full"
-        >
-          {saving ? 'Saving…' : saveLabel}
-        </button>
       </div>
     </div>
   )

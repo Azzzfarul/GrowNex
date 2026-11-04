@@ -39,14 +39,15 @@ async function push(userRef, tokens, { title, message, type, zoneId }) {
  * @param {'info'|'warn'|'critical'} [n.severity]
  * @param {string} n.title
  * @param {string} n.message
+ * @param {boolean} [n.always] send even if the user turned this type off (faults, not routine activity)
  */
-export async function notify({ userId, zoneId = null, zoneName = null, type, severity = 'info', title, message }) {
+export async function notify({ userId, zoneId = null, zoneName = null, type, severity = 'info', title, message, always = false }) {
   if (!userId || !type) return
   try {
     const userRef = db.collection('users').doc(userId)
     const user = (await userRef.get()).data() ?? {}
     const prefs = user.notificationPrefs ?? {}
-    if (prefs[type] === false) return
+    if (prefs[type] === false && !always) return
 
     await db.collection('notifications').add({
       userId, zoneId, zoneName, type, severity, title, message,

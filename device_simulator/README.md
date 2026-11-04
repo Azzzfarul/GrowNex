@@ -44,11 +44,12 @@ Options (after `npm start --`):
 |---|---|---|
 | `--node sensor\|camera\|both` | `both` | which boards to run |
 | `--interval <s>` | `60` | seconds between readings (try `5` while testing) |
-| `--slots 1-4` | `1` | soil probes to report (`soilMoisture1..4`); the real board has 1 |
+| `--slots 1-4` | `4` | soil probes to report (`soilMoisture1..4`), like the real board |
 | `--images <folder>` | `./images` | JPEGs the camera cycles through (max 1.5 MB each) |
 | `--id`, `--camera-id` | per computer | pick the IDs yourself (keep the `ESP32-` / `ESP32CAM-` prefixes) |
+| `--pump-limit <s>` | `1200` / `2400` | pump safety limit (irrigation / fertilizer, like the firmware); e.g. `60` to watch it trigger. A pump on that long stops by itself and ignores "on" until it gets an "off"; the app then shows it off with a *stopped at its safety limit* notification |
 
-Example: `npm start -- --interval 5 --slots 4`
+Example: `npm start -- --interval 5 --slots 2`
 
 ## Test scenarios
 
@@ -60,7 +61,7 @@ Type these while it runs:
 | `wet` | soil moisture to 85% | zone status / alert for soil too wet |
 | `hot` / `cold` / `normal` | temperature ±12 °C | zone turns *attention* / *critical* with a threshold notification. The zone needs plants with temperature ranges; alerts are sent at most every 30 minutes per zone, and not for the first status after a server restart |
 | `photo` | sends a camera photo now | Monitoring → Camera feed (replaces this 4-hour window's photo) |
-| `offline` / `online` | simulates a power cut / power back | device and zone show *Offline* (via the last-will), then recover. Relays switch off during the cut; on power-up the board takes the last command again and the camera sends a boot photo |
+| `offline` / `online` | simulates a power cut / power back | device and zone show *Offline* (via the last-will), then recover. Relays switch off during the cut; on power-up the board takes the last command again and the camera sends a boot photo. A manual toggle the board never confirms (sent just before the cut) is switched back off in the app after 15 s, with a warning |
 | `reading` | sends a reading now | |
 | `state` | prints the simulated values | |
 | `quit` (or Ctrl+C) | marks both boards offline and exits | |

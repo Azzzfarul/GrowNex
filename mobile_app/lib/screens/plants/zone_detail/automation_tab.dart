@@ -12,6 +12,7 @@ import '../../../services/firestore/device_service.dart';
 final _timeRe  = RegExp(r'^([01]?\d|2[0-3]):[0-5]\d$');
 final _lightRe = RegExp(r'^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$');
 final _fertRe  = RegExp(r'^(MON|TUE|WED|THU|FRI|SAT|SUN) ([01]?\d|2[0-3]):[0-5]\d$');
+const _maxWateringS = 900, _maxFertilizingS = 1800;  // validatePlan's caps (server/src/services/aiAnalytics.js)
 
 class AutomationTab extends StatefulWidget {
   final Zone zone;
@@ -148,9 +149,16 @@ class _AutomationTabState extends State<AutomationTab> {
     // Only check fields the user changed: a hidden field (e.g. lighting without a light
     // module) holding an old value must not block saving the others.
     bool bad(String? v, String saved, RegExp re) => v != null && v != saved.trim() && !re.hasMatch(v);
+    bool tooLong(TextEditingController c, String saved, int max) {
+      final v = c.text.trim(), n = int.tryParse(v);
+      return v.isNotEmpty && v != saved.trim() && !(n != null && n > 0 && n <= max);
+    }
     final error = bad(ws, _savedWaterSchedule, _timeRe) ? 'Watering time must look like 07:00 (24-hour).'
         : bad(ls, _savedLightSchedule, _lightRe) ? 'Lighting schedule must look like 08:00–18:00.'
         : bad(fs, _savedFertSchedule, _fertRe) ? 'Fertilizing schedule must look like MON 06:00.'
+        // The board stops a pump by itself after 20 / 40 min (firmware safety limit), so runs stay well inside it.
+        : tooLong(_wateringDurationCtrl, _savedWaterDuration, _maxWateringS) ? 'Watering duration must be 1 to $_maxWateringS seconds.'
+        : tooLong(_fertilizingDurationCtrl, _savedFertDuration, _maxFertilizingS) ? 'Fertilizing duration must be 1 to $_maxFertilizingS seconds.'
         : null;
     if (error != null) return _snack(error);
 
@@ -399,6 +407,8 @@ class _AutomationTabState extends State<AutomationTab> {
         final isWaterOn  = device?.irrigationActive  ?? false;
         final isFertOn   = device?.fertilizerActive  ?? false;
         final isLightOn  = device?.lightActive        ?? false;
+        // An offline device can't take a toggle now; it would fire whenever the device reconnects, maybe hours later.
+        final offline    = device?.status == 'offline';
         final deviceId   = widget.zone.deviceId!;
         final svc        = DeviceService();
 
@@ -406,28 +416,33 @@ class _AutomationTabState extends State<AutomationTab> {
           padding: const EdgeInsets.all(20),
           children: [
             Text('Manual controls', style: tt.titleMedium),
+            if (offline) ...[
+              const SizedBox(height: 4),
+              Text('Device offline. Everything is off until it reconnects, then these settings resume.',
+                style: tt.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
             const SizedBox(height: 12),
             if (hasFert)
               Row(
                 children: [
                   Expanded(child: _buildActionCard('Water', Icons.water_drop,
                     isOn: isWaterOn,
-                    onToggle: () => svc.updateIrrigationState(deviceId, !isWaterOn))),
+                    onToggle: offline ? null : () => svc.updateIrrigationState(deviceId, !isWaterOn))),
                   const SizedBox(width: 12),
                   Expanded(child: _buildActionCard('Fertilize', Icons.grass,
                     isOn: isFertOn,
-                    onToggle: () => svc.updateFertilizerState(deviceId, !isFertOn))),
+                    onToggle: offline ? null : () => svc.updateFertilizerState(deviceId, !isFertOn))),
                 ],
               )
             else
               _buildActionCard('Water', Icons.water_drop,
                 isOn: isWaterOn,
-                onToggle: () => svc.updateIrrigationState(deviceId, !isWaterOn)),
+                onToggle: offline ? null : () => svc.updateIrrigationState(deviceId, !isWaterOn)),
             if (hasLight) ...[
               const SizedBox(height: 12),
               _buildActionCard('Light', Icons.sunny,
                 isOn: isLightOn,
-                onToggle: () => svc.updateLightState(deviceId, !isLightOn)),
+                onToggle: offline ? null : () => svc.updateLightState(deviceId, !isLightOn)),
             ],
             const SizedBox(height: 24),
             Row(
@@ -559,7 +574,7 @@ class _AutomationTabState extends State<AutomationTab> {
   }
 
   // M3 toggle tile: primary when the actuator is on, a tonal surface when off
-  Widget _buildActionCard(String title, IconData icon, {required bool isOn, required VoidCallback onToggle}) {
+  Widget _buildActionCard(String title, IconData icon, {required bool isOn, required VoidCallback? onToggle}) {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: 110,

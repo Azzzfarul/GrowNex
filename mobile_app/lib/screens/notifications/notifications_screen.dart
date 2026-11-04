@@ -24,8 +24,10 @@ class NotificationsScreen extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final app = AppColors.of(context);
     switch (n.type) {
-      case 'actuator':
-        return (Icons.water_drop_outlined, cs.tertiaryContainer, cs.onTertiaryContainer);
+      case 'actuator':  // warn: a pump stopped at its safety limit, or a toggle the device never confirmed
+        return n.severity == 'warn'
+            ? (Icons.water_drop_outlined, app.warningContainer, app.onWarningContainer)
+            : (Icons.water_drop_outlined, cs.tertiaryContainer, cs.onTertiaryContainer);
       case 'daily':
         return (Icons.nightlight_outlined, cs.secondaryContainer, cs.onSecondaryContainer);
       default:

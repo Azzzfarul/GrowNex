@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/ui/Icon'
+import TextField from '../components/ui/TextField'
+import AuthLayout from '../components/layout/AuthLayout'
 
 export default function RegisterPage() {
   const { register } = useAuth()
@@ -52,81 +54,25 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-container flex items-center justify-center p-4">
-      <div className="card w-full max-w-sm p-8">
-        <div className="flex items-center gap-2 mb-8">
-          <Icon name="eco" filled className="text-primary" size={32} />
-          <span className="text-title-lg text-on-surface">GrowNex</span>
+    <AuthLayout title="Create your account" subtitle="Monitor plants, analytics and connected devices.">
+      {authError && <p className="banner banner-error mb-6"><Icon name="error" />{authError}</p>}
+
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        <TextField label="Username" value={username} onChange={(e) => setUsername(e.target.value)}
+          placeholder="Your username" error={errors.username} autoComplete="username" autoFocus />
+        <TextField type="email" label="Email" value={email} onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com" error={errors.email} autoComplete="email" />
+        <div className="grid gap-5 sm:grid-cols-2">
+          <TextField type="password" label="Password" value={password} onChange={(e) => setPassword(e.target.value)}
+            placeholder="Choose a password" error={errors.password} support="6+ characters" autoComplete="new-password" />
+          <TextField type="password" label="Confirm" value={confirm} onChange={(e) => setConfirm(e.target.value)}
+            placeholder="Repeat your password" error={errors.confirm} autoComplete="new-password" />
         </div>
-
-        <h1 className="text-headline-sm text-on-surface mb-1">Create account</h1>
-        <p className="text-sm text-on-surface-variant mb-6">Register to monitor plants, analytics, and connected devices.</p>
-
-        {authError && (
-          <p className="text-sm text-on-error-container bg-error-container rounded-lg px-3 py-2 mb-4">{authError}</p>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Username</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="field w-full"
-              placeholder="Your username"
-            />
-            {errors.username && <p className="text-xs text-error mt-1">{errors.username}</p>}
-          </div>
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="field w-full"
-              placeholder="you@example.com"
-            />
-            {errors.email && <p className="text-xs text-error mt-1">{errors.email}</p>}
-          </div>
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="field w-full"
-              placeholder="Choose a password"
-            />
-            {errors.password && <p className="text-xs text-error mt-1">{errors.password}</p>}
-          </div>
-          <div>
-            <label className="block text-label-lg text-on-surface-variant mb-1">Confirm password</label>
-            <input
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              className="field w-full"
-              placeholder="Repeat your password"
-            />
-            {errors.confirm && <p className="text-xs text-error mt-1">{errors.confirm}</p>}
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-filled w-full"
-          >
-            {loading ? 'Creating account…' : 'Register'}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-on-surface-variant">
-          Already have an account?{' '}
-          <Link to="/login" className="text-primary hover:underline font-medium">
-            Login
-          </Link>
-        </p>
-      </div>
-    </div>
+        <div className="flex items-center justify-between pt-4">
+          <Link to="/login" className="btn-text -ml-3">Sign in instead</Link>
+          <button type="submit" disabled={loading} className="btn-filled">{loading ? 'Creating account…' : 'Create account'}</button>
+        </div>
+      </form>
+    </AuthLayout>
   )
 }

@@ -39,6 +39,8 @@ const char* MQTT_PASS   = MQTT_PASSWORD;
                                         // flushes the stale frame left in the buffer since last capture
 
 const unsigned long RETRY_INTERVAL_MS = 5UL * 60 * 1000;  // after a failed capture/publish
+const unsigned long RETRY_MS          = 10000;            // WiFi / MQTT reconnect attempt gap
+const unsigned long REBOOT_AFTER_MS   = 10UL * 60000;     // offline this long → restart (unwedges the WiFi/TLS stack)
 const size_t        PUBLISH_CHUNK     = 4096;
 
 // ─── AI-Thinker ESP32-CAM pin map ─────────────────────────────────────────────
@@ -67,6 +69,8 @@ String TOPIC_CAMERA;
 
 String        lastUploadedBucket;   // 4h bucket of the last successful publish
 unsigned long lastAttempt = 0;
+unsigned long lastRetry   = 0;
+unsigned long lastOnline  = 0;
 
 WiFiClientSecure wifiClient;
 PubSubClient     mqtt(wifiClient);
@@ -177,35 +181,20 @@ bool currentBucket(char* out, size_t len) {
 }
 
 // ─── Connection ───────────────────────────────────────────────────────────────
-void connectWiFi() {
-  Serial.printf("Connecting to %s", SSID);
-  WiFi.begin(SSID, PASSWORD);
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED) {
-    if (millis() - start > 30000) {
-      Serial.println("\nWiFi timeout — restarting");
-      ESP.restart();
-    }
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.printf("\nWiFi OK — IP: %s\n", WiFi.localIP().toString().c_str());
-}
-
+// Single attempts only; loop() retries every RETRY_MS so nothing blocks forever.
 void connectMQTT() {
-  while (!mqtt.connected()) {
-    Serial.printf("Connecting to MQTT %s ...\n", MQTT_BROKER);
-    bool ok = mqtt.connect(
-      DEVICE_ID.c_str(), MQTT_USER, MQTT_PASS,
-      TOPIC_STATUS.c_str(), 1, true, "offline"
-    );
-    if (ok) {
-      mqtt.publish(TOPIC_STATUS.c_str(), "online", true);
-      Serial.printf("MQTT OK — device: %s\n", DEVICE_ID.c_str());
-    } else {
-      Serial.printf("MQTT failed (rc=%d), retry in 3s\n", mqtt.state());
-      delay(3000);
-    }
+  Serial.printf("Connecting to MQTT %s ...\n", MQTT_BROKER);
+  bool ok = mqtt.connect(
+    DEVICE_ID.c_str(), MQTT_USER, MQTT_PASS,
+    TOPIC_STATUS.c_str(), 1, true, "offline"
+  );
+  if (ok) {
+    mqtt.publish(TOPIC_STATUS.c_str(), "online", true);
+    Serial.printf("MQTT OK — device: %s\n", DEVICE_ID.c_str());
+    // (Re)start NTP now that the network is up: until it syncs there's no 4-hour bucket to shoot.
+    if (time(nullptr) < 1700000000) configTime(0, 0, "pool.ntp.org", "time.google.com");  // UTC — buckets are UTC
+  } else {
+    Serial.printf("MQTT failed (rc=%d), retrying\n", mqtt.state());
   }
 }
 
@@ -241,14 +230,24 @@ void setup() {
   mqtt.setKeepAlive(30);
   mqtt.setSocketTimeout(30);
 
-  connectWiFi();
-  configTime(0, 0, "pool.ntp.org", "time.google.com");  // UTC — buckets are UTC
-  connectMQTT();
+  Serial.printf("Connecting to %s\n", SSID);
+  WiFi.begin(SSID, PASSWORD);  // non-blocking; loop() connects MQTT once WiFi is up
 }
 
 void loop() {
-  if (WiFi.status() != WL_CONNECTED) connectWiFi();
-  if (!mqtt.connected())             connectMQTT();
+  unsigned long now = millis();
+  bool wifiUp = WiFi.status() == WL_CONNECTED;
+
+  if (!wifiUp || !mqtt.connected()) {
+    if (now - lastOnline >= REBOOT_AFTER_MS) { Serial.println("Offline too long — restarting"); ESP.restart(); }
+    if (now - lastRetry >= RETRY_MS) {
+      lastRetry = now;
+      if (wifiUp) connectMQTT();
+      else        WiFi.reconnect();  // the core's auto-reconnect gives up for good after e.g. "AP not found"
+    }
+    return;  // no photo while offline: a failed attempt would start the 5-minute retry wait
+  }
+  lastOnline = now;
   mqtt.loop();
 
   char bucket[16];
