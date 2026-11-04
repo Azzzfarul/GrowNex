@@ -399,6 +399,8 @@ class _AutomationTabState extends State<AutomationTab> {
         final isWaterOn  = device?.irrigationActive  ?? false;
         final isFertOn   = device?.fertilizerActive  ?? false;
         final isLightOn  = device?.lightActive        ?? false;
+        // An offline device can't take a toggle now; it would fire whenever the device reconnects, maybe hours later.
+        final offline    = device?.status == 'offline';
         final deviceId   = widget.zone.deviceId!;
         final svc        = DeviceService();
 
@@ -406,28 +408,33 @@ class _AutomationTabState extends State<AutomationTab> {
           padding: const EdgeInsets.all(20),
           children: [
             Text('Manual controls', style: tt.titleMedium),
+            if (offline) ...[
+              const SizedBox(height: 4),
+              Text('Device offline. Everything is off until it reconnects, then these settings resume.',
+                style: tt.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
             const SizedBox(height: 12),
             if (hasFert)
               Row(
                 children: [
                   Expanded(child: _buildActionCard('Water', Icons.water_drop,
                     isOn: isWaterOn,
-                    onToggle: () => svc.updateIrrigationState(deviceId, !isWaterOn))),
+                    onToggle: offline ? null : () => svc.updateIrrigationState(deviceId, !isWaterOn))),
                   const SizedBox(width: 12),
                   Expanded(child: _buildActionCard('Fertilize', Icons.grass,
                     isOn: isFertOn,
-                    onToggle: () => svc.updateFertilizerState(deviceId, !isFertOn))),
+                    onToggle: offline ? null : () => svc.updateFertilizerState(deviceId, !isFertOn))),
                 ],
               )
             else
               _buildActionCard('Water', Icons.water_drop,
                 isOn: isWaterOn,
-                onToggle: () => svc.updateIrrigationState(deviceId, !isWaterOn)),
+                onToggle: offline ? null : () => svc.updateIrrigationState(deviceId, !isWaterOn)),
             if (hasLight) ...[
               const SizedBox(height: 12),
               _buildActionCard('Light', Icons.sunny,
                 isOn: isLightOn,
-                onToggle: () => svc.updateLightState(deviceId, !isLightOn)),
+                onToggle: offline ? null : () => svc.updateLightState(deviceId, !isLightOn)),
             ],
             const SizedBox(height: 24),
             Row(
@@ -559,7 +566,7 @@ class _AutomationTabState extends State<AutomationTab> {
   }
 
   // M3 toggle tile: primary when the actuator is on, a tonal surface when off
-  Widget _buildActionCard(String title, IconData icon, {required bool isOn, required VoidCallback onToggle}) {
+  Widget _buildActionCard(String title, IconData icon, {required bool isOn, required VoidCallback? onToggle}) {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: 110,

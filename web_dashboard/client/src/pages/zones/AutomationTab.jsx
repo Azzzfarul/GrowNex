@@ -70,6 +70,8 @@ export default function AutomationTab({ zone }) {
   const waterOn  = device?.irrigationActive    ?? false
   const fertOn   = device?.fertilizerActive    ?? false
   const lightOn  = device?.lightActive         ?? false
+  // An offline device can't take a toggle now; it would fire whenever the device reconnects, maybe hours later.
+  const offline  = device?.status === 'offline'
 
   const devRef = zone.deviceId ? doc(db, 'devices', zone.deviceId) : null
 
@@ -221,14 +223,17 @@ export default function AutomationTab({ zone }) {
         {/* Manual controls */}
         <section className="card p-5">
           <h3 className="card-title mb-1">Manual controls</h3>
-          <p className="text-body-sm text-on-surface-variant mb-4">Turn an actuator on or off right now.</p>
+          <p className="text-body-sm text-on-surface-variant mb-4">
+            {offline ? 'Device offline. Everything is off until it reconnects, then these settings resume.' : 'Turn an actuator on or off right now.'}
+          </p>
           <div className="space-y-2">
             {actuators.map(({ label, icon, on, onToggle }) => (
               <button
                 key={label}
                 onClick={onToggle}
+                disabled={offline}
                 aria-pressed={on}
-                className={`state-layer w-full h-16 rounded-2xl px-4 flex items-center gap-4 text-left transition-colors duration-200 ${
+                className={`state-layer w-full h-16 rounded-2xl px-4 flex items-center gap-4 text-left transition-colors duration-200 disabled:opacity-[.38] disabled:cursor-not-allowed ${
                   on ? 'bg-primary text-on-primary shadow-elevation-1' : 'bg-surface-container-highest text-on-surface'
                 }`}
               >
