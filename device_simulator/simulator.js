@@ -197,6 +197,8 @@ const sim = {
 // Same pump safety limit as the firmware (Pump in firmware/src/main.cpp): a pump stops on its own this
 // long after its "on" command, then ignores "on" until an "off" arrives. The firmware keeps that latch
 // and the time run so far in flash, so both survive a power cut here too; the command itself doesn't.
+// Like the firmware, the saved run time is a checkpoint up to a minute ahead (capped at the limit), so
+// a power cut can only make a pump stop early.
 const pumps = {
   irrigation: { maxOnMs: (pumpLimitS ?? 20 * 60) * 1000, cmd: false, onSince: 0, timedOut: false, ranMs: 0 },
   fertilizer: { maxOnMs: (pumpLimitS ?? 40 * 60) * 1000, cmd: false, onSince: 0, timedOut: false, ranMs: 0 },
@@ -288,8 +290,9 @@ function startSensor() {
       const on = cmd[`${name}State`]
       if (typeof on !== 'boolean') continue
       if (on && !p.cmd) {
-        p.onSince = Date.now() - p.ranMs  // after a power cut, carry on from the time run
+        p.onSince = Date.now() - p.ranMs  // after a power cut, carry on from the checkpoint
         if (p.ranMs >= p.maxOnMs) p.timedOut = true  // already at its limit: latch before the relay is set
+        else p.ranMs = Math.min(p.ranMs + 60000, p.maxOnMs)
       }
       if (!on) { p.timedOut = false; p.ranMs = 0 }      // only an explicit "off" releases the latch
       p.cmd = on
@@ -303,7 +306,12 @@ function startSensor() {
   setInterval(publishReading, intervalMs)
   setInterval(() => {
     for (const [name, p] of Object.entries(pumps)) {
-      if (!p.cmd || p.timedOut || Date.now() - p.onSince < p.maxOnMs) continue
+      if (!p.cmd || p.timedOut) continue
+      const ran = Date.now() - p.onSince
+      if (ran < p.maxOnMs) {
+        if (ran >= p.ranMs) p.ranMs = Math.min(ran + 60000, p.maxOnMs)
+        continue
+      }
       p.timedOut = true
       applyRelays(sensorClient.connected)
       if (sensorClient.connected) publishState()
@@ -412,10 +420,7 @@ if (process.stdin.isTTY) console.log(`\n${COMMANDS}\n`)
       case 'offline':
         // A board without power has every relay off, and boots again afterwards.
         lightCmd = false
-        for (const p of Object.values(pumps)) {  // the command is lost with the power; the latch and run time aren't
-          if (p.cmd) p.ranMs = Date.now() - p.onSince
-          p.cmd = false
-        }
+        for (const p of Object.values(pumps)) p.cmd = false  // lost with the power; the latch and checkpoint aren't
         applyRelays(false)
         camera?.reboot()
         clients().forEach(([c, id]) => { powerOff(c); log(id, 'power cut — broker sends the last-will "offline"') })

@@ -162,7 +162,7 @@ test('a pump past its safety limit stops and ignores "on", even after a power cu
   }
 })
 
-test('a power cut doesn\'t restart a pump\'s safety countdown', async () => {
+test('a power cut can only shorten a pump\'s run, never restart its countdown', async () => {
   const ID = 'ESP32-TEST00000003'
   const stateTopic = `grownex/${ID}/actuators/state`
   const p = runSim(['--node', 'sensor', '--id', ID, '--pump-limit', '3'])
@@ -171,14 +171,16 @@ test('a power cut doesn\'t restart a pump\'s safety countdown', async () => {
     const t = Date.now()
     await watcher.publishAsync(`grownex/${ID}/actuators/command`, JSON.stringify({ irrigationState: true }), { retain: true })
     await waitFor(() => find(t, stateTopic, m => json(m).irrigationState), 'pump on')
-    await sleep(2000)
+    await sleep(1000)
     const t2 = Date.now()
     p.stdin.write('offline\n')
     await waitFor(() => find(t2, `grownex/${ID}/status`, m => m.payload.toString() === 'offline'), 'power cut')
     p.stdin.write('online\n')
-    const back = await waitFor(() => find(t2, stateTopic, m => json(m).irrigationState), 'on again from the retained command')
-    const stopped = await waitFor(() => find(back.at, stateTopic, m => json(m).irrigationTimedOut), 'stopped at the limit')
-    assert.ok(stopped.at - back.at < 2000, `stopped ${stopped.at - back.at} ms after power-up: ~1 s was left, a restarted countdown is 3 s`)
+    // The checkpoint runs a minute ahead (capped at the 3 s limit), so the retained "on" finds it at the limit
+    const back = await waitFor(() => find(t2, stateTopic, m => json(m).irrigationTimedOut), 'latched after power-up')
+    assert.equal(json(back).irrigationState, false)
+    await sleep(500)
+    assert.ok(!find(t2, stateTopic, m => json(m).irrigationState), 'the pump never ran again after the power cut')
   } finally {
     p.kill()
     await p.exited

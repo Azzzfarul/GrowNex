@@ -138,6 +138,8 @@ void commandPump(Pump& p, JsonVariantConst v) {
   if (on && !p.cmd) {
     p.onSince = millis() - p.savedMs;
     if (p.savedMs >= p.maxOnMs) setTimedOut(p, true);  // already at its limit: latch before the relay is touched
+    // and the next checkpoint before it's energized, so a brownout as the pump starts still advances it
+    else saveRan(p, min(p.savedMs + 60000UL, p.maxOnMs));
   }
   if (!on) { setTimedOut(p, false); saveRan(p, 0); }  // only an explicit "off" releases the latch
   p.cmd = on;

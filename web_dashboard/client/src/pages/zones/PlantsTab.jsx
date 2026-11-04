@@ -458,7 +458,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
       onClose={onClose}
       busy={deleting || showDelConfirm || loading}
       headerActions={
-        <button onClick={() => setShowDelConfirm(true)} className="icon-btn text-error" aria-label="Remove plant" data-tip="Remove plant">
+        <button onClick={() => setShowDelConfirm(true)} disabled={loading || deleting || showDelConfirm} className="icon-btn text-error" aria-label="Remove plant" data-tip="Remove plant">
           <Icon name="delete" />
         </button>
       }
