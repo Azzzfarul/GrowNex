@@ -454,6 +454,20 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal((await notifs(users.alice.uid, 'threshold')).length, alerts)
   })
 
+  test('after a restart: a toggle made while the bridge was down is sent once', async () => {
+    const light = !(await docData('devices/ESP32-T1')).lightActive
+    await stopServer()
+    await db.doc('devices/ESP32-T1').update({ lightActive: light })  // the app writes intent; nobody publishes it
+    const t0 = Date.now()
+    await startServer()
+    await waitFor(() => commandsFor('ESP32-T1', t0).length, 'stale command re-sent')
+    await sleep(1000)
+    const sent = commandsFor('ESP32-T1', t0)
+    assert.equal(sent.length, 1, `sent once (got ${sent.length})`)
+    assert.equal(sent[0].state.lightState, light)
+    assert.equal(commands.filter(c => c.at >= t0).length, 1, 'devices already in sync get nothing')
+  })
+
   test('account deletion removes all of the user’s data and nobody else’s', async () => {
     const A = users.alice.uid
     await db.doc(`zones/${ids.zoneA}/aiCache/today`).set({ payload: {} })

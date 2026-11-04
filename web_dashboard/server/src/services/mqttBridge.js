@@ -378,6 +378,7 @@ function watchDeviceActuators() {
       })
       devicesListenerInitialized = true
       console.log(`[MQTT bridge] device actuator cache initialized (${actuatorCache.size} devices)`)
+      reconcileCommands()
       return
     }
 
@@ -408,6 +409,27 @@ function watchDeviceActuators() {
       }, DEBOUNCE_MS))
     })
   }, err => console.error('[MQTT bridge] devices listener stopped:', err.message))
+}
+
+// ─── Startup: re-send intent that changed while the bridge was down ──────────
+// Nothing publishes those changes, so the broker still holds an older retained command, which a
+// device applies on its next reconnect. On (re)subscribe the broker hands us every retained command:
+// compare each with the stored intent once the cache is loaded, and re-send the intent where they differ.
+// shortcut: a device that has never been sent a command has none retained, so it isn't checked.
+const retainedCommands = new Map()  // Map<deviceId, command> waiting for the cache
+
+function reconcileCommands() {
+  if (!devicesListenerInitialized) return  // runs again once the cache is loaded
+  for (const [deviceId, cmd] of retainedCommands) {
+    retainedCommands.delete(deviceId)
+    const want = actuatorCache.get(deviceId)
+    if (!want || !cmd || typeof cmd !== 'object') continue
+    if (cmd.irrigationState === want.irrigationActive &&
+        cmd.fertilizerState === want.fertilizerActive &&
+        cmd.lightState      === want.lightActive) continue
+    console.log(`[MQTT bridge] ${deviceId}: broker's command is stale, re-sending stored intent`)
+    publishCommand(deviceId, want)
+  }
 }
 
 // ─── Schedule-based automation ────────────────────────────────────────────────
@@ -595,6 +617,7 @@ export function init() {
     client.subscribe('grownex/+/actuators/state')
     client.subscribe('grownex/+/status')
     client.subscribe('grownex/+/camera')
+    client.subscribe('grownex/+/actuators/command')  // only its retained copies are used: reconcileCommands
   })
 
   // Register Firestore listeners once — outside connect to prevent stacking on reconnect
@@ -614,7 +637,7 @@ export function init() {
     console.warn(`[MQTT bridge] invalid DAILY_SUMMARY_CRON: "${summaryCron}"`)
   }
 
-  client.on('message', (topic, buf) => {
+  client.on('message', (topic, buf, packet) => {
     const parts    = topic.split('/')   // ['grownex', deviceId, ...]
     const deviceId = parts[1]
 
@@ -645,6 +668,9 @@ export function init() {
     } else if (parts[2] === 'actuators' && parts[3] === 'state') {
       enqueue(deviceQueues, deviceId, () => handleActuatorState(deviceId, payload))
         .catch(e => console.error(`[MQTT bridge] ${deviceId} actuator state failed:`, e.message))
+    } else if (parts[2] === 'actuators' && parts[3] === 'command' && packet.retain) {
+      retainedCommands.set(deviceId, payload)  // live echoes of our own publishes aren't retained-flagged
+      reconcileCommands()
     }
   })
 
