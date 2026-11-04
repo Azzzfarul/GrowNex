@@ -316,6 +316,66 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal((await docData('devices/ESP32-T1')).status, 'online')
   })
 
+  const T1_STATE = 'grownex/ESP32-T1/actuators/state'
+  const t1State = (s = {}) => ({ deviceId: 'ESP32-T1', lightState: false, fertilizerState: false, irrigationState: false, ...s })
+  const warnings = async () => (await notifs(users.alice.uid, 'actuator')).filter(n => n.severity === 'warn')
+
+  test('a pump the device stopped at its safety limit is switched off in the app, with one warning', async () => {
+    const t0 = Date.now()
+    await db.doc('devices/ESP32-T1').update({ irrigationActive: true })  // e.g. a manual toggle left on
+    await waitFor(() => commandsFor('ESP32-T1', t0).some(c => c.state.irrigationState), 'on command')
+    const before = (await warnings()).length
+
+    const t1 = Date.now()
+    await publish(T1_STATE, t1State({ irrigationTimedOut: true }), { retain: true })
+    await waitFor(async () => (await docData('devices/ESP32-T1')).irrigationActive === false, 'intent switched off')
+    await waitFor(() => commandsFor('ESP32-T1', t1).some(c => !c.state.irrigationState), '"off" command (releases the latch)')
+    const t2 = Date.now()
+    await publish(T1_STATE, t1State({ irrigationTimedOut: true }), { retain: true })  // still latched: the "off" didn't land
+    await waitFor(() => commandsFor('ESP32-T1', t2).some(c => !c.state.irrigationState), '"off" re-sent to release the latch')
+    await sleep(1000)
+    const now = await warnings()
+    assert.equal(now.length, before + 1, 'warned once')
+    assert.ok(now.some(n => n.title === 'Irrigation stopped at its safety limit' && n.zoneId === ids.zoneA))
+    await publish(T1_STATE, t1State(), { retain: true })  // the device took the "off"
+  })
+
+  test('the safety stop switches off the device that reported, even if its zone points elsewhere', async () => {
+    await publish('grownex/ESP32-T3/status', 'online', { retain: true })
+    await waitFor(async () => (await docData('devices/ESP32-T3'))?.status === 'online', 'T3 registered')
+    // A stale link (zoneA's relay node is T1): the stop must not act on T1 or warn on every report
+    await db.doc('devices/ESP32-T3').update({ assignedZoneId: ids.zoneA, irrigationActive: true })
+    const t0 = Date.now()
+    await publish('grownex/ESP32-T3/actuators/state',
+      { deviceId: 'ESP32-T3', lightState: false, fertilizerState: false, irrigationState: false, irrigationTimedOut: true }, { retain: true })
+    await waitFor(async () => (await docData('devices/ESP32-T3')).irrigationActive === false, "T3's intent switched off")
+    await waitFor(() => commandsFor('ESP32-T3', t0).some(c => !c.state.irrigationState), 'T3 got its "off"')
+    assert.equal(commandsFor('ESP32-T1', t0).length, 0, 'T1 untouched')
+    await publish('grownex/ESP32-T3/actuators/state',  // the device took the "off" and released its latch
+      { deviceId: 'ESP32-T3', lightState: false, fertilizerState: false, irrigationState: false }, { retain: true })
+  })
+
+  test('a manual "on" the device never confirms is switched back off, with a warning; confirmed ones stay', async () => {
+    const dev = db.doc('devices/ESP32-T1')
+    const before = (await warnings()).length
+    // The device dropped off silently, so the app still shows it online: it confirms the light
+    // (sent just before) but never gets the fertilizer.
+    const t0 = Date.now()
+    await dev.update({ lightActive: true, fertilizerActive: true })
+    await waitFor(() => commandsFor('ESP32-T1', t0).some(c => c.state.fertilizerState), 'command sent')
+    await publish(T1_STATE, t1State({ lightState: true }), { retain: true })
+    await waitFor(async () => (await docData('devices/ESP32-T1')).fertilizerActive === false, 'unconfirmed "on" switched back off', 20000)
+    assert.equal((await docData('devices/ESP32-T1')).lightActive, true, 'the confirmed light stays on')
+    assert.deepEqual(commandsFor('ESP32-T1', t0).at(-1).state, { irrigationState: false, fertilizerState: false, lightState: true },
+      'the retained command a reconnecting device gets no longer feeds')
+    const now = await warnings()
+    assert.equal(now.length, before + 1)
+    assert.ok(now.some(n => n.title === "Fertilizer didn't turn on"))
+
+    await dev.update({ lightActive: false })  // back in sync for the next tests
+    await publish(T1_STATE, t1State(), { retain: true })
+  })
+
   test('camera JPEGs land in Storage + the snapshots feed; junk is rejected', async () => {
     await publish('grownex/ESP32CAM-T1/camera', Buffer.from('not a jpeg'))
     await waitForLog(/rejected camera payload/)
@@ -441,7 +501,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await stopServer()
     await startServer()
     await sleep(1000)
-    assert.equal(commands.length, before, 'startup publishes nothing')
+    assert.equal(commands.length, before, `startup publishes nothing (got ${JSON.stringify(commands.slice(before))})`)
 
     // A failed DHT11 read right after the restart keeps the stored status, not just the in-memory one
     await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture1: 60, soilMoisture2: 64 })
@@ -465,7 +525,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     const sent = commandsFor('ESP32-T1', t0)
     assert.equal(sent.length, 1, `sent once (got ${sent.length})`)
     assert.equal(sent[0].state.lightState, light)
-    assert.equal(commands.filter(c => c.at >= t0).length, 1, 'devices already in sync get nothing')
+    assert.equal(commands.filter(c => c.at >= t0).length, 1, `devices already in sync get nothing (got ${JSON.stringify(commands.filter(c => c.at >= t0))})`)
   })
 
   test('account deletion removes all of the user’s data and nobody else’s', async () => {

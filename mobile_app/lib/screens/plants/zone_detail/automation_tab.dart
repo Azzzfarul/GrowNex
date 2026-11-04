@@ -12,6 +12,7 @@ import '../../../services/firestore/device_service.dart';
 final _timeRe  = RegExp(r'^([01]?\d|2[0-3]):[0-5]\d$');
 final _lightRe = RegExp(r'^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$');
 final _fertRe  = RegExp(r'^(MON|TUE|WED|THU|FRI|SAT|SUN) ([01]?\d|2[0-3]):[0-5]\d$');
+const _maxWateringS = 900, _maxFertilizingS = 1800;  // validatePlan's caps (server/src/services/aiAnalytics.js)
 
 class AutomationTab extends StatefulWidget {
   final Zone zone;
@@ -148,9 +149,16 @@ class _AutomationTabState extends State<AutomationTab> {
     // Only check fields the user changed: a hidden field (e.g. lighting without a light
     // module) holding an old value must not block saving the others.
     bool bad(String? v, String saved, RegExp re) => v != null && v != saved.trim() && !re.hasMatch(v);
+    bool tooLong(TextEditingController c, String saved, int max) {
+      final v = c.text.trim(), n = int.tryParse(v);
+      return v.isNotEmpty && v != saved.trim() && !(n != null && n > 0 && n <= max);
+    }
     final error = bad(ws, _savedWaterSchedule, _timeRe) ? 'Watering time must look like 07:00 (24-hour).'
         : bad(ls, _savedLightSchedule, _lightRe) ? 'Lighting schedule must look like 08:00–18:00.'
         : bad(fs, _savedFertSchedule, _fertRe) ? 'Fertilizing schedule must look like MON 06:00.'
+        // The board stops a pump by itself after 20 / 40 min (firmware safety limit), so runs stay well inside it.
+        : tooLong(_wateringDurationCtrl, _savedWaterDuration, _maxWateringS) ? 'Watering duration must be 1 to $_maxWateringS seconds.'
+        : tooLong(_fertilizingDurationCtrl, _savedFertDuration, _maxFertilizingS) ? 'Fertilizing duration must be 1 to $_maxFertilizingS seconds.'
         : null;
     if (error != null) return _snack(error);
 

@@ -4,6 +4,7 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <DHT.h>
+#include <Preferences.h>
 
 // ─── Credentials ──────────────────────────────────────────────────────────────
 // WiFi/MQTT credentials live in include/secrets.h (gitignored).
@@ -60,9 +61,29 @@ String TOPIC_STATUS;
 String TOPIC_ACTUATOR_STATE;
 String TOPIC_ACTUATOR_CMD;
 
+// What the relays are doing now (reported as the actuator state). Only on while online and commanded.
 bool lightState      = false;
 bool fertilizerState = false;
 bool irrigationState = false;
+
+// Pump safety limit. The bridge's "off" can be lost (server restart mid-cycle, a manual toggle left on),
+// so each pump stops on its own this long after its "on" command, counting time offline too. It then
+// ignores "on" until an "off" arrives. The latch and the time run so far are kept in flash, so a reboot
+// (say, a brownout each time the pump starts) can neither restart the pump nor restart its countdown.
+// Longer than the longest runs the app allows (watering 15 min, fertilizing 30 min).
+struct Pump {
+  const char*   name;      // also its latch's flash key and the "<name>TimedOut" field in the state
+  const char*   ranKey;    // flash key of the time run so far
+  unsigned long maxOnMs;
+  bool          cmd;       // last command
+  unsigned long onSince;   // millis() at which the current "on" would have started
+  bool          timedOut;
+  unsigned long savedMs;   // run time last written to flash
+};
+Pump irrigation = {"irrigation", "irrigationRan", 20UL * 60000, false, 0, false, 0};
+Pump fertilizer = {"fertilizer", "fertilizerRan", 40UL * 60000, false, 0, false, 0};
+bool lightCmd = false;
+Preferences prefs;
 
 unsigned long lastPublish = 0;
 unsigned long lastRetry   = 0;
@@ -73,7 +94,12 @@ PubSubClient     mqtt(wifiClient);
 DHT          dht(DHT_PIN, DHT_TYPE);
 
 // ─── Actuator helpers ─────────────────────────────────────────────────────────
+// Offline, nothing may run: no command (including the bridge's auto-off) can reach us.
 void applyActuators() {
+  bool live = WiFi.status() == WL_CONNECTED && mqtt.connected();
+  lightState      = live && lightCmd;
+  fertilizerState = live && fertilizer.cmd && !fertilizer.timedOut;
+  irrigationState = live && irrigation.cmd && !irrigation.timedOut;
   digitalWrite(PIN_LIGHT,      lightState      ? RELAY_ON : RELAY_OFF);
   digitalWrite(PIN_FERTILIZER, fertilizerState ? RELAY_ON : RELAY_OFF);
   digitalWrite(PIN_IRRIGATION, irrigationState ? RELAY_ON : RELAY_OFF);
@@ -85,9 +111,46 @@ void publishActuatorState() {
   doc["lightState"]      = lightState;
   doc["fertilizerState"] = fertilizerState;
   doc["irrigationState"] = irrigationState;
-  char buf[128];
+  if (fertilizer.timedOut) doc["fertilizerTimedOut"] = true;  // the bridge then switches its intent off
+  if (irrigation.timedOut) doc["irrigationTimedOut"] = true;
+  char buf[192];  // max payload ≈ 152 bytes
   serializeJson(doc, buf);
   mqtt.publish(TOPIC_ACTUATOR_STATE.c_str(), buf, true);
+}
+
+void setTimedOut(Pump& p, bool v) {
+  if (p.timedOut == v) return;
+  p.timedOut = v;
+  prefs.putBool(p.name, v);
+}
+
+void saveRan(Pump& p, unsigned long ms) {
+  if (p.savedMs == ms) return;
+  p.savedMs = ms;
+  prefs.putULong(p.ranKey, ms);
+}
+
+void commandPump(Pump& p, JsonVariantConst v) {
+  if (!v.is<bool>()) return;
+  bool on = v.as<bool>();
+  // An "on" right after boot carries on from the time already run: it's the retained command the
+  // pump was running before the reboot (or, rarely, a new one, which then just stops sooner).
+  if (on && !p.cmd) p.onSince = millis() - p.savedMs;
+  if (!on) { setTimedOut(p, false); saveRan(p, 0); }  // only an explicit "off" releases the latch
+  p.cmd = on;
+}
+
+void checkPumpLimit(Pump& p) {
+  if (!p.cmd || p.timedOut) return;
+  unsigned long ran = millis() - p.onSince;
+  if (ran < p.maxOnMs) {
+    if (ran - p.savedMs >= 60000) saveRan(p, ran);  // at most one flash write a minute
+    return;
+  }
+  setTimedOut(p, true);
+  applyActuators();
+  publishActuatorState();  // if offline, the next reading after reconnecting re-sends it
+  Serial.printf("[SAFE] %s on too long — off until the next \"off\" command\n", p.name);
 }
 
 // ─── MQTT incoming command ────────────────────────────────────────────────────
@@ -95,9 +158,9 @@ void onMessage(char* topic, byte* payload, unsigned int len) {
   JsonDocument doc;
   if (deserializeJson(doc, payload, len)) return;
 
-  if (doc["lightState"].is<bool>())      lightState      = doc["lightState"];
-  if (doc["fertilizerState"].is<bool>()) fertilizerState = doc["fertilizerState"];
-  if (doc["irrigationState"].is<bool>()) irrigationState = doc["irrigationState"];
+  if (doc["lightState"].is<bool>()) lightCmd = doc["lightState"];
+  commandPump(fertilizer, doc["fertilizerState"]);
+  commandPump(irrigation, doc["irrigationState"]);
 
   applyActuators();
   publishActuatorState();
@@ -171,8 +234,7 @@ void failSafe() {
   // and the reconnect re-delivers the retained command even if the TCP link survived a short WiFi blip.
   if (mqtt.connected()) wifiClient.stop();
   if (lightState || fertilizerState || irrigationState) {
-    lightState = fertilizerState = irrigationState = false;
-    applyActuators();
+    applyActuators();  // all off; the commands are kept, so the pump limits keep counting
     Serial.println("[SAFE] offline — all actuators off");
   }
 }
@@ -208,6 +270,12 @@ void setup() {
   digitalWrite(PIN_SPARE, RELAY_OFF);
   applyActuators();
 
+  prefs.begin("grownex");
+  for (Pump* p : {&irrigation, &fertilizer}) {
+    p->timedOut = prefs.getBool(p->name, false);
+    p->savedMs  = prefs.getULong(p->ranKey, 0);
+  }
+
   mqtt.setServer(MQTT_BROKER, MQTT_PORT);
   mqtt.setCallback(onMessage);
 
@@ -216,6 +284,9 @@ void setup() {
 }
 
 void loop() {
+  checkPumpLimit(irrigation);
+  checkPumpLimit(fertilizer);
+
   unsigned long now = millis();
   bool wifiUp = WiFi.status() == WL_CONNECTED;
 

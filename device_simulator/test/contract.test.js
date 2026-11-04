@@ -31,6 +31,8 @@ const runSim = (args, env = {}) => {
     env: { ...process.env, MQTT_HOST: '127.0.0.1', MQTT_PORT: String(port), MQTT_USERNAME: '', MQTT_PASSWORD: '', ...env },
   })
   p.exited = new Promise(r => p.once('exit', r))
+  p.out = ''
+  p.stdout.on('data', d => { p.out += d })
   p.stdin.on('error', () => {})  // writing to a crashed simulator must fail the test, not the runner
   return p
 }
@@ -121,6 +123,66 @@ test('power cut fires the last-will; power-on reboots like the firmware', async 
   // Boots with relays off, then the retained command switches irrigation back on
   await waitFor(() => find(t2, `grownex/${SENSOR}/actuators/state`, m => json(m).irrigationState), 'retained command re-applied')
   await waitFor(() => find(t2, `grownex/${CAM}/camera`), 'boot photo after power-on')
+})
+
+test('a pump past its safety limit stops and ignores "on", even after a power cut, until an "off"', async () => {
+  const ID = 'ESP32-TEST00000002'
+  const stateTopic = `grownex/${ID}/actuators/state`, cmdTopic = `grownex/${ID}/actuators/command`
+  const p = runSim(['--node', 'sensor', '--id', ID, '--pump-limit', '1'])
+  try {
+    await waitFor(() => find(0, `grownex/${ID}/status`, m => m.payload.toString() === 'online'), 'online')
+    const t = Date.now()
+    await watcher.publishAsync(cmdTopic, JSON.stringify({ irrigationState: true, lightState: true }), { retain: true })
+    await waitFor(() => find(t, stateTopic, m => json(m).irrigationState), 'pump on')
+    const stopped = await waitFor(() => find(t, stateTopic, m => json(m).irrigationTimedOut), 'stopped at the limit')
+    assert.deepEqual(json(stopped), { deviceId: ID, lightState: true, fertilizerState: false, irrigationState: false, irrigationTimedOut: true })
+
+    const t2 = Date.now()
+    p.stdin.write('offline\n')
+    await waitFor(() => find(t2, `grownex/${ID}/status`, m => m.payload.toString() === 'offline'), 'power cut')
+    p.stdin.write('online\n')
+    const rebooted = await waitFor(() => find(t2, stateTopic, m => json(m).lightState), 'retained command re-applied')
+    assert.equal(json(rebooted).irrigationState, false, 'the stale retained "on" must not restart the pump')
+    assert.equal(json(rebooted).irrigationTimedOut, true)
+
+    const t3 = Date.now()
+    await watcher.publishAsync(cmdTopic, JSON.stringify({ irrigationState: false }), { retain: true })
+    await waitFor(() => find(t3, stateTopic, m => !('irrigationTimedOut' in json(m))), 'an "off" releases the latch')
+    await watcher.publishAsync(cmdTopic, JSON.stringify({ irrigationState: true }), { retain: true })
+    await waitFor(() => find(t3, stateTopic, m => json(m).irrigationState), 'the next "on" works')
+
+    // A dropped connection (not a power cut) switches the relays off too, like the firmware's failSafe()
+    broker.clients[ID].close()
+    await waitFor(() => p.out.includes('connection lost — all relays off'), 'relays off on a lost connection')
+    const t4 = Date.now()
+    await waitFor(() => find(t4, stateTopic, m => json(m).lightState), 'reconnect re-applies the retained command')
+  } finally {
+    p.kill()
+    await p.exited
+  }
+})
+
+test('a power cut doesn\'t restart a pump\'s safety countdown', async () => {
+  const ID = 'ESP32-TEST00000003'
+  const stateTopic = `grownex/${ID}/actuators/state`
+  const p = runSim(['--node', 'sensor', '--id', ID, '--pump-limit', '3'])
+  try {
+    await waitFor(() => find(0, `grownex/${ID}/status`, m => m.payload.toString() === 'online'), 'online')
+    const t = Date.now()
+    await watcher.publishAsync(`grownex/${ID}/actuators/command`, JSON.stringify({ irrigationState: true }), { retain: true })
+    await waitFor(() => find(t, stateTopic, m => json(m).irrigationState), 'pump on')
+    await sleep(2000)
+    const t2 = Date.now()
+    p.stdin.write('offline\n')
+    await waitFor(() => find(t2, `grownex/${ID}/status`, m => m.payload.toString() === 'offline'), 'power cut')
+    p.stdin.write('online\n')
+    const back = await waitFor(() => find(t2, stateTopic, m => json(m).irrigationState), 'on again from the retained command')
+    const stopped = await waitFor(() => find(back.at, stateTopic, m => json(m).irrigationTimedOut), 'stopped at the limit')
+    assert.ok(stopped.at - back.at < 2000, `stopped ${stopped.at - back.at} ms after power-up: ~1 s was left, a restarted countdown is 3 s`)
+  } finally {
+    p.kill()
+    await p.exited
+  }
 })
 
 test('"forget" clears the retained messages and exits', async () => {

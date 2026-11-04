@@ -14,6 +14,7 @@ const TIME_RE  = /^([01]?\d|2[0-3]):[0-5]\d$/
 const LIGHT_RE = /^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$/
 const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN) ([01]?\d|2[0-3]):[0-5]\d$/
 const SAVE_FAILED = "Couldn't save the change. Please try again."
+const MAX_WATERING_S = 900, MAX_FERTILIZING_S = 1800  // validatePlan's caps (server/src/services/aiAnalytics.js)
 
 function ToggleSetting({ icon, title, subtitle, value, onChange, busy, children }) {
   return (
@@ -129,6 +130,10 @@ export default function AutomationTab({ zone }) {
     if (bad(ws, waterSchedOrig, TIME_RE))              return setConfigError('Watering time must look like 07:00 (24-hour).')
     if (bad(ls, lightSchedOrig, LIGHT_RE))             return setConfigError('Lighting schedule must look like 08:00–18:00.')
     if (bad(fs, fertSchedOrig.toUpperCase(), FERT_RE)) return setConfigError('Fertilizing schedule must look like MON 06:00.')
+    // The board stops a pump by itself after 20 / 40 min (firmware safety limit), so runs stay well inside it.
+    const tooLong = (v, orig, max) => v && v !== orig && !(parseInt(v) > 0 && parseInt(v) <= max)
+    if (tooLong(waterDuration, waterDurOrig, MAX_WATERING_S)) return setConfigError(`Watering duration must be 1 to ${MAX_WATERING_S} seconds.`)
+    if (tooLong(fertDuration, fertDurOrig, MAX_FERTILIZING_S)) return setConfigError(`Fertilizing duration must be 1 to ${MAX_FERTILIZING_S} seconds.`)
     setConfigError(null)
     try {
       await setDoc(doc(db, 'automationConfig', zone.id), {

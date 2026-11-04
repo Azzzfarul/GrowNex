@@ -25,6 +25,8 @@ const HELP = `Usage: npm start -- [options]
   --interval <seconds>        time between readings (default: 60, like the firmware)
   --slots 1-4                 soil probes to report (default: 1, like the firmware)
   --images <folder>           JPEGs for the camera (default: ./images)
+  --pump-limit <seconds>      pump safety limit for both pumps (default: 1200 irrigation,
+                              2400 fertilizer, like the firmware); shorten it to test it
   -h, --help
 
 Broker: MQTT_HOST / MQTT_USERNAME / MQTT_PASSWORD (and MQTT_PORT, default 8883) from the
@@ -53,6 +55,7 @@ try {
     interval: { type: 'string', default: '60' },
     slots: { type: 'string', default: '1' },
     images: { type: 'string', default: path.join(HERE, 'images') },
+    'pump-limit': { type: 'string' },
     help: { type: 'boolean', short: 'h' },
   } }).values
 } catch (e) {
@@ -68,6 +71,8 @@ if (!runSensor && !runCamera) fail(`--node must be sensor, camera or both\n\n${H
 // setInterval treats anything over 2^31-1 ms as 1 ms, which would flood the broker.
 if (!(intervalMs >= 1000 && intervalMs <= 2147483647)) fail('--interval must be 1 to 2147483 seconds')
 if (![1, 2, 3, 4].includes(slots)) fail('--slots must be 1, 2, 3 or 4')
+const pumpLimitS = opt['pump-limit'] === undefined ? null : Number(opt['pump-limit'])
+if (pumpLimitS !== null && !(pumpLimitS >= 1 && pumpLimitS <= 2147483)) fail('--pump-limit must be 1 to 2147483 seconds')
 
 function fail(msg) {
   console.error(msg)
@@ -189,6 +194,24 @@ const sim = {
   actuators: { lightState: false, fertilizerState: false, irrigationState: false },
 }
 
+// Same pump safety limit as the firmware (Pump in firmware/src/main.cpp): a pump stops on its own this
+// long after its "on" command, then ignores "on" until an "off" arrives. The firmware keeps that latch
+// and the time run so far in flash, so both survive a power cut here too; the command itself doesn't.
+const pumps = {
+  irrigation: { maxOnMs: (pumpLimitS ?? 20 * 60) * 1000, cmd: false, onSince: 0, timedOut: false, ranMs: 0 },
+  fertilizer: { maxOnMs: (pumpLimitS ?? 40 * 60) * 1000, cmd: false, onSince: 0, timedOut: false, ranMs: 0 },
+}
+let lightCmd = false
+
+// Like the firmware's applyActuators(): relays follow the last commands, but only while connected.
+function applyRelays(live) {
+  sim.actuators = {
+    lightState: live && lightCmd,
+    fertilizerState: live && pumps.fertilizer.cmd && !pumps.fertilizer.timedOut,
+    irrigationState: live && pumps.irrigation.cmd && !pumps.irrigation.timedOut,
+  }
+}
+
 const round1 = v => Math.round(v * 10) / 10
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 const noise = size => (Math.random() * 2 - 1) * size
@@ -225,7 +248,10 @@ function startSensor() {
   }
   sensorClient = connect(sensorId, { keepalive: 15 })  // PubSubClient default keep-alive
 
-  const publishState = () => sensorClient.publish(topics.state, JSON.stringify({ deviceId: sensorId, ...sim.actuators }), { retain: true })
+  const publishState = () => {
+    const timedOut = Object.entries(pumps).filter(([, p]) => p.timedOut).map(([name]) => [`${name}TimedOut`, true])
+    sensorClient.publish(topics.state, JSON.stringify({ deviceId: sensorId, ...sim.actuators, ...Object.fromEntries(timedOut) }), { retain: true })
+  }
 
   const publishReading = () => {
     if (!sensorClient.connected) return
@@ -235,6 +261,14 @@ function startSensor() {
     const soil = sim.moisture.map((_, i) => `soil${i + 1}=${r[`soilMoisture${i + 1}`]}%`).join(' ')
     log(sensorId, `sensors → temp=${r.temperature}°C humid=${r.humidity}% ${soil} light=${r.lightLevel}`)
   }
+
+  // Like the firmware's failSafe(): no connection, no relays, since no "off" could reach us. The
+  // commands are kept (so the pump limits keep counting); the retained command restores them.
+  sensorClient.on('close', () => {
+    if (!Object.values(sim.actuators).some(Boolean)) return
+    applyRelays(false)
+    log(sensorId, 'connection lost — all relays off')
+  })
 
   sensorClient.on('connect', () => {
     sensorClient.subscribe(topics.command)  // the retained last command arrives right away
@@ -249,15 +283,30 @@ function startSensor() {
     let cmd
     try { cmd = JSON.parse(buf.toString()) } catch { return }
     if (!cmd || typeof cmd !== 'object') return  // e.g. a retained `null`; the firmware ignores it too
-    for (const key of ['lightState', 'fertilizerState', 'irrigationState']) {
-      if (typeof cmd[key] === 'boolean') sim.actuators[key] = cmd[key]
+    if (typeof cmd.lightState === 'boolean') lightCmd = cmd.lightState
+    for (const [name, p] of Object.entries(pumps)) {
+      const on = cmd[`${name}State`]
+      if (typeof on !== 'boolean') continue
+      if (on && !p.cmd) p.onSince = Date.now() - p.ranMs  // after a power cut, carry on from the time run
+      if (!on) { p.timedOut = false; p.ranMs = 0 }      // only an explicit "off" releases the latch
+      p.cmd = on
     }
+    applyRelays(true)
     publishState()
     const a = sim.actuators
     log(sensorId, `cmd → light=${+a.lightState} fert=${+a.fertilizerState} irrig=${+a.irrigationState}`)
   })
 
   setInterval(publishReading, intervalMs)
+  setInterval(() => {
+    for (const [name, p] of Object.entries(pumps)) {
+      if (!p.cmd || p.timedOut || Date.now() - p.onSince < p.maxOnMs) continue
+      p.timedOut = true
+      applyRelays(sensorClient.connected)
+      if (sensorClient.connected) publishState()
+      log(sensorId, `${name} on too long — off until the next "off" command`)
+    }
+  }, 250).unref()
   return { publishReading }
 }
 
@@ -359,7 +408,12 @@ if (process.stdin.isTTY) console.log(`\n${COMMANDS}\n`)
       case 'photo': camera ? await camera.publishPhoto() : log('sim', 'no camera node running'); break
       case 'offline':
         // A board without power has every relay off, and boots again afterwards.
-        sim.actuators = { lightState: false, fertilizerState: false, irrigationState: false }
+        lightCmd = false
+        for (const p of Object.values(pumps)) {  // the command is lost with the power; the latch and run time aren't
+          if (p.cmd) p.ranMs = Date.now() - p.onSince
+          p.cmd = false
+        }
+        applyRelays(false)
         camera?.reboot()
         clients().forEach(([c, id]) => { powerOff(c); log(id, 'power cut — broker sends the last-will "offline"') })
         break
@@ -370,6 +424,7 @@ if (process.stdin.isTTY) console.log(`\n${COMMANDS}\n`)
       case 'online': clients().forEach(([c, id]) => { powerOn(c); log(id, 'power back on') }); break
       case 'state':
         console.log({ moisture: sim.moisture.map(round1), tempOffset: sim.tempOffset, ...sim.actuators,
+          pumpTimedOut: Object.fromEntries(Object.entries(pumps).map(([n, p]) => [n, p.timedOut])),
           connected: Object.fromEntries(clients().map(([c, id]) => [id, c.connected])) })
         break
       case 'help': console.log(COMMANDS); break
