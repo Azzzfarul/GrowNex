@@ -135,7 +135,10 @@ void commandPump(Pump& p, JsonVariantConst v) {
   bool on = v.as<bool>();
   // An "on" right after boot carries on from the time already run: it's the retained command the
   // pump was running before the reboot (or, rarely, a new one, which then just stops sooner).
-  if (on && !p.cmd) p.onSince = millis() - p.savedMs;
+  if (on && !p.cmd) {
+    p.onSince = millis() - p.savedMs;
+    if (p.savedMs >= p.maxOnMs) setTimedOut(p, true);  // already at its limit: latch before the relay is touched
+  }
   if (!on) { setTimedOut(p, false); saveRan(p, 0); }  // only an explicit "off" releases the latch
   p.cmd = on;
 }

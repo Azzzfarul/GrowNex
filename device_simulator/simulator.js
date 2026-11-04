@@ -287,7 +287,10 @@ function startSensor() {
     for (const [name, p] of Object.entries(pumps)) {
       const on = cmd[`${name}State`]
       if (typeof on !== 'boolean') continue
-      if (on && !p.cmd) p.onSince = Date.now() - p.ranMs  // after a power cut, carry on from the time run
+      if (on && !p.cmd) {
+        p.onSince = Date.now() - p.ranMs  // after a power cut, carry on from the time run
+        if (p.ranMs >= p.maxOnMs) p.timedOut = true  // already at its limit: latch before the relay is set
+      }
       if (!on) { p.timedOut = false; p.ranMs = 0 }      // only an explicit "off" releases the latch
       p.cmd = on
     }

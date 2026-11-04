@@ -456,7 +456,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
     <Sheet
       title="Plant details"
       onClose={onClose}
-      busy={deleting || showDelConfirm}
+      busy={deleting || showDelConfirm || loading}
       headerActions={
         <button onClick={() => setShowDelConfirm(true)} className="icon-btn text-error" aria-label="Remove plant" data-tip="Remove plant">
           <Icon name="delete" />
