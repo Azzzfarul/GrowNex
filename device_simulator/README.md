@@ -44,12 +44,12 @@ Options (after `npm start --`):
 |---|---|---|
 | `--node sensor\|camera\|both` | `both` | which boards to run |
 | `--interval <s>` | `60` | seconds between readings (try `5` while testing) |
-| `--slots 1-4` | `1` | soil probes to report (`soilMoisture1..4`); the real board has 1 |
+| `--slots 1-4` | `4` | soil probes to report (`soilMoisture1..4`), like the real board |
 | `--images <folder>` | `./images` | JPEGs the camera cycles through (max 1.5 MB each) |
 | `--id`, `--camera-id` | per computer | pick the IDs yourself (keep the `ESP32-` / `ESP32CAM-` prefixes) |
 | `--pump-limit <s>` | `1200` / `2400` | pump safety limit (irrigation / fertilizer, like the firmware); e.g. `60` to watch it trigger. A pump on that long stops by itself and ignores "on" until it gets an "off"; the app then shows it off with a *stopped at its safety limit* notification |
 
-Example: `npm start -- --interval 5 --slots 4`
+Example: `npm start -- --interval 5 --slots 2`
 
 ## Test scenarios
 

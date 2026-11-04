@@ -169,9 +169,11 @@ async function handleSensors(deviceId, payload) {
         cfg.wateringThreshold != null &&
         moisture != null &&
         moisture < cfg.wateringThreshold) {
-      const last = lastIrrTrigger.get(deviceId) ?? 0
+      // Also kept on the device doc, so a server restart doesn't water the same dry soil again right away.
+      const last = lastIrrTrigger.get(deviceId) ?? device.lastAutoWateringAt?.toMillis() ?? 0
       if (Date.now() - last > COOLDOWN_MS) {
         lastIrrTrigger.set(deviceId, Date.now())
+        await db.collection('devices').doc(deviceId).update({ lastAutoWateringAt: Timestamp.now() })
         // Like the cron jobs: the auto-off is scheduled even if the "on" reports an error — the
         // write may have committed anyway, and nothing else would ever switch the pump off.
         await fireActuator(assignedZoneId, 'irrigation', true)

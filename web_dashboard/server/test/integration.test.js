@@ -285,6 +285,14 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 40, soilMoisture2: 40 })
     await sleep(1500)
     assert.equal(commandsFor('ESP32-T1', t1).filter(c => c.state.irrigationState).length, 0, 'cooldown blocks re-trigger')
+
+    await stopServer()
+    await startServer()
+    const t2 = Date.now()
+    await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 40, soilMoisture2: 40 })
+    await waitForLog(/sensor write → zone/)
+    await sleep(1500)
+    assert.equal(commandsFor('ESP32-T1', t2).filter(c => c.state.irrigationState).length, 0, 'the cooldown survives a restart')
     await db.doc(`automationConfig/${ids.zoneA}`).set({ autoWateringEnabled: false }, { merge: true })
   })
 
