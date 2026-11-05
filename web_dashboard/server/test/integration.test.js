@@ -630,12 +630,16 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(await as('bob', 'devices/ESP32-T1', { method: 'PATCH', fields: { irrigationActive: bool(true) } }), 403, "switch alice's pump")
     assert.equal(await as('bob', `automationConfig/${ids.zoneA}`, { method: 'PATCH', fields: { wateringSchedule: str('07:00') } }), 403, "change alice's schedule")
     assert.equal(await upload('bob', `zonePhotos/${ids.zoneA}.jpg`), 403, "replace alice's zone photo")
-    const notifQuery = await fetch(`${FS}:runQuery`, {
-      method: 'POST', headers: { Authorization: `Bearer ${users.bob.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'notifications' }],
-        where: { fieldFilter: { field: { fieldPath: 'userId' }, op: 'EQUAL', value: str(users.alice.uid) } } } }),
-    })
-    assert.equal(notifQuery.status, 403, "list alice's notifications")
+    const list = (who, collectionId, userId) => fetch(`${FS}:runQuery`, {
+      method: 'POST', headers: { Authorization: `Bearer ${users[who].token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery: { from: [{ collectionId }],
+        ...(userId === undefined ? {} : { where: { fieldFilter: { field: { fieldPath: 'userId' }, op: 'EQUAL', value: str(userId) } } }) } }),
+    }).then(r => r.status)
+    assert.equal(await list('bob', 'notifications', users.alice.uid), 403, "list alice's notifications")
+    assert.equal(await list('bob', 'devices'), 403, 'list every board')
+    assert.equal(await list('bob', 'devices', users.alice.uid), 403, "list alice's boards")
+    assert.equal(await list('bob', 'devices', users.bob.uid), 200, 'list his own boards')
+    assert.equal(await list('bob', 'devices', ''), 200, 'list unclaimed boards')
     // ...not even through his own zone or board (the bridge acts on zones.deviceId / devices.assignedZoneId)
     assert.equal(await as('bob', 'zones?documentId=bob-zone', { method: 'POST',
       fields: { userId: str(users.bob.uid), zoneName: str('Mine'), deviceId: str('ESP32-T1') } }), 403, "point his zone at alice's board")
