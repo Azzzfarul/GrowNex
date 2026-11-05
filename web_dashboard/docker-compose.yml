@@ -5,10 +5,14 @@ services:
   server:
     build: ./server
     env_file: ./server/.env
-    ports: ["5000:5000"]
+    # Local only: published ports skip ufw, and an open API lets anyone with a Firebase account
+    # spend the AI credits. Phones reach the API through the client's /api proxy (Tailscale Serve).
+    ports: ["127.0.0.1:5000:5000"]
     restart: unless-stopped
+    logging: { options: { max-size: 10m, max-file: "3" } }   # the bridge logs every reading
   client:
     build: ./client
-    ports: ["127.0.0.1:3000:80"]   # local only; :5000 stays open for the mobile app on the LAN
+    ports: ["127.0.0.1:3000:80"]   # local only; expose with `tailscale serve --bg 3000`
     depends_on: [server]
     restart: unless-stopped
+    logging: { options: { max-size: 10m, max-file: "3" } }
