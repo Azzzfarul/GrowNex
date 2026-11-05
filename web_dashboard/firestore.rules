@@ -54,7 +54,10 @@ service cloud.firestore {
     match /devices/{deviceId} {
       // Own boards, unclaimed ones (the Add device list), and a missing one (so a lookup by ID can
       // say "not found"). Another user's board is refused, which the apps show as "already registered".
-      allow read: if signedIn() && (resource == null || resource.data.get('userId', '') in ['', uid()]);
+      allow get: if signedIn() && (resource == null || resource.data.get('userId', '') in ['', uid()]);
+      // A list must filter on userId == '' or the user's uid: with get()'s default, an unfiltered
+      // query passed too and returned every user's boards.
+      allow list: if signedIn() && resource.data.userId in ['', uid()];
       allow update: if signedIn() && (
         // Claiming an unclaimed board: only the owner and the module flags may change.
         (resource.data.get('userId', '') == '' && request.resource.data.userId == uid()
