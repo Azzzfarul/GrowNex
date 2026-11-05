@@ -490,6 +490,42 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await db.doc(`automationConfig/${ids.zoneS}`).delete()
   })
 
+  test('a board that loses its zone, or is deleted, switches everything off', async () => {
+    // T2's grow light is still on from the schedule test; the app removes it from its zone
+    assert.equal((await docData('devices/ESP32-T2')).lightActive, true)
+    const t0 = Date.now()
+    await db.doc('devices/ESP32-T2').update({ assignedZoneId: null })
+    await waitFor(() => commandsFor('ESP32-T2', t0).some(c => !c.state.lightState), 'all-off command')
+    assert.deepEqual(commandsFor('ESP32-T2', t0).at(-1).state, { irrigationState: false, fertilizerState: false, lightState: false })
+    await waitFor(async () => (await docData('devices/ESP32-T2')).lightActive === false, 'intent reset')
+
+    // T3 (assigned in the safety-stop test) is deleted while its light is on
+    await db.doc('devices/ESP32-T3').update({ lightActive: true })
+    await waitFor(() => commandsFor('ESP32-T3', t0).some(c => c.state.lightState), 'light on')
+    const t1 = Date.now()
+    await db.doc('devices/ESP32-T3').delete()
+    await waitFor(() => commandsFor('ESP32-T3', t1).some(c => !c.state.lightState), 'all-off after delete')
+    await db.doc('devices/ESP32-T2').update({ assignedZoneId: ids.zoneS })  // back, for the tests below
+  })
+
+  test('a zone never switches on a board that is not assigned back to it', async () => {
+    // Zone Q points at board Q2, but Q2's own record says it has no zone (removed, re-claimed by
+    // someone else, an assign half done). Dry soil reported by Q1, which is in Q, must not water Q2.
+    for (const id of ['ESP32-Q1', 'ESP32-Q2']) await publish(`grownex/${id}/status`, 'online', { retain: true })
+    await waitFor(async () => (await docData('devices/ESP32-Q1')) && (await docData('devices/ESP32-Q2')), 'Q1, Q2 registered')
+    const zoneRef = db.collection('zones').doc()
+    await zoneRef.set({ userId: users.alice.uid, zoneName: 'Stale link', deviceId: 'ESP32-Q2' })
+    await db.doc('devices/ESP32-Q1').update({ userId: users.alice.uid, assignedZoneId: zoneRef.id })
+    await db.doc(`automationConfig/${zoneRef.id}`).set({ autoWateringEnabled: true, wateringThreshold: 50, wateringDuration: 1 })
+    const t0 = Date.now()
+    await sensors('ESP32-Q1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 10 })
+    await waitForLog(/not switching irrigation on: ESP32-Q2 isn't assigned/)
+    await sleep(500)
+    assert.equal(commandsFor('ESP32-Q2', t0).filter(c => c.state.irrigationState).length, 0)
+    assert.equal(!!(await docData('devices/ESP32-Q2')).irrigationActive, false)
+    await db.doc(`automationConfig/${zoneRef.id}`).delete()
+  })
+
   test('nightly job: per-user summary, opt-out respected, retention prunes', async () => {
     const A = users.alice.uid, B = users.bob.uid
     const zB = db.collection('zones').doc()
@@ -551,6 +587,66 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(sent.length, 1, `sent once (got ${sent.length})`)
     assert.equal(sent[0].state.lightState, light)
     assert.equal(commands.filter(c => c.at >= t0).length, 1, `devices already in sync get nothing (got ${JSON.stringify(commands.filter(c => c.at >= t0))})`)
+  })
+
+  test('after a restart: a board deleted while the bridge was down is switched off', async () => {
+    // Its doc is gone (deleted during the outage, e.g. by the mobile account-deletion fallback),
+    // but the broker still holds its last "light on"
+    await publish('grownex/ESP32-GHOST/actuators/command', { irrigationState: false, fertilizerState: false, lightState: true }, { retain: true })
+    await stopServer()
+    const t0 = Date.now()
+    await startServer()
+    await waitFor(() => commandsFor('ESP32-GHOST', t0).some(c => !c.state.lightState), 'all-off for the deleted board')
+    assert.ok(!(await docData('devices/ESP32-GHOST')), 'no device doc is created for it')
+  })
+
+  // Both apps talk to Firestore and Storage directly, so the security rules (web_dashboard/*.rules,
+  // which the emulators load through firebase.json) are what keep one user out of another's data.
+  test('security rules keep each user to their own data and boards', async () => {
+    const FS = `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${PROJECT}/databases/(default)/documents`
+    const as = (who, path, { method = 'GET', fields } = {}) => {
+      const mask = method === 'PATCH' ? '?' + Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&') : ''
+      return fetch(`${FS}/${path}${mask}`, {
+        method,
+        headers: { Authorization: `Bearer ${users[who].token}`, 'Content-Type': 'application/json' },
+        body: fields ? JSON.stringify({ fields }) : undefined,
+      }).then(r => r.status)
+    }
+    const str = v => ({ stringValue: v }), bool = v => ({ booleanValue: v })
+    const upload = (who, path) => fetch(`http://${process.env.FIREBASE_STORAGE_EMULATOR_HOST}/v0/b/${BUCKET}/o?name=${encodeURIComponent(path)}`, {
+      method: 'POST', headers: { Authorization: `Firebase ${users[who].token}`, 'Content-Type': 'image/jpeg' }, body: Buffer.from('jpg'),
+    }).then(r => r.status)
+
+    // Alice uses her own zone and board as before
+    assert.equal(await as('alice', `zones/${ids.zoneA}`), 200)
+    assert.equal(await as('alice', 'devices/ESP32-T1', { method: 'PATCH', fields: { deviceName: str('Herb node') } }), 200)
+    assert.equal(await upload('alice', `zonePhotos/${ids.zoneA}.jpg`), 200)
+
+    // Bob reaches none of it...
+    assert.equal(await as('bob', `zones/${ids.zoneA}`), 403, "read alice's zone")
+    assert.equal(await as('bob', `zones/${ids.zoneA}/stats/x`), 403, "read alice's readings")
+    assert.equal(await as('bob', `users/${users.alice.uid}`), 403, "read alice's profile")
+    assert.equal(await as('bob', 'devices/ESP32-T1'), 403, "read alice's board")
+    assert.equal(await as('bob', 'devices/ESP32-T1', { method: 'PATCH', fields: { irrigationActive: bool(true) } }), 403, "switch alice's pump")
+    assert.equal(await as('bob', `automationConfig/${ids.zoneA}`, { method: 'PATCH', fields: { wateringSchedule: str('07:00') } }), 403, "change alice's schedule")
+    assert.equal(await upload('bob', `zonePhotos/${ids.zoneA}.jpg`), 403, "replace alice's zone photo")
+    const notifQuery = await fetch(`${FS}:runQuery`, {
+      method: 'POST', headers: { Authorization: `Bearer ${users.bob.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'notifications' }],
+        where: { fieldFilter: { field: { fieldPath: 'userId' }, op: 'EQUAL', value: str(users.alice.uid) } } } }),
+    })
+    assert.equal(notifQuery.status, 403, "list alice's notifications")
+    // ...not even through his own zone or board (the bridge acts on zones.deviceId / devices.assignedZoneId)
+    assert.equal(await as('bob', 'zones?documentId=bob-zone', { method: 'POST',
+      fields: { userId: str(users.bob.uid), zoneName: str('Mine'), deviceId: str('ESP32-T1') } }), 403, "point his zone at alice's board")
+    assert.equal(await as('bob', 'devices/ESP32-BURST', { method: 'PATCH', fields: { assignedZoneId: str(ids.zoneA) } }), 403, "assign his board to alice's zone")
+
+    // Unclaimed boards stay visible and claimable; once claimed they're the new owner's only
+    await publish('grownex/ESP32-FREE/status', 'online', { retain: true })
+    await waitFor(() => docData('devices/ESP32-FREE'), 'unclaimed board registered')
+    assert.equal(await as('bob', 'devices/ESP32-FREE'), 200)
+    assert.equal(await as('bob', 'devices/ESP32-FREE', { method: 'PATCH', fields: { userId: str(users.bob.uid) } }), 200, 'claim')
+    assert.equal(await as('alice', 'devices/ESP32-FREE'), 403, "now bob's")
   })
 
   test('account deletion removes all of the user’s data and nobody else’s', async () => {

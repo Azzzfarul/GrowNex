@@ -2,15 +2,41 @@
 //   Firebase emulators + web_dashboard/server + web_dashboard/server/test/sandbox.js (broker and
 //   fake node ESP32-MOB01) — see web_dashboard/README.md "Local sandbox". Then, on an Android
 //   emulator: flutter test integration_test --dart-define=USE_FIREBASE_EMULATORS=true
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
 import 'package:mobile_app/main.dart' as app;
 
 const deviceId = 'ESP32-MOB01';
+
+// Once the account is deleted the test is signed out, and the security rules (rightly) refuse its
+// reads, so the final checks ask the Firestore emulator as admin ("Bearer owner" skips the rules).
+String get _adminDocs =>
+    'http://10.0.2.2:8080/v1/projects/${Firebase.app().options.projectId}/databases/(default)/documents';
+const _admin = {'Authorization': 'Bearer owner', 'Content-Type': 'application/json'};
+
+Future<int> adminCountWhere(String collection, String field, String value) async {
+  final res = await http.post(Uri.parse('$_adminDocs:runQuery'), headers: _admin, body: jsonEncode({
+    'structuredQuery': {
+      'from': [{'collectionId': collection}],
+      'where': {'fieldFilter': {'field': {'fieldPath': field}, 'op': 'EQUAL', 'value': {'stringValue': value}}},
+    },
+  }));
+  return (jsonDecode(res.body) as List).where((r) => r['document'] != null).length;
+}
+
+Future<int> adminCount(String path) async =>
+    ((jsonDecode((await http.get(Uri.parse('$_adminDocs/$path'), headers: _admin)).body)['documents'] as List?) ?? []).length;
+
+Future<bool> adminExists(String path) async =>
+    (await http.get(Uri.parse('$_adminDocs/$path'), headers: _admin)).statusCode == 200;
 
 String onScreen() =>
     find.byType(Text).evaluate().map((e) => (e.widget as Text).data).whereType<String>().toSet().join(' | ');
@@ -182,10 +208,10 @@ void main() {
     await tap(t, find.text('Delete account').last);
     await pumpUntil(t, button('Login'), timeout: const Duration(seconds: 40));
     expect(FirebaseAuth.instance.currentUser, isNull);
-    expect((await db.collection('zones').where('userId', isEqualTo: uid).get()).docs, isEmpty);
-    expect((await db.doc('users/$uid').get()).exists, isFalse);
-    expect((await db.collection('zones/$zoneId/stats').get()).docs, isEmpty);
-    expect((await db.collection('devices').where('userId', isEqualTo: uid).get()).docs, isEmpty);
-    expect((await db.collection('plants').where('zoneId', isEqualTo: zoneId).get()).docs, isEmpty);
+    expect(await adminCountWhere('zones', 'userId', uid), 0);
+    expect(await adminExists('users/$uid'), isFalse);
+    expect(await adminCount('zones/$zoneId/stats'), 0);
+    expect(await adminCountWhere('devices', 'userId', uid), 0);
+    expect(await adminCountWhere('plants', 'zoneId', zoneId), 0);
   });
 }

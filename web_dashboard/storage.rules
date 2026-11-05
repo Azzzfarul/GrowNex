@@ -1,0 +1,27 @@
+// Cloud Storage security rules for project grownex-iot. Deploy from web_dashboard/:
+//   npx firebase-tools deploy --only storage --project grownex-iot
+// Each photo belongs to the owner of its zone, looked up in Firestore. Download URLs that carry
+// a token (what the apps store and show) keep working regardless of these rules.
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function fsDoc(path) { return firestore.get(/databases/(default)/documents/$(path)); }
+    function ownsZone(zoneId) { return signedIn() && fsDoc(/zones/$(zoneId)).data.userId == request.auth.uid; }
+    function idOf(fileName) { return fileName.split('[.]')[0]; }  // "<docId>.jpg" → docId
+
+    match /zonePhotos/{fileName} {
+      allow read, write: if ownsZone(idOf(fileName));
+    }
+
+    // One photo per 4-hour bucket; the server also writes here (and bypasses these rules).
+    match /zoneSnapshots/{zoneId}/{fileName} {
+      allow read, write: if ownsZone(zoneId);
+    }
+
+    // The plant doc must exist: both apps create it before uploading, and delete the photo first.
+    match /plantPhotos/{fileName} {
+      allow read, write: if signedIn() && ownsZone(fsDoc(/plants/$(idOf(fileName))).data.zoneId);
+    }
+  }
+}

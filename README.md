@@ -77,7 +77,13 @@ AI_CACHE_TTL_MS=1800000
 # Nightly summary notification + data cleanup (cron expression + IANA timezone)
 DAILY_SUMMARY_CRON=0 20 * * *
 DAILY_SUMMARY_TZ=Asia/Kuala_Lumpur
+
+# Server local time: automation schedules run in it (Docker and most hosts default to UTC)
+TZ=Asia/Kuala_Lumpur
 ```
+
+> Set `TZ` to the growers' timezone. Watering, lighting and fertilizing schedules fire in the server's
+> local time, so on a UTC server (the Docker image) a "07:00" watering runs at 15:00 in Malaysia.
 
 > `FIREBASE_STORAGE_BUCKET` is required — the server won't start the MQTT bridge without it.
 > Keep `FIREBASE_PRIVATE_KEY` on one line with literal `\n` sequences, wrapped in double quotes.
@@ -275,9 +281,12 @@ The firmware has no tests.
 
 - `.env` files and Firebase service-account keys are secrets — they are git-ignored; never commit them.
 - All clients must target the **same Firebase project** to share accounts and data.
-- Firestore/Storage security rules and composite indexes live in the Firebase console, not in this repo.
-  The notifications list needs a composite index on `notifications` (`userId` + `createdAt` desc) —
-  the first query logs a link that creates it. (`web_dashboard/emulator/storage.rules` is only for the local emulators.)
+- Security rules are in this repo: `web_dashboard/firestore.rules` and `storage.rules`. Both apps read and
+  write Firestore directly, so these rules keep users out of each other's data. Deploy them after a change:
+  `cd web_dashboard && npx firebase-tools deploy --only firestore:rules,storage --project <your-project-id>`.
+- Composite indexes live in the Firebase console. The notifications list needs one on `notifications`
+  (`userId` + `createdAt` desc); the first query logs a link that creates it.
 - Automation timers live in the server's memory. Restarting it mid-watering (including a `--watch` reload)
-  can leave an actuator on until you switch it off.
+  can leave an actuator on: a pump until the board's safety limit (20 min watering, 40 min fertilizer),
+  the light until you switch it off.
 - See [`web_dashboard/README.md`](web_dashboard/README.md) for more detail on the dashboard's structure.

@@ -1,0 +1,81 @@
+// Firestore security rules for project grownex-iot. Deploy from web_dashboard/:
+//   npx firebase-tools deploy --only firestore:rules --project grownex-iot
+// Both apps read and write Firestore directly, so these rules are the only thing keeping one
+// user out of another user's data. The server (firebase-admin) bypasses them.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function doc(path) { return get(/databases/$(database)/documents/$(path)); }
+    function ownsZone(zoneId) { return doc(/zones/$(zoneId)).data.userId == uid(); }
+    function ownsDevice(deviceId) { return doc(/devices/$(deviceId)).data.get('userId', '') == uid(); }
+    function changed(field) { return field in request.resource.data.diff(resource.data).affectedKeys(); }
+
+    // A zone may only point at the user's own boards: the bridge runs a zone's schedules on
+    // zones.deviceId, so pointing at someone else's board would switch their pump.
+    function zoneDevicesOk(isCreate) {
+      let d = request.resource.data;
+      return (d.get('deviceId', null) == null || (!isCreate && !changed('deviceId')) || ownsDevice(d.deviceId))
+        && (d.get('cameraDeviceId', null) == null || (!isCreate && !changed('cameraDeviceId')) || ownsDevice(d.cameraDeviceId));
+    }
+
+    // Profile: username, notification preferences, phone push tokens.
+    match /users/{userId} {
+      allow read, write: if signedIn() && uid() == userId;
+    }
+
+    match /zones/{zoneId} {
+      // resource == null: a listener on a zone that was just deleted gets "missing", not an error.
+      allow read: if signedIn() && (resource == null || resource.data.userId == uid());
+      allow create: if signedIn() && request.resource.data.userId == uid() && zoneDevicesOk(true);
+      allow update: if signedIn() && resource.data.userId == uid()
+        && request.resource.data.userId == uid() && zoneDevicesOk(false);
+      allow delete: if signedIn() && resource.data.userId == uid();
+
+      // sensorReadings, stats, aiCache, snapshots, automationHistory (the server writes most of them).
+      match /{subcollection}/{docId} {
+        allow read, write: if signedIn() && ownsZone(zoneId);
+      }
+    }
+
+    match /plants/{plantId} {
+      allow read: if signedIn() && (resource == null || ownsZone(resource.data.zoneId));
+      allow create: if signedIn() && ownsZone(request.resource.data.zoneId);
+      allow update: if signedIn() && ownsZone(resource.data.zoneId) && ownsZone(request.resource.data.zoneId);
+      allow delete: if signedIn() && ownsZone(resource.data.zoneId);
+    }
+
+    match /automationConfig/{zoneId} {
+      allow read, write: if signedIn() && ownsZone(zoneId);
+    }
+
+    // Created by the bridge when a board first connects, with userId '' (unclaimed).
+    match /devices/{deviceId} {
+      // Own boards, unclaimed ones (the Add device list), and a missing one (so a lookup by ID can
+      // say "not found"). Another user's board is refused, which the apps show as "already registered".
+      allow read: if signedIn() && (resource == null || resource.data.get('userId', '') in ['', uid()]);
+      allow update: if signedIn() && (
+        // Claiming an unclaimed board: only the owner and the module flags may change.
+        (resource.data.get('userId', '') == '' && request.resource.data.userId == uid()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId', 'hasLightingModule', 'hasFertilizerModule']))
+        // An own board stays the user's, and may only be assigned to the user's own zones: the bridge
+        // writes its readings to, and waters on, devices.assignedZoneId.
+        || (resource.data.get('userId', '') == uid() && request.resource.data.get('userId', '') == uid()
+          && (!changed('assignedZoneId') || request.resource.data.get('assignedZoneId', null) == null
+              || ownsZone(request.resource.data.assignedZoneId)))
+      );
+      allow delete: if signedIn() && resource.data.get('userId', '') == uid();
+    }
+
+    // Written by the server's notify(); users read their own, mark them read, and delete them
+    // (the mobile account-deletion fallback).
+    match /notifications/{notificationId} {
+      allow read, delete: if signedIn() && resource.data.userId == uid();
+      allow update: if signedIn() && resource.data.userId == uid()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+    }
+
+    // Everything else (aiPlantProfiles, ...) is server-only.
+  }
+}

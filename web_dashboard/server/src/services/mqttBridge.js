@@ -456,12 +456,13 @@ function watchDeviceActuators() {
       })
       devicesListenerInitialized = true
       console.log(`[MQTT bridge] device actuator cache initialized (${actuatorCache.size} devices)`)
+      snapshot.docs.forEach(d => switchOffIfNoZone(d.id, d.data()))
       reconcileCommands()
       return
     }
 
     snapshot.docChanges().forEach(change => {
-      if (change.type === 'removed') return
+      if (change.type === 'removed') { switchOffIfNoZone(change.doc.id, null); return }
 
       const deviceId = change.doc.id
       const data     = change.doc.data()
@@ -477,8 +478,8 @@ function watchDeviceActuators() {
 
       // The bridge's own write coming back (applyActuator already published it): not a manual toggle.
       if (isOwnEcho(deviceId, data)) return
+      if (!data.assignedZoneId) { switchOffIfNoZone(deviceId, data); return }
       if (!changed.length) return
-      if (!data.assignedZoneId) return
 
       const ons = manualOns.get(deviceId) ?? new Set()
       for (const a of changed) data[`${a}Active`] ? ons.add(a) : ons.delete(a)
@@ -495,6 +496,24 @@ function watchDeviceActuators() {
   }, err => console.error('[MQTT bridge] devices listener stopped:', err.message))
 }
 
+// A sensor board without a zone has nothing that may run it: its zone's schedules are gone, and
+// nothing here sends it commands. So when it loses its zone (removed from it, zone deleted) or its
+// doc is deleted (device or account deleted), switch everything off, or its last retained command
+// (say, the grow light on) would stay in force with no way left to stop it.
+// data: the device doc, or null once it's deleted.
+const ALL_OFF = { irrigationActive: false, fertilizerActive: false, lightActive: false }
+function switchOffIfNoZone(deviceId, data) {
+  if (isCameraId(deviceId) || data?.assignedZoneId) return
+  const intent = data ?? actuatorCache.get(deviceId) ?? {}
+  if (!ACTUATORS.some(a => intent[`${a}Active`])) return
+  console.log(`[MQTT bridge] ${deviceId} ${data ? 'has no zone' : 'was deleted'} — switching everything off`)
+  publishCommand(deviceId, ALL_OFF)  // syncs the cache first, so the write's echo below is no change
+  if (data) {
+    db.collection('devices').doc(deviceId).update(ALL_OFF)
+      .catch(e => console.error(`[MQTT bridge] ${deviceId} intent reset failed:`, e.message))
+  }
+}
+
 // ─── Startup: re-send intent that changed while the bridge was down ──────────
 // Nothing publishes those changes, so the broker still holds an older retained command, which a
 // device applies on its next reconnect. On (re)subscribe the broker hands us every retained command:
@@ -507,7 +526,15 @@ function reconcileCommands() {
   for (const [deviceId, cmd] of retainedCommands) {
     retainedCommands.delete(deviceId)
     const want = actuatorCache.get(deviceId)
-    if (!want || !cmd || typeof cmd !== 'object') continue
+    if (!cmd || typeof cmd !== 'object') continue
+    if (!want) {
+      // No device doc: deleted while the bridge was down, so nothing switched the board off.
+      if (!isCameraId(deviceId) && ['irrigationState', 'fertilizerState', 'lightState'].some(k => cmd[k])) {
+        console.log(`[MQTT bridge] ${deviceId} has no device doc but a retained "on" — switching everything off`)
+        publishCommand(deviceId, ALL_OFF)
+      }
+      continue
+    }
     if (cmd.irrigationState === want.irrigationActive &&
         cmd.fertilizerState === want.fertilizerActive &&
         cmd.lightState      === want.lightActive) continue
@@ -551,6 +578,14 @@ async function applyActuator(zoneId, actuator, state, onDevice = null) {
   if (!deviceSnap.exists) return z
 
   const deviceData = deviceSnap.data()
+
+  // Only switch something on for a board whose own record points back at this zone. A zone can
+  // outlive its link (board removed or deleted, zone being deleted, an assign half done), and a
+  // stale pointer must not run a board that may now be someone else's. Off is always allowed.
+  if (state && deviceData.assignedZoneId !== zoneId) {
+    console.warn(`[MQTT bridge] not switching ${actuator} on: ${deviceId} isn't assigned to zone ${zoneId}`)
+    return z
+  }
 
   const merged = {
     irrigationActive: actuator === 'irrigation' ? state : !!deviceData.irrigationActive,
