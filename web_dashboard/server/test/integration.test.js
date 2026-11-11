@@ -92,6 +92,11 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
   const sensors = (deviceId, values) => publish(`grownex/${deviceId}/sensors`, { deviceId, ...values })
   const commandsFor = (deviceId, since = 0) => commands.filter(c => c.deviceId === deviceId && c.at >= since)
   const docData = async (path) => (await db.doc(path).get()).data()
+  // This UTC hour's entry in a zone's daily stats doc (statsDaily/{YYYY-MM-DD}.hours.{HH})
+  const statsNow = async (zoneId) => {
+    const iso = new Date().toISOString()
+    return (await docData(`zones/${zoneId}/statsDaily/${iso.slice(0, 10)}`))?.hours?.[iso.slice(11, 13)]
+  }
   const notifs = async (uid, type) =>
     (await db.collection('notifications').where('userId', '==', uid).get()).docs
       .map(d => d.data()).filter(n => !type || n.type === type)
@@ -191,13 +196,8 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(zone.latestTemp, 25)
     assert.equal(zone.status, 'healthy')
 
-    const readings = await db.collection(`zones/${ids.zoneA}/sensorReadings`).get()
-    assert.equal(readings.size, 1)
-    const ttlDays = (readings.docs[0].data().expiresAt.toMillis() - Date.now()) / 86400000
-    assert.ok(ttlDays > 6.9 && ttlDays <= 7, `readings kept 7 days (got ${ttlDays})`)
-
-    const hour = new Date().toISOString().slice(0, 13)
-    assert.equal((await docData(`zones/${ids.zoneA}/stats/${hour}`)).moisture, 62)
+    assert.equal((await db.collection(`zones/${ids.zoneA}/sensorReadings`).get()).size, 0, 'no raw per-reading docs')
+    assert.equal((await statsNow(ids.zoneA)).moisture, 62)
   })
 
   test('a worsening zone alerts once, then the 30-minute cooldown holds', async () => {
@@ -219,13 +219,14 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
 
   test('a failed DHT11 read keeps the worse status and the hour’s last temperature', async () => {
     const before = await docData(`zones/${ids.zoneA}`)  // critical: temperature 35 + low moisture
-    const hour = new Date().toISOString().slice(0, 13)
+    const syncedAt = (await docData('devices/ESP32-T1')).lastSync.toMillis()
     await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture1: 60, soilMoisture2: 64 })
     await waitFor(async () => (await docData(`zones/${ids.zoneA}`)).latestMoisture === 62, 'zone updated')
     const stats = await waitFor(async () => {
-      const s = await docData(`zones/${ids.zoneA}/stats/${hour}`)
+      const s = await statsNow(ids.zoneA)
       return s.moisture === 62 && s
     }, 'stats updated')
+    assert.equal((await docData('devices/ESP32-T1')).lastSync.toMillis(), syncedAt, 'device doc not rewritten every reading')
     assert.equal(stats.temperature, 35, 'a null reading does not blank the hour')
     const z = await docData(`zones/${ids.zoneA}`)
     assert.equal(z.latestTemp, null)
@@ -238,7 +239,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     // A soil probe that stops reporting is cleared, not kept like temperature/humidity
     await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture1: 60 })
     const after = await waitFor(async () => {
-      const s = await docData(`zones/${ids.zoneA}/stats/${hour}`)
+      const s = await statsNow(ids.zoneA)
       return s.moisture === 60 && s
     }, 'stats updated again')
     assert.equal(after.soilMoisture2, null)
@@ -423,14 +424,11 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.deepEqual(await (await api('/api/zones', { token: B })).json(), [])
     assert.equal((await (await api(`/api/zones/${ids.zoneA}/plants`, { token: A })).json()).length, 2)
     assert.equal((await api(`/api/zones/${ids.zoneA}/plants`, { token: B })).status, 403)
-    assert.ok((await (await api(`/api/zones/${ids.zoneA}/sensor-readings`, { token: A })).json()).length >= 1)
-    assert.equal((await api(`/api/zones/${ids.zoneA}/sensor-readings`, { token: B })).status, 403)
     assert.deepEqual((await (await api('/api/devices', { token: A })).json()).map(d => d.id).sort(), ['ESP32-T1', 'ESP32CAM-T1'])
     assert.equal((await api('/api/devices/ESP32-T1', { token: B })).status, 403)
     assert.equal((await api('/api/devices/NOPE', { token: A })).status, 404)
     assert.equal((await (await api('/api/plants', { token: A })).json()).length, 2)
     assert.equal((await api(`/api/plants/${ids.basil}`, { token: B })).status, 403)
-    assert.ok((await (await api('/api/analytics/summary', { token: A })).json()).readings.length >= 1)
     assert.equal((await (await api('/api/auth/me', { token: A })).json()).username, 'alice')
   })
 
@@ -535,7 +533,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
 
     const old = Timestamp.fromMillis(Date.now() - 31 * 86400000)
     await db.collection('notifications').add({ userId: A, type: 'threshold', title: 'old', createdAt: old })
-    await db.collection(`zones/${ids.zoneA}/sensorReadings`).doc('expired').set({ moisture: 1, expiresAt: Timestamp.fromMillis(Date.now() - 1000) })
+    await db.doc(`zones/${ids.zoneA}/statsDaily/2000-01-01`).set({ hours: { '00': { moisture: 1 } } })
     const oldPath = `zoneSnapshots/${ids.zoneA}/old.jpg`
     await bucket.file(oldPath).save(Buffer.from([0xFF, 0xD8]))
     await db.collection(`zones/${ids.zoneA}/snapshots`).doc('old').set({ storagePath: oldPath, capturedAt: Timestamp.fromMillis(Date.now() - 49 * 3600000) })
@@ -548,8 +546,8 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.match(daily[0].message, /1 needs attention \(Herbs\)/)  // Herbs is still critical
     assert.equal((await notifs(B, 'daily')).length, 0, 'opt-out respected')
     assert.ok(!(await notifs(A)).some(n => n.title === 'old'), 'notifications > 30 days pruned')
-    assert.equal((await db.doc(`zones/${ids.zoneA}/sensorReadings/expired`).get()).exists, false)
-    assert.ok((await db.collection(`zones/${ids.zoneA}/sensorReadings`).get()).size >= 1, 'fresh readings kept')
+    assert.equal((await db.doc(`zones/${ids.zoneA}/statsDaily/2000-01-01`).get()).exists, false, 'stats > 30 days pruned')
+    assert.ok(await statsNow(ids.zoneA), "today's stats kept")
     assert.equal((await db.doc(`zones/${ids.zoneA}/snapshots/old`).get()).exists, false)
     assert.equal((await bucket.file(oldPath).exists())[0], false)
     assert.ok((await db.collection(`zones/${ids.zoneA}/snapshots`).get()).size >= 1, 'recent snapshot kept')
@@ -624,7 +622,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
 
     // Bob reaches none of it...
     assert.equal(await as('bob', `zones/${ids.zoneA}`), 403, "read alice's zone")
-    assert.equal(await as('bob', `zones/${ids.zoneA}/stats/x`), 403, "read alice's readings")
+    assert.equal(await as('bob', `zones/${ids.zoneA}/statsDaily/x`), 403, "read alice's readings")
     assert.equal(await as('bob', `users/${users.alice.uid}`), 403, "read alice's profile")
     assert.equal(await as('bob', 'devices/ESP32-T1'), 403, "read alice's board")
     assert.equal(await as('bob', 'devices/ESP32-T1', { method: 'PATCH', fields: { irrigationActive: bool(true) } }), 403, "switch alice's pump")
@@ -662,7 +660,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     const res = await api('/api/auth/me', { token: users.alice.token, method: 'DELETE' })
     assert.equal(res.status, 200, await res.text())
 
-    for (const sub of ['sensorReadings', 'stats', 'aiCache', 'snapshots'])
+    for (const sub of ['statsDaily', 'aiCache', 'snapshots'])
       assert.equal((await db.collection(`zones/${ids.zoneA}/${sub}`).get()).size, 0, `${sub} deleted`)
     assert.equal((await db.collection('zones').where('userId', '==', A).get()).size, 0)
     assert.equal((await db.collection('plants').where('zoneId', '==', ids.zoneA).get()).size, 0)
@@ -680,7 +678,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await auth.getUser(users.bob.uid)
   })
 
-  test('seed.js seeds demo data and --clean removes it, even past 500 readings', { timeout: 60000 }, async () => {
+  test('seed.js seeds demo data and --clean removes it, even past 500 docs', { timeout: 60000 }, async () => {
     const B = users.bob.uid
     const run = (...args) => new Promise((resolve, reject) => {
       const p = spawn(process.execPath, ['seed.js', ...args], { cwd: SERVER_DIR,
@@ -693,9 +691,10 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     const zones = await db.collection('zones').where('userId', '==', B).where('_demo', '==', true).get()
     assert.equal(zones.size, 1)
     const demo = zones.docs[0].ref
-    assert.equal((await demo.collection('stats').get()).size, 168)
+    const days = (await demo.collection('statsDaily').get()).docs
+    assert.equal(days.reduce((n, d) => n + Object.keys(d.data().hours).length, 0), 168, '7 days of hourly entries')
 
-    // A demo device left running for ~10 hours
+    // Leftovers from an older version that wrote one doc per reading
     const w = db.bulkWriter()
     for (let i = 0; i < 600; i++) w.set(demo.collection('sensorReadings').doc(), { moisture: 50 })
     await w.close()

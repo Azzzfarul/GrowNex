@@ -176,10 +176,15 @@ void main() {
     // ── Analytics: history from last week plus today's live readings ──
     final now = DateTime.now();
     for (final ago in [const Duration(hours: 6 * 24 + 22), const Duration(days: 3)]) {
-      final ts = now.subtract(ago);
-      await db.doc('zones/$zoneId/stats/${ts.toUtc().toIso8601String().substring(0, 13)}').set({
-        'temperature': 22, 'humidity': 60, 'moisture': 45, 'soilMoisture1': 45, 'timestamp': Timestamp.fromDate(ts),
-      });
+      final iso = now.subtract(ago).toUtc().toIso8601String();
+      await db.doc('zones/$zoneId/statsDaily/${iso.substring(0, 10)}').set({
+        'hours': {
+          iso.substring(11, 13): {
+            'temperature': 22, 'humidity': 60, 'moisture': 45, 'soilMoisture1': 45,
+            'timestamp': Timestamp.fromDate(now.subtract(ago)),
+          },
+        },
+      }, SetOptions(merge: true));
     }
     await t.pageBack();
     await t.pump(const Duration(milliseconds: 500));
@@ -210,7 +215,7 @@ void main() {
     expect(FirebaseAuth.instance.currentUser, isNull);
     expect(await adminCountWhere('zones', 'userId', uid), 0);
     expect(await adminExists('users/$uid'), isFalse);
-    expect(await adminCount('zones/$zoneId/stats'), 0);
+    expect(await adminCount('zones/$zoneId/statsDaily'), 0);
     expect(await adminCountWhere('devices', 'userId', uid), 0);
     expect(await adminCountWhere('plants', 'zoneId', zoneId), 0);
   });

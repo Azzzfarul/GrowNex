@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  collection, query, where, onSnapshot,
-  getDocs, orderBy, Timestamp,
+  collection, query, where, onSnapshot, getDocs,
 } from 'firebase/firestore'
 import { db } from '../firebase'
+import { fetchZoneStats } from '../lib/zoneStats'
 import Icon from '../components/ui/Icon'
 import TextField from '../components/ui/TextField'
 import Loading from '../components/ui/Loading'
@@ -138,20 +138,10 @@ export default function AnalyticsPage() {
     const cutoff = new Date()
     if (timeRange === 'today') cutoff.setHours(cutoff.getHours() - 24)
     else cutoff.setDate(cutoff.getDate() - 7)
-    const cutoffTs = Timestamp.fromDate(cutoff)
-
     const targets = selectedZoneId === 'all' ? zones : zones.filter(z => z.id === selectedZoneId)
 
     Promise.all([
-      Promise.all(
-        targets.map(z =>
-          getDocs(query(
-            collection(db, 'zones', z.id, 'stats'),
-            where('timestamp', '>=', cutoffTs),
-            orderBy('timestamp', 'asc'),
-          )).then(s => s.docs.map(d => d.data()))
-        )
-      ).then(arr => arr.flat()),
+      Promise.all(targets.map(z => fetchZoneStats(z.id, cutoff))).then(arr => arr.flat()),
 
       Promise.all(
         targets.map(z =>

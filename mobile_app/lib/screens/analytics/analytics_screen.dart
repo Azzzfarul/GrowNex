@@ -115,21 +115,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final cutoff = _timeRange == 'today'
         ? DateTime.now().subtract(const Duration(hours: 24))
         : DateTime.now().subtract(const Duration(days: 7));
-    final cutoffTs = Timestamp.fromDate(cutoff);
 
     final targets = _selectedZoneId == 'all'
         ? _zones
         : _zones.where((z) => z.id == _selectedZoneId).toList();
 
     try {
-      final readingResults = await Future.wait(targets.map((z) => _db
-          .collection('zones')
-          .doc(z.id)
-          .collection('stats')
-          .where('timestamp', isGreaterThanOrEqualTo: cutoffTs)
-          .orderBy('timestamp')
-          .get()
-          .then((s) => s.docs.map((d) => SensorReading.fromMap(d.id, d.data())).toList())));
+      final readingResults = await Future.wait(targets.map((z) => ZoneService().getStats(z.id, cutoff)));
 
       final plantResults = await Future.wait(targets.map((z) => _db
           .collection('plants')

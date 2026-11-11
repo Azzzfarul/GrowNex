@@ -22,7 +22,8 @@ const HELP = `Usage: npm start -- [options]
   --node sensor|camera|both   which boards to simulate (default: both)
   --id ESP32-XXXXXXXXXXXX     sensor node ID (default: stable per computer)
   --camera-id ESP32CAM-…      camera node ID (default: stable per computer)
-  --interval <seconds>        time between readings (default: 60, like the firmware)
+  --interval <seconds>        time between readings (default: 300, like the firmware;
+                              try 10 while testing)
   --slots 1-4                 soil probes to report (default: 4, like the firmware)
   --images <folder>           JPEGs for the camera (default: ./images)
   --pump-limit <seconds>      pump safety limit for both pumps (default: 1200 irrigation,
@@ -52,7 +53,7 @@ try {
     node: { type: 'string', default: 'both' },
     id: { type: 'string' },
     'camera-id': { type: 'string' },
-    interval: { type: 'string', default: '60' },
+    interval: { type: 'string', default: '300' },
     slots: { type: 'string', default: '4' },
     images: { type: 'string', default: path.join(HERE, 'images') },
     'pump-limit': { type: 'string' },

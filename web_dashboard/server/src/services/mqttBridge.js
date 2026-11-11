@@ -6,9 +6,7 @@ import { runDailySummary } from './dailySummary.js'
 import { saveZoneSnapshot } from './cameraSnapshots.js'
 
 const BROKER      = process.env.MQTT_BROKER_HOST || 'broker.hivemq.com'
-// Raw sensorReadings kept for 7 days — nothing reads them past that; analytics/history
-// always comes from zones/{id}/stats (hourly, no expiry). Pruned nightly in dailySummary.js.
-const READING_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const DEVICE_SYNC_MS = 4 * 60 * 1000
 const BROKER_PORT = parseInt(process.env.MQTT_BROKER_PORT || '1883')
 const MQTT_USER   = process.env.MQTT_USER || ''
 const MQTT_PASS   = process.env.MQTT_PASS || ''
@@ -73,8 +71,9 @@ async function getOrCreateDevice(deviceId) {
       lastSync:            FieldValue.serverTimestamp(),
     }).then(() => true, e => { if (e.code === 6) return false; throw e })  // 6 = ALREADY_EXISTS
     if (created) console.log(`[MQTT bridge] new device registered: ${deviceId}`)
+    return (await ref.get()).data()
   }
-  return (await ref.get()).data()
+  return snap.data()
 }
 
 // ─── Sensor message handler ───────────────────────────────────────────────────
@@ -100,8 +99,10 @@ async function handleSensors(deviceId, payload) {
     return
   }
 
-  // Hourly stats doc ID — UTC hour bucket, e.g. "2024-01-15T14"
-  const statsDocId = new Date().toISOString().slice(0, 13)
+  // Daily stats doc ID + hour key, UTC: "2024-01-15" / "14"
+  const nowIso = new Date().toISOString()
+  const statsDayId = nowIso.slice(0, 10)
+  const statsHour = nowIso.slice(11, 13)
 
   const sensorFields = {
     temperature, humidity, lightLevel,
@@ -112,31 +113,26 @@ async function handleSensors(deviceId, payload) {
     moisture,
   }
 
-  // expiresAt is read by the nightly prune in dailySummary.js (no Firestore TTL policy).
-  const reading = {
-    ...sensorFields,
-    timestamp: FieldValue.serverTimestamp(),
-    expiresAt: Timestamp.fromDate(new Date(Date.now() + READING_TTL_MS)),
-  }
-
   // After a restart the cache is empty until this zone's first write: fall back to the stored status.
   const prevStatus = zoneStatusCache.get(assignedZoneId) ??
     (await db.collection('zones').doc(assignedZoneId).get()).data()?.status
   const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(assignedZoneId), prevStatus)
 
-  // Hourly stats: the current-hour bucket holds each metric's latest value. A failed DHT11 read
-  // sends null temperature/humidity: leave them out so the merge keeps the hour's last good ones.
-  // Analytics queries this instead of sensorReadings (168 docs/zone/7d vs 10,080).
+  // History: one doc per UTC day, each hour's entry holding that hour's latest values, so 7 days of
+  // charts cost 8 reads, not 168 (clients flatten it: zoneStats.js / ZoneService.getStats). The
+  // merge is deep, and a failed DHT11 read sends null temperature/humidity: leave them out so the
+  // hour keeps its last good ones. No raw per-reading docs: nothing read them.
   const stats = { ...sensorFields, timestamp: FieldValue.serverTimestamp() }
   if (temperature == null) delete stats.temperature
   if (humidity == null) delete stats.humidity
 
+  // lastSync only backs "seen in the last 10 minutes" checks: refresh it at most every 4 minutes.
+  const lastSyncMs = device.lastSync?.toMillis?.() ?? 0
+  const deviceStale = device.status !== 'online' || Date.now() - lastSyncMs > DEVICE_SYNC_MS
+
   await Promise.all([
     db.collection('zones').doc(assignedZoneId)
-      .collection('sensorReadings').add(reading),
-
-    db.collection('zones').doc(assignedZoneId)
-      .collection('stats').doc(statsDocId).set(stats, { merge: true }),
+      .collection('statsDaily').doc(statsDayId).set({ hours: { [statsHour]: stats } }, { merge: true }),
 
     db.collection('zones').doc(assignedZoneId).update({
       latestMoisture:  moisture,
@@ -151,7 +147,7 @@ async function handleSensors(deviceId, payload) {
       ...(alertSummary != null ? { status, alertSummary } : { status }),
     }),
 
-    db.collection('devices').doc(deviceId).update({
+    deviceStale && db.collection('devices').doc(deviceId).update({
       status:   'online',
       lastSync: FieldValue.serverTimestamp(),
     }),
@@ -162,9 +158,12 @@ async function handleSensors(deviceId, payload) {
   await maybeNotifyStatus(assignedZoneId, status, alertSummary)
 
   // ── Moisture threshold check (30-minute cooldown per device) ──────────────
-  const configSnap = await db.collection('automationConfig').doc(assignedZoneId).get()
-  if (configSnap.exists) {
-    const cfg = configSnap.data()
+  // From watchAutomationConfig's listener, not a read per reading. Until it has loaded, or after it
+  // failed, read it directly: a missed check would delay watering by a whole reading interval.
+  const cfg = automationConfigsReady
+    ? automationConfigs.get(assignedZoneId)
+    : (await db.collection('automationConfig').doc(assignedZoneId).get()).data()
+  if (cfg) {
     if (cfg.autoWateringEnabled &&
         cfg.wateringThreshold != null &&
         moisture != null &&
@@ -236,12 +235,16 @@ async function handleActuatorState(deviceId, payload) {
   // fertilizerActive/lightActive (those are user intent; overwriting them here causes a
   // watchDeviceActuators → publishCommand feedback loop via a debounce race condition).
   // The one exception, the safety-limit stop below, goes through triggerActuator, which syncs the cache.
-  await db.collection('devices').doc(deviceId).update({
-    irrigationConfirmed: irrigationState,
-    fertilizerConfirmed: fertilizerState,
-    lightConfirmed:      lightState,
-  })
-  console.log(`[MQTT bridge] actuator state confirmed for ${deviceId}`)
+  // The firmware re-sends its state with every reading: write only when something changed.
+  if (device.irrigationConfirmed !== irrigationState || device.fertilizerConfirmed !== fertilizerState ||
+      device.lightConfirmed !== lightState) {
+    await db.collection('devices').doc(deviceId).update({
+      irrigationConfirmed: irrigationState,
+      fertilizerConfirmed: fertilizerState,
+      lightConfirmed:      lightState,
+    })
+    console.log(`[MQTT bridge] actuator state confirmed for ${deviceId}`)
+  }
 
   // The device stopped a pump at its safety limit (firmware/src/main.cpp) because no "off" came: a
   // restart mid-cycle lost the bridge's auto-off, or a manual toggle was left on. Make that the intent
@@ -722,16 +725,25 @@ function scheduleCronJobsForZone(zoneId, config) {
 // ─── Firestore → cron: watch automationConfig for schedule changes ────────────
 // First snapshot fires with all existing docs as 'added' — sets up jobs on startup.
 // No MQTT commands are sent during initial load.
+const automationConfigs = new Map()  // Map<zoneId, config>, for handleSensors' threshold check
+let automationConfigsReady = false   // false until the first snapshot, and again if the listener fails
+
 function watchAutomationConfig() {
   db.collection('automationConfig').onSnapshot(snapshot => {
     snapshot.docChanges().forEach(change => {
       if (change.type === 'removed') {
+        automationConfigs.delete(change.doc.id)
         cancelCronJobs(change.doc.id)
         return
       }
+      automationConfigs.set(change.doc.id, change.doc.data())
       scheduleCronJobsForZone(change.doc.id, change.doc.data())
     })
-  }, err => console.error('[MQTT bridge] automationConfig listener stopped:', err.message))
+    automationConfigsReady = true
+  }, err => {
+    automationConfigsReady = false  // handleSensors falls back to reading the config itself
+    console.error('[MQTT bridge] automationConfig listener stopped:', err.message)
+  })
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

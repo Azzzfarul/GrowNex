@@ -16,11 +16,11 @@ import MonitoringTab from './zones/MonitoringTab'
 
 const TABS = [['Overview', 'info'], ['Plants', 'potted_plant'], ['Automation', 'tune'], ['Monitoring', 'monitor_heart']]
 
-// Clients can't list subcollections, so name them all (automationHistory is legacy data). Keep in
-// step with mobile zone_detail_screen.dart; the server's account deletion uses recursiveDelete.
-const ZONE_SUBCOLLECTIONS = ['sensorReadings', 'stats', 'aiCache', 'snapshots', 'automationHistory']
+// Clients can't list subcollections, so name them all (sensorReadings, stats and automationHistory are
+// legacy data). Keep in step with mobile zone_service.dart; the server's account deletion uses recursiveDelete.
+const ZONE_SUBCOLLECTIONS = ['statsDaily', 'aiCache', 'snapshots', 'sensorReadings', 'stats', 'automationHistory']
 
-// Batched, so a week of readings (~10k docs) takes seconds rather than minutes.
+// Batched, so a large legacy backlog takes seconds rather than minutes.
 async function deleteAll(col) {
   for (;;) {
     const snap = await getDocs(query(col, limit(400)))

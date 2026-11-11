@@ -60,7 +60,7 @@ async function clean() {
     await Promise.all(plantsSnap.docs.map(d => d.ref.delete()))
     plantCount += plantsSnap.size
     await db.collection('automationConfig').doc(zoneDoc.id).delete()
-    // Zone + all subcollections; a single batch would fail past 500 sensorReadings
+    // Zone + all subcollections (also any left from older versions)
     await db.recursiveDelete(zoneDoc.ref)
   }
   console.log(`  Deleted ${plantCount} plants, ${zonesSnap.size} zones, ${devicesSnap.size} devices, automationConfig`)
@@ -172,14 +172,13 @@ async function seed() {
     console.log(`  Created plant: ${plant.plantName} (${ref.id})`)
   }
 
-  // ── 4. Hourly stats + sensorReadings (7 days) ─────────────────────────────
-  const HOURS = 7 * 24   // 168 hourly buckets
-  // Firestore batches cap at 500 ops; split into two batches (168 stats + 168 readings = 336 ≤ 500)
-  const batch = db.batch()
+  // ── 4. Hourly history (7 days), in daily docs like the MQTT bridge writes ─
+  const HOURS = 7 * 24   // 168 hourly entries across 8 UTC days
+  const days = {}
 
   for (let i = HOURS - 1; i >= 0; i--) {
     const hourMs = Date.now() - i * 60 * 60 * 1000
-    const docId  = new Date(hourMs).toISOString().slice(0, 13)  // "2026-06-01T08"
+    const iso    = new Date(hourMs).toISOString()
     const hour   = new Date(hourMs).getUTCHours()
     const isDay  = hour >= 6 && hour <= 20
 
@@ -196,18 +195,14 @@ async function seed() {
       timestamp:     Timestamp.fromDate(new Date(hourMs)),
     }
 
-    // Analytics (web + mobile) reads the hourly zones/{id}/stats buckets.
-    batch.set(zoneRef.collection('stats').doc(docId), reading)
-    // Raw zones/{id}/sensorReadings feeds the "latest reading" stream; carries a
-    // TTL field (expiresAt) exactly like the MQTT bridge writes.
-    batch.set(zoneRef.collection('sensorReadings').doc(docId), {
-      ...reading,
-      expiresAt: Timestamp.fromDate(new Date(hourMs + 30 * 24 * 60 * 60 * 1000)),
-    })
+    // zones/{id}/statsDaily/{YYYY-MM-DD}.hours.{HH}, read by analytics + plant health (web + mobile).
+    ;(days[iso.slice(0, 10)] ??= {})[iso.slice(11, 13)] = reading
   }
 
+  const batch = db.batch()
+  for (const [day, hours] of Object.entries(days)) batch.set(zoneRef.collection('statsDaily').doc(day), { hours })
   await batch.commit()
-  console.log(`  Seeded ${HOURS} hourly stats + sensorReadings docs`)
+  console.log(`  Seeded ${HOURS} hours of stats in ${Object.keys(days).length} statsDaily docs`)
 
   // ── 5. Automation config ──────────────────────────────────────────────────
   // Top-level automationConfig/{zoneId} — the collection the app and MQTT bridge

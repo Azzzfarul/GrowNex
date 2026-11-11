@@ -22,7 +22,7 @@ web_dashboard/
 │       └── firebase.js          # Firebase SDK init
 └── server/          # Express.js backend
     └── src/
-        ├── routes/              # /api/auth  /api/plants  /api/analytics
+        ├── routes/              # /api/auth  /api/plants  /api/ai
         ├── middleware/          # verifyToken (Firebase Admin)
         └── firebase-admin.js    # Admin SDK init
 ```

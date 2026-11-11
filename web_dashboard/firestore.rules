@@ -33,7 +33,8 @@ service cloud.firestore {
         && request.resource.data.userId == uid() && zoneDevicesOk(false);
       allow delete: if signedIn() && resource.data.userId == uid();
 
-      // sensorReadings, stats, aiCache, snapshots, automationHistory (the server writes most of them).
+      // statsDaily, aiCache, snapshots, plus legacy sensorReadings, stats, automationHistory
+      // (the server writes most of them).
       match /{subcollection}/{docId} {
         allow read, write: if signedIn() && ownsZone(zoneId);
       }
