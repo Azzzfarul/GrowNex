@@ -231,6 +231,7 @@ void connectMQTT() {
   if (ok) {
     mqtt.publish(TOPIC_STATUS.c_str(), "online", true);
     mqtt.subscribe(TOPIC_ACTUATOR_CMD.c_str());  // the broker re-sends the retained command, restoring the intended state
+    lastPublish = millis() - PUBLISH_INTERVAL_MS;  // send a reading right away (boot or reconnect), then every interval
     Serial.printf("MQTT OK — device: %s\n", DEVICE_ID.c_str());
   } else {
     Serial.printf("MQTT failed (rc=%d), retrying\n", mqtt.state());

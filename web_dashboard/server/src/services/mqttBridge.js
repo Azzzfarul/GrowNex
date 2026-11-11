@@ -158,9 +158,11 @@ async function handleSensors(deviceId, payload) {
   await maybeNotifyStatus(assignedZoneId, status, alertSummary)
 
   // ── Moisture threshold check (30-minute cooldown per device) ──────────────
-  // From watchAutomationConfig's listener, not a read per reading. Right after a restart it may not
-  // have loaded yet: that reading skips the check, and the next one makes it.
-  const cfg = automationConfigs.get(assignedZoneId)
+  // From watchAutomationConfig's listener, not a read per reading. Until it has loaded, or after it
+  // failed, read it directly: a missed check would delay watering by a whole reading interval.
+  const cfg = automationConfigsReady
+    ? automationConfigs.get(assignedZoneId)
+    : (await db.collection('automationConfig').doc(assignedZoneId).get()).data()
   if (cfg) {
     if (cfg.autoWateringEnabled &&
         cfg.wateringThreshold != null &&
@@ -233,12 +235,16 @@ async function handleActuatorState(deviceId, payload) {
   // fertilizerActive/lightActive (those are user intent; overwriting them here causes a
   // watchDeviceActuators → publishCommand feedback loop via a debounce race condition).
   // The one exception, the safety-limit stop below, goes through triggerActuator, which syncs the cache.
-  await db.collection('devices').doc(deviceId).update({
-    irrigationConfirmed: irrigationState,
-    fertilizerConfirmed: fertilizerState,
-    lightConfirmed:      lightState,
-  })
-  console.log(`[MQTT bridge] actuator state confirmed for ${deviceId}`)
+  // The firmware re-sends its state with every reading: write only when something changed.
+  if (device.irrigationConfirmed !== irrigationState || device.fertilizerConfirmed !== fertilizerState ||
+      device.lightConfirmed !== lightState) {
+    await db.collection('devices').doc(deviceId).update({
+      irrigationConfirmed: irrigationState,
+      fertilizerConfirmed: fertilizerState,
+      lightConfirmed:      lightState,
+    })
+    console.log(`[MQTT bridge] actuator state confirmed for ${deviceId}`)
+  }
 
   // The device stopped a pump at its safety limit (firmware/src/main.cpp) because no "off" came: a
   // restart mid-cycle lost the bridge's auto-off, or a manual toggle was left on. Make that the intent
@@ -720,6 +726,7 @@ function scheduleCronJobsForZone(zoneId, config) {
 // First snapshot fires with all existing docs as 'added' — sets up jobs on startup.
 // No MQTT commands are sent during initial load.
 const automationConfigs = new Map()  // Map<zoneId, config>, for handleSensors' threshold check
+let automationConfigsReady = false   // false until the first snapshot, and again if the listener fails
 
 function watchAutomationConfig() {
   db.collection('automationConfig').onSnapshot(snapshot => {
@@ -732,7 +739,11 @@ function watchAutomationConfig() {
       automationConfigs.set(change.doc.id, change.doc.data())
       scheduleCronJobsForZone(change.doc.id, change.doc.data())
     })
-  }, err => console.error('[MQTT bridge] automationConfig listener stopped:', err.message))
+    automationConfigsReady = true
+  }, err => {
+    automationConfigsReady = false  // handleSensors falls back to reading the config itself
+    console.error('[MQTT bridge] automationConfig listener stopped:', err.message)
+  })
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

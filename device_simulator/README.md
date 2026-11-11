@@ -34,7 +34,9 @@ With the server running (`web_dashboard/server`, `npm run dev`):
    *New devices nearby*. Claim them.
 2. Open a zone and assign the sensor node in **Overview → Device**, and the camera in
    **Overview → Camera**.
-3. Readings appear within a minute. Manual controls and automation drive the simulated relays.
+3. The first reading goes out right after start, before the node is assigned, so the server ignores
+   it, and the next one is 5 minutes away: type `reading` once it's assigned to see values now (or
+   start with `--interval 10`). Manual controls and automation drive the simulated relays.
    The camera's first photo goes out right after start, before it's assigned, so the server
    ignores it: type `photo` once the camera is assigned to see it in the Camera feed.
 

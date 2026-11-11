@@ -215,7 +215,7 @@ void main() {
     expect(FirebaseAuth.instance.currentUser, isNull);
     expect(await adminCountWhere('zones', 'userId', uid), 0);
     expect(await adminExists('users/$uid'), isFalse);
-    expect(await adminCount('zones/$zoneId/stats'), 0);
+    expect(await adminCount('zones/$zoneId/statsDaily'), 0);
     expect(await adminCountWhere('devices', 'userId', uid), 0);
     expect(await adminCountWhere('plants', 'zoneId', zoneId), 0);
   });
