@@ -54,6 +54,21 @@ void main() {
   final today = DateTime.now();
   final now = DateTime(today.year, today.month, today.day, 12);
 
+  group('flattenDailyStats', () {
+    test('turns daily docs into hourly readings, oldest first, from the cutoff on', () {
+      final t0 = DateTime.utc(2026, 1, 1, 22);
+      Map<String, dynamic> r(DateTime t, num temp) => {'timestamp': t, 'temperature': temp};
+      final days = <String, Map<String, dynamic>>{
+        '2026-01-02': {'hours': {'00': r(t0.add(const Duration(hours: 2)), 21), '23': r(t0.add(const Duration(hours: 1)), 23)}},
+        '2026-01-01': {'hours': {'22': r(t0, 22), '21': r(t0.subtract(const Duration(hours: 1)), 99)}},
+        '2026-01-03': {'hours': {'05': {'temperature': 1}}},  // no timestamp: skipped
+        '2026-01-04': {},                                       // no hours at all
+      };
+      expect(flattenDailyStats(days, t0).map((x) => x.temperature).toList(), [22, 23, 21]);
+      expect(flattenDailyStats({}, t0), isEmpty);
+    });
+  });
+
   group('groupByTime', () {
     test('24h: the hour from yesterday and the current hour are separate points, oldest first', () {
       final rs = [

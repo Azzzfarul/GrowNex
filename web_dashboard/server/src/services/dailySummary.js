@@ -1,7 +1,7 @@
 // Nightly per-user "evening summary" notification + notification pruning.
 // Scheduled from mqttBridge.init() at DAILY_SUMMARY_CRON / DAILY_SUMMARY_TZ.
 
-import { getFirestore, Timestamp } from 'firebase-admin/firestore'
+import { getFirestore, Timestamp, FieldPath } from 'firebase-admin/firestore'
 import { getStorage } from 'firebase-admin/storage'
 import { notify } from './notifications.js'
 
@@ -9,34 +9,29 @@ const db = getFirestore()
 const bucket = getStorage().bucket()
 const PRUNE_MS = 30 * 24 * 60 * 60 * 1000
 const SNAPSHOT_RETENTION_MS = 48 * 60 * 60 * 1000
+const STATS_RETENTION_DAYS = 30  // the apps show 7; the rest is margin
 
-// Deletes zones/{id}/sensorReadings docs whose expiresAt has passed (plain batch deletes —
-// billed as normal deletes, unlike a Firestore TTL policy which needs billing enabled).
-// Looped per zone so each query is collection-scoped (no composite index needed); capped at
-// 20 batches/zone/night (10,000 docs) so a large backlog just continues over following nights.
-async function pruneSensorReadings(zoneRefs) {
-  const now = Timestamp.now()
+// Deletes zones/{id}/statsDaily docs (IDs "YYYY-MM-DD", UTC) older than STATS_RETENTION_DAYS.
+// One doc per zone per day, so normally one delete per zone per night; the limit keeps a long
+// backlog (server down for months) to one batch per zone per night.
+async function pruneStatsDaily(zoneRefs) {
+  const cutoffDay = new Date(Date.now() - STATS_RETENTION_DAYS * 86400000).toISOString().slice(0, 10)
   let totalDeleted = 0
   for (const zoneRef of zoneRefs) {
-    for (let i = 0; i < 20; i++) {
-      const staleSnap = await zoneRef.collection('sensorReadings')
-        .where('expiresAt', '<', now)
-        .limit(500)
-        .get()
-      if (staleSnap.empty) break
-      const batch = db.batch()
-      staleSnap.docs.forEach(d => batch.delete(d.ref))
-      await batch.commit()
-      totalDeleted += staleSnap.size
-      if (staleSnap.size < 500) break
-    }
+    const staleSnap = await zoneRef.collection('statsDaily')
+      .where(FieldPath.documentId(), '<', cutoffDay).limit(400).get()
+    if (staleSnap.empty) continue
+    const batch = db.batch()
+    staleSnap.docs.forEach(d => batch.delete(d.ref))
+    await batch.commit()
+    totalDeleted += staleSnap.size
   }
   return totalDeleted
 }
 
 // Deletes zones/{id}/snapshots docs (+ their Storage object) older than the 48h camera-feed
 // retention window. Volume is tiny (at most 12 docs/zone by construction — one per 4h bucket),
-// so a plain sequential loop is fine; no 500-doc batching needed like pruneSensorReadings.
+// so a plain sequential loop is fine.
 async function pruneZoneSnapshots(zoneRefs) {
   const cutoff = Timestamp.fromDate(new Date(Date.now() - SNAPSHOT_RETENTION_MS))
   let totalDeleted = 0
@@ -112,10 +107,10 @@ export async function runDailySummary() {
   }
 
   try {
-    const deleted = await pruneSensorReadings(zonesSnap.docs.map(d => d.ref))
-    if (deleted) console.log(`[daily summary] pruned ${deleted} stale sensorReadings doc(s)`)
+    const deleted = await pruneStatsDaily(zonesSnap.docs.map(d => d.ref))
+    if (deleted) console.log(`[daily summary] pruned ${deleted} old statsDaily doc(s)`)
   } catch (err) {
-    console.warn('[daily summary] sensorReadings prune skipped:', err.message)
+    console.warn('[daily summary] statsDaily prune skipped:', err.message)
   }
 
   try {

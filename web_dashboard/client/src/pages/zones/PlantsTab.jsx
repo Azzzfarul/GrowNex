@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  collection, query, where, onSnapshot, getDocs, orderBy, Timestamp,
+  collection, query, where, onSnapshot, getDocs,
   setDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../../firebase'
@@ -14,6 +14,7 @@ import { fetchPlantProfile } from '../../lib/aiSummary'
 import { zoneFitHint } from '../../lib/zoneFit'
 import { plantHealth, plantHealthSummary } from '../../lib/plantHealth'
 import { scoreBadge, plantStatus } from '../../lib/analytics'
+import { fetchZoneStats } from '../../lib/zoneStats'
 import { uploadPlantPhoto, removePlantPhoto, removePlantPhotoFile } from '../../lib/photoUpload'
 
 const MAX_PLANTS = 4
@@ -357,11 +358,7 @@ function ConditionCard({ plant, zone }) {
     if (!zone?.id) return
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - 7)
-    getDocs(query(
-      collection(db, 'zones', zone.id, 'stats'),
-      where('timestamp', '>=', Timestamp.fromDate(cutoff)),
-      orderBy('timestamp', 'asc'),
-    )).then(s => setReadings(s.docs.map(d => d.data()))).catch(() => setReadings([]))
+    fetchZoneStats(zone.id, cutoff).then(setReadings).catch(() => setReadings([]))
   }, [zone?.id])
 
   if (readings == null) return null

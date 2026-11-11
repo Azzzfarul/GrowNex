@@ -7,7 +7,7 @@ and credentials, topics, JSON payloads, retained flags and last-will.
 
 | Simulated board | ID | Does |
 |---|---|---|
-| Sensor/relay node (`firmware/`) | `ESP32-XXXXXXXXXXXX` | Sends temperature, humidity, light and soil moisture every 60 s; obeys irrigation / fertilizer / light commands and confirms them |
+| Sensor/relay node (`firmware/`) | `ESP32-XXXXXXXXXXXX` | Sends temperature, humidity, light and soil moisture every 5 min; obeys irrigation / fertilizer / light commands and confirms them |
 | Camera node (`firmware_cam/`) | `ESP32CAM-XXXXXXXXXXXX` | Sends one JPEG right after start, then one per 4-hour UTC window |
 
 The IDs are fixed for your computer, so the boards keep their claim between runs, just as a
@@ -43,7 +43,7 @@ Options (after `npm start --`):
 | Option | Default | |
 |---|---|---|
 | `--node sensor\|camera\|both` | `both` | which boards to run |
-| `--interval <s>` | `60` | seconds between readings (try `5` while testing) |
+| `--interval <s>` | `300` | seconds between readings (try `10` while testing) |
 | `--slots 1-4` | `4` | soil probes to report (`soilMoisture1..4`), like the real board |
 | `--images <folder>` | `./images` | JPEGs the camera cycles through (max 1.5 MB each) |
 | `--id`, `--camera-id` | per computer | pick the IDs yourself (keep the `ESP32-` / `ESP32CAM-` prefixes) |

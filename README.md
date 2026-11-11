@@ -209,7 +209,7 @@ pio device monitor       # serial monitor @ 115200 baud
 
 Before flashing, copy `firmware/include/secrets.example.h` to `firmware/include/secrets.h` and fill in your WiFi
 and MQTT credentials (`secrets.h` is gitignored; the build fails with a hint if it's missing).
-The device publishes sensor readings every 60s and subscribes to actuator command topics; the server's
+The device publishes sensor readings every 5 minutes (`PUBLISH_INTERVAL_MS` in `firmware/src/main.cpp`) and subscribes to actuator command topics; the server's
 MQTT bridge relays these to and from Firestore.
 
 ### Camera node (ESP32-CAM)

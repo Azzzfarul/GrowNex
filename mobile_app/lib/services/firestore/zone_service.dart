@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../models/sensor_reading_model.dart';
 import '../../models/zone_model.dart';
+import '../../utils/analytics.dart';
 
 class ZoneService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -12,15 +14,26 @@ class ZoneService {
     await _firestore.collection('zones').doc(zone.id).set(zone.toMap());
   }
 
-  // Clients can't list subcollections, so name them all (automationHistory is legacy data). Keep in
-  // step with web ZoneDetailPage.jsx; the server's account deletion uses recursiveDelete.
-  static const zoneSubcollections = ['sensorReadings', 'stats', 'aiCache', 'snapshots', 'automationHistory'];
+  // A zone's hourly readings since [since], oldest first. One read per UTC day touched: 8 for
+  // 7 days, 2 for the last 24 h. Web: fetchZoneStats in client/src/lib/zoneStats.js.
+  Future<List<SensorReading>> getStats(String zoneId, DateTime since) async {
+    final snap = await _firestore
+        .collection('zones').doc(zoneId).collection('statsDaily')
+        .where(FieldPath.documentId, isGreaterThanOrEqualTo: since.toUtc().toIso8601String().substring(0, 10))
+        .get();
+    return flattenDailyStats({for (final d in snap.docs) d.id: d.data()}, since);
+  }
+
+  // Clients can't list subcollections, so name them all (sensorReadings, stats and automationHistory
+  // are legacy data). Keep in step with web ZoneDetailPage.jsx; the server's account deletion uses
+  // recursiveDelete.
+  static const zoneSubcollections = ['statsDaily', 'aiCache', 'snapshots', 'sensorReadings', 'stats', 'automationHistory'];
 
   // Zone doc plus its subcollections. Delete Storage files (snapshots) before calling this.
   Future<void> deleteZone(String zoneId) async {
     final zoneRef = _firestore.collection('zones').doc(zoneId);
     for (final sub in zoneSubcollections) {
-      // Batched, so a week of readings (~10k docs) takes seconds rather than minutes.
+      // Batched, so a large legacy backlog takes seconds rather than minutes.
       while (true) {
         final snap = await zoneRef.collection(sub).limit(400).get();
         if (snap.docs.isEmpty) break;

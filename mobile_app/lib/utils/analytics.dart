@@ -5,6 +5,24 @@ import '../models/zone_model.dart';
 // Pure analytics helpers for screens/analytics/analytics_screen.dart.
 // Hand-ported from web client/src/lib/analytics.js — keep both passing the same test cases.
 
+/// History is stored one doc per UTC day (zones/{id}/statsDaily/{YYYY-MM-DD}), each hour an entry
+/// in its `hours` map. Flattens those docs (day ID → data) into the hourly readings everything else
+/// takes, oldest first, from [since] on. Web: flattenDailyStats in client/src/lib/analytics.js.
+List<SensorReading> flattenDailyStats(Map<String, Map<String, dynamic>> days, DateTime since) {
+  final out = <SensorReading>[];
+  days.forEach((day, data) {
+    final hours = data['hours'];
+    if (hours is! Map) return;
+    hours.forEach((hour, entry) {
+      if (entry is! Map) return;
+      final r = SensorReading.fromMap('${day}T$hour', Map<String, dynamic>.from(entry));
+      if (r.timestamp != null && !r.timestamp!.isBefore(since)) out.add(r);
+    });
+  });
+  out.sort((a, b) => a.timestamp!.compareTo(b.timestamp!));
+  return out;
+}
+
 const _dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 double? _listAvg(List<num> vals) {

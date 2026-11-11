@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,6 +6,7 @@ import '../../../models/plant_model.dart';
 import '../../../models/sensor_reading_model.dart';
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/plant_service.dart';
+import '../../../services/firestore/zone_service.dart';
 import '../../../services/photo_service.dart';
 import '../../../utils/plant_health.dart';
 import '../../../theme.dart';
@@ -111,14 +111,9 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     final zone = widget.zone;
     if (zone == null) return;
     try {
-      final cutoff = DateTime.now().subtract(const Duration(days: 7));
-      final snap = await FirebaseFirestore.instance
-          .collection('zones').doc(zone.id).collection('stats')
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
-          .orderBy('timestamp')
-          .get();
+      final stats = await ZoneService().getStats(zone.id, DateTime.now().subtract(const Duration(days: 7)));
       if (!mounted) return;
-      setState(() => _stats = snap.docs.map((d) => SensorReading.fromMap(d.id, d.data())).toList());
+      setState(() => _stats = stats);
     } catch (_) {
       if (mounted) setState(() => _stats = const []);
     }

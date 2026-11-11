@@ -16,6 +16,15 @@ export function avgPref(plants, minField, maxField) {
   }
 }
 
+// History is stored one doc per UTC day (zones/{id}/statsDaily/{YYYY-MM-DD}), each hour an entry in
+// its `hours` map. Flattens those docs into the hourly readings everything else takes, oldest first.
+export function flattenDailyStats(days, sinceMs) {
+  const ms = t => t?.toMillis ? t.toMillis() : new Date(t).getTime()
+  return days.flatMap(d => Object.values(d?.hours ?? {}))
+    .filter(r => r?.timestamp != null && ms(r.timestamp) >= sinceMs)
+    .sort((a, b) => ms(a.timestamp) - ms(b.timestamp))
+}
+
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 // Buckets by local calendar hour ('today' = last 24h) or calendar day ('7days'), oldest first.

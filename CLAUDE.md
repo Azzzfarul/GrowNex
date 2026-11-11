@@ -20,7 +20,7 @@ There is no root tooling; run commands inside each subproject. Env setup (Fireba
 ```bash
 # web_dashboard/server   (needs server/.env)
 npm run dev                            # node --watch → :5000, health check GET /api/health  (npm start = no watch)
-node seed.js <FIREBASE_UID>            # demo zone/plants/7 days of stats + claimable device GRX-DEMO-HUB02
+node seed.js <FIREBASE_UID>            # demo zone/plants/7 days of statsDaily + claimable device GRX-DEMO-HUB02
 node seed.js <FIREBASE_UID> --clean    # remove the demo data
 
 # web_dashboard/client   (needs client/.env)
@@ -57,7 +57,7 @@ ESP32 ──MQTT──▶ mqttBridge ──writes──▶ Firestore ◀──SD
 ESP32 ◀──MQTT── mqttBridge ◀─onSnapshot─ Firestore (devices.*Active, automationConfig, plants)
 ```
 
-REST endpoints actually called by clients: `POST /api/auth/register` (web only — mobile writes `users/{uid}` directly), `DELETE /api/auth/me` (both — it removes every zone subcollection, notifications and Storage photos; mobile falls back to the same cleanup in `auth_service.dart` when the server is unreachable, so keep the two in step) and `/api/ai/*` (both). `/api/zones|plants|devices|analytics` exist but nothing calls them. Every route except `/api/health` requires a Firebase ID token (`middleware/verifyToken.js`); zone/device-scoped routes also check `userId` ownership.
+REST endpoints actually called by clients: `POST /api/auth/register` (web only — mobile writes `users/{uid}` directly), `DELETE /api/auth/me` (both — it removes every zone subcollection, notifications and Storage photos; mobile falls back to the same cleanup in `auth_service.dart` when the server is unreachable, so keep the two in step) and `/api/ai/*` (both). `/api/zones|plants|devices` exist but nothing calls them. Every route except `/api/health` requires a Firebase ID token (`middleware/verifyToken.js`); zone/device-scoped routes also check `userId` ownership.
 
 ### MQTT contract (firmware ↔ bridge)
 
@@ -65,7 +65,7 @@ Device ID = `ESP32-` + uppercase MAC hex (`ESP32CAM-` for camera nodes; the brid
 
 | Topic | Direction | Payload |
 |---|---|---|
-| `grownex/{id}/sensors` | device → bridge, every 60 s | `{deviceId, temperature, humidity, lightLevel, soilMoisture1..4}` |
+| `grownex/{id}/sensors` | device → bridge, every 5 min (`PUBLISH_INTERVAL_MS`; simulator `--interval`) | `{deviceId, temperature, humidity, lightLevel, soilMoisture1..4}` |
 | `grownex/{id}/status` | device → bridge, retained + LWT | `"online"` / `"offline"` |
 | `grownex/{id}/actuators/state` | device → bridge, retained | `{deviceId, lightState, fertilizerState, irrigationState}`, plus `irrigationTimedOut` / `fertilizerTimedOut: true` while that pump is latched off at its safety limit |
 | `grownex/{id}/actuators/command` | bridge → device, retained | `{irrigationState, fertilizerState, lightState}` |
@@ -80,8 +80,8 @@ The firmware reads four capacitive soil probes (v1.2) into `soilMoisture1..4`, e
 Use `mqttBridge.js` and `server/seed.js` as the schema reference — `mobile_app/docs/data_design.md` is an outdated early sketch.
 
 - `zones/{zoneId}` — owned via `userId`; linked sensor/relay node in `deviceId`, linked camera node in `cameraDeviceId`. The bridge maintains denormalized `latestTemp|Humid|Light|Moisture`, `latestMoisture1..4`, `latestTimestamp`, `deviceOnline`, and `status` (`healthy|attention|critical|unknown`) + `alertSummary`, computed against the zone's plants' averaged preferred ranges (these only update while the bridge runs). Subcollections:
-  - `sensorReadings/` — every raw reading, kept 7 days (`expiresAt`). Deleted by the server's nightly prune, not a Firestore TTL policy (those need billing), so stale readings pile up while the server is down.
-  - `stats/{YYYY-MM-DDTHH}` — one doc per UTC hour holding that hour's latest value of each metric (merged; a null temperature/humidity is left out, so a failed DHT11 read doesn't blank the hour). **Analytics and plant-health scoring on both clients read `stats`, not `sensorReadings`.**
+  - `statsDaily/{YYYY-MM-DD}` (UTC) — the only sensor history: `hours.{HH}` holds that hour's latest value of each metric plus `timestamp` (deep-merged; a null temperature/humidity is left out, so a failed DHT11 read doesn't blank the hour). One doc per day so 7 days of charts cost 8 reads, not 168; **analytics and plant-health scoring on both clients read it** through `lib/zoneStats.js` `fetchZoneStats` / `ZoneService.getStats`, which flatten it (`flattenDailyStats`) into the hourly readings `buildChartData`, `plantHealth` etc. take. Pruned after 30 days by the nightly job. There are no raw per-reading docs; the legacy `sensorReadings/` and hourly `stats/` collections are only still named in the delete cascades.
+  - Firestore free tier (Spark: 50k reads, 20k writes, 20k deletes per day) is the budget: a reading costs the bridge ~2 writes (`statsDaily` + zone; the device doc only when `status` changes or `lastSync` is > 4 min old) and no reads (device doc read once; automation config comes from `watchAutomationConfig`'s `automationConfigs` cache). Keep it that way, and keep client history reads on daily docs.
   - `aiCache/{today|7days}` — AI analytics summary cache (input hash + TTL).
   - `snapshots/{YYYY-MM-DDTHH}` — "camera feed" photos, one per 4-hour UTC bucket (later uploads overwrite the bucket). `{imageUrl, storagePath, capturedAt}`; the nightly job deletes docs + Storage objects older than 48 h.
 - `zones.zonePhotoUrl` / `plants.photoUrl` — download URLs for Storage objects at `zonePhotos/{zoneId}.jpg` / `plantPhotos/{plantId}.jpg`. Uploads go straight from the client to Storage (web `lib/photoUpload.js`, which downscales to a 1280px JPEG first; mobile `services/photo_service.dart`). Mobile's add-plant/add-zone screens pre-allocate the doc ID (`newPlantRef` / `newZoneRef` + `create*WithId`) so the photo can be uploaded under that ID.
@@ -104,7 +104,7 @@ Nothing enforces cross-document integrity server-side; client code maintains it:
 - **Notifications** (`notify()` calls in the bridge): `threshold` when a zone's computed status *worsens* to `attention`/`critical` (30-min cooldown per zone; the first status seen after a restart never alerts), and `actuator` when automation turns an actuator on (`triggerActuator` with `true`), or with severity `warn` when a device stopped a pump at its safety limit or never confirmed a manual "on". Those warnings pass `always: true`, so they're sent even to users who turned actuator notifications off. Manual toggles and auto-offs don't notify.
 - **Unconfirmed manual "on":** a device that drops off silently still looks online for ~20 s, so a manual toggle can go to a dead device, and its retained "on" would fire whenever it reconnects. `expectConfirmation` gives each manual "on" `CONFIRM_MS` (15 s) to show up in `*Confirmed`; otherwise it's switched back off with a `warn` notification. Automation isn't checked (a schedule that fires while the device is away resumes when it's back). Telling the two apart relies on `isOwnEcho`: `applyActuator` records each intent write it makes, and its Firestore echo is not treated as a manual toggle (or re-published).
 - **Push:** `notify()` also sends each notification it writes to the user's `fcmTokens` via FCM (`firebase-admin/messaging`), after the Firestore write and without awaiting it, so FCM latency never delays callers. Tokens FCM reports as unregistered/invalid are pruned (`deadTokens`). Mobile only (no web push); no in-app pop-up while the app is open. FCM isn't emulated, so pushes fail or hang in the emulator tests, and mobile skips `PushService.init()` when `USE_FIREBASE_EMULATORS` is set. Needs "Firebase Cloud Messaging API (V1)" enabled on the project.
-- **Nightly job** (`services/dailySummary.js`, scheduled in `mqttBridge.init()` by `DAILY_SUMMARY_CRON` / `DAILY_SUMMARY_TZ`, default 20:00 Asia/Kuala_Lumpur): sends each user a `daily` "Evening summary" notification, then prunes notifications older than 30 days, expired `sensorReadings` (up to 10k per zone per night), and snapshots older than 48 h. This runs in the timezone you configure; the schedule crons, and the summary's "today", run in server local time, so `TZ` in `server/.env` must be the growers' timezone (the Docker image and most hosts default to UTC).
+- **Nightly job** (`services/dailySummary.js`, scheduled in `mqttBridge.init()` by `DAILY_SUMMARY_CRON` / `DAILY_SUMMARY_TZ`, default 20:00 Asia/Kuala_Lumpur): sends each user a `daily` "Evening summary" notification, then prunes notifications older than 30 days, `statsDaily` docs older than 30 days, and snapshots older than 48 h. This runs in the timezone you configure; the schedule crons, and the summary's "today", run in server local time, so `TZ` in `server/.env` must be the growers' timezone (the Docker image and most hosts default to UTC).
 - Cron jobs, the zone-alert cooldown, debounce and confirmation timers and auto-off `setTimeout`s all live in memory. A restart mid-cycle, including a `node --watch` reload while editing server code, loses the pending "off", and the retained command keeps the actuator on: a pump until the firmware's safety limit, the light until the next schedule or toggle.
 
 ### AI features (`server/src/routes/ai.js`)

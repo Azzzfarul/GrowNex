@@ -2,12 +2,26 @@
 // These modules are hand-ported to the mobile app — keep both sides passing the same cases.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildChartData, describeTrend, buildOverviewSummary, moistureBucketSeries, healthScoreForPlant, generateInsights, plantStatus } from '../src/lib/analytics.js'
+import { flattenDailyStats, buildChartData, describeTrend, buildOverviewSummary, moistureBucketSeries, healthScoreForPlant, generateInsights, plantStatus } from '../src/lib/analytics.js'
 import { plantHealth, plantHealthSummary, compliancePercent } from '../src/lib/plantHealth.js'
 import { plantZoneFit, zoneFitHint } from '../src/lib/zoneFit.js'
 
 const HOUR = 3600000, DAY = 24 * HOUR
 const reading = (ms, temperature) => ({ timestamp: new Date(ms), temperature })
+
+// ── flattenDailyStats ────────────────────────────────────────────────────────
+
+test('flattenDailyStats turns daily docs into hourly readings, oldest first, from the cutoff on', () => {
+  const t0 = Date.UTC(2026, 0, 1, 22)
+  const days = [
+    { hours: { '00': reading(t0 + 2 * HOUR, 21), '23': reading(t0 + HOUR, 23) } },  // keys out of order
+    { hours: { '22': reading(t0, 22), '21': reading(t0 - HOUR, 99) } },
+    { hours: { '05': { temperature: 1 } } },  // no timestamp: skipped
+    {},                                        // no hours at all
+  ]
+  assert.deepEqual(flattenDailyStats(days, t0).map(r => r.temperature), [22, 23, 21])
+  assert.deepEqual(flattenDailyStats([], 0), [])
+})
 
 // ── buildChartData ───────────────────────────────────────────────────────────
 

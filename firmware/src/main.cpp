@@ -24,7 +24,9 @@ const int   MQTT_PORT   = 8883;
 const char* MQTT_USER   = MQTT_USERNAME;
 const char* MQTT_PASS   = MQTT_PASSWORD;
 
-const unsigned long PUBLISH_INTERVAL_MS = 60000;          // 60 seconds
+// Time between sensor readings: 5 min keeps Firestore in the free tier (~2 writes per reading).
+// For testing, set 10000 (10 s), re-flash, and put it back afterwards.
+const unsigned long PUBLISH_INTERVAL_MS = 5UL * 60000;    // 5 minutes
 const unsigned long RETRY_MS            = 10000;          // WiFi / MQTT reconnect attempt gap
 const unsigned long REBOOT_AFTER_MS     = 10UL * 60000;   // offline this long → restart (unwedges the WiFi/TLS stack)
 

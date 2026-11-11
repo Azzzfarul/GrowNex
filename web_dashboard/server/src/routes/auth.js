@@ -45,7 +45,7 @@ router.delete('/me', verifyToken, async (req, res) => {
     const delFile = (path) => bucket.file(path).delete({ ignoreNotFound: true })
 
     // Devices first: while a device doc still points at a zone, its next reading would recreate
-    // sensorReadings/stats under the deleted zone, which nothing ever cleans up. Without the doc,
+    // statsDaily under the deleted zone, which nothing ever cleans up. Without the doc,
     // the bridge re-registers the device as unclaimed and writes nothing.
     const devicesSnap = await db.collection('devices').where('userId', '==', uid).get()
     const deviceDeletes = await Promise.allSettled(devicesSnap.docs.map(d => d.ref.delete()))
@@ -70,7 +70,7 @@ router.delete('/me', verifyToken, async (req, res) => {
         // Keep the zone until its plant/config deletes have landed: a retry finds plants via the zone.
         await writer.flush()
         if (failed.length) throw new Error(`${failed.length} document(s) could not be deleted`)
-        // Zone doc plus every subcollection (sensorReadings, stats, aiCache, snapshots)
+        // Zone doc plus every subcollection (statsDaily, aiCache, snapshots, and any left from older versions)
         await db.recursiveDelete(zoneDoc.ref)
       }
 
