@@ -32,7 +32,7 @@ const char* MQTT_PASS   = MQTT_PASSWORD;
 // ─── Capture settings ─────────────────────────────────────────────────────────
 #define FRAME_SIZE      FRAMESIZE_SVGA  // 800x600 ≈ 30–80 KB; FRAMESIZE_XGA (1024x768) for more detail
 #define JPEG_QUALITY    12              // 0–63, lower = better quality + bigger file
-#define CAM_VFLIP       false           // flip these to match how the camera is mounted
+#define CAM_VFLIP       true            // flip these to match how the camera is mounted
 #define CAM_HMIRROR     false
 #define USE_FLASH       false           // light the onboard flash LED (GPIO 4) while capturing
 #define WARMUP_FRAMES   3               // discarded before each shot: lets auto-exposure settle and
