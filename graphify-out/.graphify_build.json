@@ -1,0 +1,1 @@
+{"excludes": ["mobile_app/android/app/src/main/res/mipmap-*/", "mobile_app/ios/Runner/Assets.xcassets/", "mobile_app/macos/Runner/Assets.xcassets/", "mobile_app/web/icons/", "mobile_app/web/favicon.png"]}
