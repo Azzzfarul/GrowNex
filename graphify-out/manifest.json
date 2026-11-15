@@ -258,10 +258,10 @@
     "semantic_hash": "177a4043486ff619b02004717c887a4b"
   },
   "mobile_app/lib/screens/plants/widgets/zone_summary_card.dart": {
-    "mtime": 1793293301.1488101,
-    "seen": 1794734439.646096,
-    "ast_hash": "ff0f0b2e248f444766177cd159dd2e98",
-    "semantic_hash": "ff0f0b2e248f444766177cd159dd2e98"
+    "mtime": 1794764242.892854,
+    "seen": 1794764255.502326,
+    "ast_hash": "38ef372767dffc958b46d5771a9296be",
+    "semantic_hash": ""
   },
   "mobile_app/lib/screens/plants/zone_detail/automation_tab.dart": {
     "mtime": 1793805906.6895952,
@@ -738,10 +738,10 @@
     "semantic_hash": "ee4ecd066e793d79fe4003323fc2c0c1"
   },
   "web_dashboard/client/src/pages/PlantsPage.jsx": {
-    "mtime": 1793857943.7379615,
-    "seen": 1794734439.646134,
-    "ast_hash": "d18741763cab8b2c6b5103baf5b56c07",
-    "semantic_hash": "d18741763cab8b2c6b5103baf5b56c07"
+    "mtime": 1794764222.5889475,
+    "seen": 1794764255.5023758,
+    "ast_hash": "c0811c44bbc807b2720707b9fe20c653",
+    "semantic_hash": ""
   },
   "web_dashboard/client/src/pages/ProfilePage.jsx": {
     "mtime": 1793805906.6916382,
@@ -828,9 +828,9 @@
     "semantic_hash": "2c4637b38531b926c37323bc1ac32321"
   },
   "web_dashboard/server/seed.js": {
-    "mtime": 1794761965.1046677,
-    "seen": 1794762909.749505,
-    "ast_hash": "40f79714de902c0d3b267deb9d5c3b4d",
+    "mtime": 1794763225.582893,
+    "seen": 1794763736.3593228,
+    "ast_hash": "7d862f04520aa86914f41b8b4e1d2402",
     "semantic_hash": ""
   },
   "web_dashboard/server/src/firebase-admin.js": {
@@ -924,9 +924,9 @@
     "semantic_hash": "d7ab05c5ba1ffe688bf2a965c3e041ee"
   },
   "web_dashboard/server/test/integration.test.js": {
-    "mtime": 1794761657.6036704,
-    "seen": 1794762909.749515,
-    "ast_hash": "d7da4bed38b4baed18e878e99021cc8a",
+    "mtime": 1794763132.1264808,
+    "seen": 1794763736.359334,
+    "ast_hash": "9975e62b83f14f4510b0c80595ef5e2b",
     "semantic_hash": ""
   },
   "web_dashboard/server/test/sandbox.js": {
