@@ -147,7 +147,7 @@ export default function PlantsPage() {
               <EmptyState
                 icon="potted_plant"
                 title="No zones yet"
-                body="A zone is a group of up to four plants watched by one sensor node."
+                body="A zone is a group of plants that share one sensor node and its soil sensor."
                 action={<button onClick={openAddZone} className="btn-filled"><Icon name="add" />Add zone</button>}
               />
             ) : (
