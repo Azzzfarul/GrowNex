@@ -204,9 +204,9 @@
     "semantic_hash": "74984355791edfd159723bedfdff5c51"
   },
   "mobile_app/lib/screens/devices/device_detail_screen.dart": {
-    "mtime": 1794762389.789385,
-    "seen": 1794762909.749443,
-    "ast_hash": "4d55d72d8bbe6e7c57b3635ae98f5288",
+    "mtime": 1794765265.4713705,
+    "seen": 1794765291.592549,
+    "ast_hash": "26e4373cd165931869de3f2907d827bd",
     "semantic_hash": ""
   },
   "mobile_app/lib/screens/devices/devices_screen.dart": {
@@ -708,9 +708,9 @@
     "semantic_hash": "cfae6f5da53e35fef39001233c0b5c38"
   },
   "web_dashboard/client/src/pages/AnalyticsPage.jsx": {
-    "mtime": 1794762249.293601,
-    "seen": 1794762909.749493,
-    "ast_hash": "26c98d5bf8e6d1c576bd0aad8df55026",
+    "mtime": 1794765265.4712546,
+    "seen": 1794765291.592602,
+    "ast_hash": "1f87c38c728f4e5eb4cd9834c680122d",
     "semantic_hash": ""
   },
   "web_dashboard/client/src/pages/DashboardPage.jsx": {
@@ -786,9 +786,9 @@
     "semantic_hash": ""
   },
   "web_dashboard/client/src/pages/zones/PlantsTab.jsx": {
-    "mtime": 1794762271.1035671,
-    "seen": 1794762909.749501,
-    "ast_hash": "d11b5ba3a468ccce25bccb789891ea3c",
+    "mtime": 1794765265.4709802,
+    "seen": 1794765291.592611,
+    "ast_hash": "77880da5ddff736ca045ea64b2ed85fb",
     "semantic_hash": ""
   },
   "web_dashboard/client/tailwind.config.js": {
@@ -912,9 +912,9 @@
     "semantic_hash": "ef14aa731138982afe1d71fbf17f91da"
   },
   "web_dashboard/server/src/services/mqttBridge.js": {
-    "mtime": 1794761805.9448562,
-    "seen": 1794762909.749514,
-    "ast_hash": "3e64f541bdf71247362bd7b28036df8a",
+    "mtime": 1794765144.544399,
+    "seen": 1794765291.5926242,
+    "ast_hash": "330b26c97f58d5ebd3cd07e043d0d3ce",
     "semantic_hash": ""
   },
   "web_dashboard/server/src/services/notifications.js": {
@@ -924,9 +924,9 @@
     "semantic_hash": "d7ab05c5ba1ffe688bf2a965c3e041ee"
   },
   "web_dashboard/server/test/integration.test.js": {
-    "mtime": 1794763132.1264808,
-    "seen": 1794763736.359334,
-    "ast_hash": "9975e62b83f14f4510b0c80595ef5e2b",
+    "mtime": 1794765022.1214871,
+    "seen": 1794765291.592625,
+    "ast_hash": "000c53f7a758ed0800270da740eed0d4",
     "semantic_hash": ""
   },
   "web_dashboard/server/test/sandbox.js": {
