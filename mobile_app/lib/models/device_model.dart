@@ -7,7 +7,6 @@ class Device {
   final String deviceName;
   final String deviceType;
   final String status;
-  final int totalSlots;
   final bool hasLightingModule;
   final bool hasFertilizerModule;
   final bool irrigationActive;
@@ -22,7 +21,6 @@ class Device {
     required this.deviceName,
     required this.deviceType,
     required this.status,
-    this.totalSlots = 4,
     required this.hasLightingModule,
     required this.hasFertilizerModule,
     this.irrigationActive = false,
@@ -61,7 +59,6 @@ class Device {
       deviceName: map['deviceName'] as String? ?? 'Device',
       deviceType: map['deviceType'] as String? ?? 'indoor',
       status: map['status'] as String? ?? 'offline',
-      totalSlots: (map['totalSlots'] as num?)?.toInt() ?? 4,
       hasLightingModule: map['hasLightingModule'] as bool? ?? false,
       hasFertilizerModule: map['hasFertilizerModule'] as bool? ?? false,
       irrigationActive: map['irrigationActive'] as bool? ?? false,
@@ -78,7 +75,6 @@ class Device {
       'deviceName': deviceName,
       'deviceType': deviceType,
       'status': status,
-      'totalSlots': totalSlots,
       'hasLightingModule': hasLightingModule,
       'hasFertilizerModule': hasFertilizerModule,
       'irrigationActive': irrigationActive,

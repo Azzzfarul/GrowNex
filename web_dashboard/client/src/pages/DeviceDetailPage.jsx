@@ -162,8 +162,6 @@ export default function DeviceDetailPage() {
     )
   }
 
-  const totalSlots = device.totalSlots || 4
-  const slotsLeft = Math.max(0, totalSlots - zoneInfo.plantsUsed)
   const sensorAvailable = isSensorAvailable(device.lastSync)
   const isCamera = device.deviceType === 'camera'
   const online = device.status === 'online'
@@ -253,12 +251,8 @@ export default function DeviceDetailPage() {
                 ? <Link to={`/zones/${zoneInfo.zone.id}`} className="text-primary hover:underline">{zoneInfo.zone.zoneName}</Link>
                 : 'Not assigned'}
             </Fact>
-            {!isCamera && (
-              <Fact label="Plant slots">
-                {!zoneInfo.loaded ? '…' : device.assignedZoneId
-                  ? `${zoneInfo.plantsUsed} used · ${slotsLeft} free`
-                  : `${totalSlots} total`}
-              </Fact>
+            {!isCamera && device.assignedZoneId && (
+              <Fact label="Plants">{zoneInfo.loaded ? zoneInfo.plantsUsed : '…'}</Fact>
             )}
             {!device.assignedZoneId && (
               <p className="text-body-sm text-on-surface-variant mt-2">Assign it from a zone's Overview tab.</p>

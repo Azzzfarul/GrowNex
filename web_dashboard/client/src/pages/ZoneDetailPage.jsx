@@ -111,7 +111,7 @@ export default function ZoneDetailPage() {
       <PageHeader
         back="/plants"
         title={zone.zoneName}
-        subtitle={<span className="capitalize">{zone.zoneType} · {zone.totalPlantSlots ?? 0} slot{zone.totalPlantSlots !== 1 ? 's' : ''}</span>}
+        subtitle={<span className="capitalize">{zone.zoneType}</span>}
         actions={
           <button onClick={() => setShowDeleteConfirm(true)} className="btn-outlined btn-danger">
             <Icon name="delete" />Delete zone

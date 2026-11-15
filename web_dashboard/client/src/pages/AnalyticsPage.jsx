@@ -14,12 +14,12 @@ import { fetchAiSummary } from '../lib/aiSummary'
 import { compliancePercent, plantHealth, plantHealthSummary } from '../lib/plantHealth'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer,
 } from 'recharts'
 
 import {
   avg, avgPref, buildChartData, describeTrend, moistureBucketSeries, buildOverviewSummary,
-  getMoistureLines, healthScoreForPlant, zoneHealthScore, generateInsights,
+  healthScoreForPlant, zoneHealthScore, generateInsights,
   scoreColor, scoreBadge, scoreLabel,
 } from '../lib/analytics'
 
@@ -32,7 +32,6 @@ const TOOLTIP = {
   labelStyle: TIP_TEXT,
   itemStyle: TIP_TEXT,
 }
-const legendText = (v) => <span className="text-body-sm text-on-surface-variant">{v}</span>
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -202,7 +201,7 @@ export default function AnalyticsPage() {
         light:    zone.latestLight    ?? null,
         moisture: zone.latestMoisture ?? null,
       },
-      plants: plants.map(p => ({ name: p.plantName, species: p.species ?? null, slotNumber: p.slotNumber ?? null })),
+      plants: plants.map(p => ({ name: p.plantName, species: p.species ?? null })),
       ruleResults: {
         overview:    buildOverviewSummary({ selectedZone: zone, plants, results: { temperature: tRes, humidity: hRes, moisture: mRes } }).text,
         temperature: tRes.text,
@@ -241,7 +240,6 @@ export default function AnalyticsPage() {
 
   // Chart data
   const chartData     = buildChartData(readings, timeRange)
-  const moistureLines = getMoistureLines(plants, readings, isAllZones)
   const noReadings    = chartData.length === 0
 
   // Zone-specific computations (only when a specific zone is selected)
@@ -386,20 +384,7 @@ export default function AnalyticsPage() {
           ))}
 
           <ChartCard title="Soil moisture (%)" caption={<SummaryLine text={aiMap.moisture ?? moistRes.text} isAi={aiMap.moisture != null} />}>
-            {noReadings ? <EmptyChart /> : (
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={chartData} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
-                  <CartesianGrid {...GRID} />
-                  <XAxis dataKey="label" {...AXIS} minTickGap={24} />
-                  <YAxis {...AXIS} width={40} />
-                  <Tooltip {...TOOLTIP} />
-                  {moistureLines.length > 1 && <Legend formatter={legendText} />}
-                  {moistureLines.map(({ key, name, color }) => (
-                    <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} name={name} connectNulls />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            )}
+            {noReadings ? <EmptyChart /> : chart('moisture', 'var(--chart-1)')}
           </ChartCard>
         </div>
 

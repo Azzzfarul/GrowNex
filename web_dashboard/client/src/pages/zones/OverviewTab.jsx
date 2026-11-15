@@ -136,7 +136,6 @@ export default function OverviewTab({ zone }) {
         deviceId: dev.id,
         hasFertilizer: dev.hasFertilizerModule ?? false,
         hasLight: dev.hasLightingModule ?? false,
-        totalPlantSlots: dev.totalSlots ?? 4,
       })
       await setDoc(doc(db, 'devices', dev.id), {
         assignedZoneId: zone.id,
@@ -156,7 +155,7 @@ export default function OverviewTab({ zone }) {
     setDevError(null)
     try {
       await updateDoc(doc(db, 'devices', zone.deviceId), { assignedZoneId: null })
-      await updateDoc(doc(db, 'zones', zone.id), { deviceId: null, hasFertilizer: false, hasLight: false, totalPlantSlots: 0 })
+      await updateDoc(doc(db, 'zones', zone.id), { deviceId: null, hasFertilizer: false, hasLight: false })
     } catch {
       setDevError('Failed to remove device. Please try again.')
     } finally {
@@ -260,7 +259,7 @@ export default function OverviewTab({ zone }) {
             </div>
             <div className="rounded-lg bg-surface-container p-3">
               <dt className="text-label-md text-on-surface-variant">Plants</dt>
-              <dd className="text-title-sm text-on-surface mt-0.5">{plantCount === null ? '…' : plantCount} of {zone.totalPlantSlots ?? 4}</dd>
+              <dd className="text-title-sm text-on-surface mt-0.5">{plantCount === null ? '…' : plantCount}</dd>
             </div>
           </dl>
         </section>

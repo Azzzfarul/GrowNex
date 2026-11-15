@@ -77,8 +77,7 @@ async function seed() {
   const fiveDaysAgo  = Timestamp.fromDate(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000))
 
   // ── 1. Zone (created first so we have its ID for the device) ─────────────
-  const sm1 = rand(50, 62), sm2 = rand(55, 68), sm3 = rand(38, 50), sm4 = rand(58, 72)
-  const latestMoisture = +((sm1 + sm2 + sm3 + sm4) / 4).toFixed(1)
+  const latestMoisture = rand(55, 60)  // the zone's one soil probe: inside every demo plant's range
 
   const zoneRef = db.collection('zones').doc()
 
@@ -91,7 +90,6 @@ async function seed() {
     deviceName:          'GrowNex Hub 01',
     deviceType:          'indoor',
     status:              'online',
-    totalSlots:          4,
     hasLightingModule:   true,
     hasFertilizerModule: true,
     irrigationActive:    false,
@@ -110,17 +108,12 @@ async function seed() {
     status:           'healthy',
     alertSummary:     'All conditions are within preferred range.',
     deviceOnline:     true,
-    totalPlantSlots:  4,
     hasFertilizer:    true,
     hasLight:         true,
     latestTemp:       rand(25, 29),
     latestHumid:      rand(62, 75),
     latestLight:      rand(60, 85),
     latestMoisture,
-    latestMoisture1:  sm1,
-    latestMoisture2:  sm2,
-    latestMoisture3:  sm3,
-    latestMoisture4:  sm4,
     latestTimestamp:  now,
     createdAt:        sevenDaysAgo,
   })
@@ -129,7 +122,7 @@ async function seed() {
   // ── 3. Plants ─────────────────────────────────────────────────────────────
   const plantDefs = [
     {
-      plantName: 'Basil', species: 'Ocimum basilicum', slotNumber: 1,
+      plantName: 'Basil', species: 'Ocimum basilicum',
       preferredMoistureMin: 45,   preferredMoistureMax: 70,
       preferredHumidityMin: 50,   preferredHumidityMax: 80,
       preferredTemperatureMin: 22, preferredTemperatureMax: 30,
@@ -137,7 +130,7 @@ async function seed() {
       notes: 'Keep away from cold drafts. Pinch flowers to prolong leaf production.',
     },
     {
-      plantName: 'Mint', species: 'Mentha spicata', slotNumber: 2,
+      plantName: 'Mint', species: 'Mentha spicata',
       preferredMoistureMin: 55,   preferredMoistureMax: 75,
       preferredHumidityMin: 55,   preferredHumidityMax: 80,
       preferredTemperatureMin: 18, preferredTemperatureMax: 28,
@@ -145,20 +138,36 @@ async function seed() {
       notes: 'Trim regularly to prevent leggy growth.',
     },
     {
-      plantName: 'Chili', species: 'Capsicum annuum', slotNumber: 3,
-      preferredMoistureMin: 35,   preferredMoistureMax: 55,
+      plantName: 'Chili', species: 'Capsicum annuum',
+      preferredMoistureMin: 45,   preferredMoistureMax: 60,
       preferredHumidityMin: 45,   preferredHumidityMax: 65,
       preferredTemperatureMin: 24, preferredTemperatureMax: 32,
       preferredLightCondition: 'high',
       notes: 'Reduce watering when fruiting. Likes warmth.',
     },
     {
-      plantName: 'Lettuce', species: 'Lactuca sativa', slotNumber: 4,
+      plantName: 'Lettuce', species: 'Lactuca sativa',
       preferredMoistureMin: 55,   preferredMoistureMax: 78,
       preferredHumidityMin: 60,   preferredHumidityMax: 80,
       preferredTemperatureMin: 15, preferredTemperatureMax: 22,
       preferredLightCondition: 'medium',
       notes: 'Sensitive to heat — watch temperature carefully.',
+    },
+    {
+      plantName: 'Parsley', species: 'Petroselinum crispum',
+      preferredMoistureMin: 50,   preferredMoistureMax: 70,
+      preferredHumidityMin: 50,   preferredHumidityMax: 75,
+      preferredTemperatureMin: 18, preferredTemperatureMax: 28,
+      preferredLightCondition: 'medium',
+      notes: 'Keep the soil evenly moist.',
+    },
+    {
+      plantName: 'Coriander', species: 'Coriandrum sativum',
+      preferredMoistureMin: 50,   preferredMoistureMax: 70,
+      preferredHumidityMin: 50,   preferredHumidityMax: 75,
+      preferredTemperatureMin: 17, preferredTemperatureMax: 27,
+      preferredLightCondition: 'medium',
+      notes: 'Bolts in heat; keep the soil evenly moist.',
     },
   ]
 
@@ -182,17 +191,12 @@ async function seed() {
     const hour   = new Date(hourMs).getUTCHours()
     const isDay  = hour >= 6 && hour <= 20
 
-    const s1 = rand(35, 65), s2 = rand(35, 65), s3 = rand(35, 65), s4 = rand(35, 65)
     const reading = {
-      temperature:   rand(24, 32),
-      humidity:      rand(50, 80),
-      lightLevel:    isDay ? rand(40, 100) : rand(0, 10),
-      moisture:      +((s1 + s2 + s3 + s4) / 4).toFixed(1),
-      soilMoisture1: s1,
-      soilMoisture2: s2,
-      soilMoisture3: s3,
-      soilMoisture4: s4,
-      timestamp:     Timestamp.fromDate(new Date(hourMs)),
+      temperature: rand(24, 32),
+      humidity:    rand(50, 80),
+      lightLevel:  isDay ? rand(40, 100) : rand(0, 10),
+      moisture:    rand(40, 65),
+      timestamp:   Timestamp.fromDate(new Date(hourMs)),
     }
 
     // zones/{id}/statsDaily/{YYYY-MM-DD}.hours.{HH}, read by analytics + plant health (web + mobile).
@@ -232,7 +236,6 @@ async function seed() {
     deviceName:          'GrowNex Hub 02',
     deviceType:          'indoor',
     status:              'offline',
-    totalSlots:          4,
     hasLightingModule:   true,
     hasFertilizerModule: true,
     irrigationActive:    false,
@@ -251,7 +254,7 @@ Done! Demo data ready.
 
 Open the app/dashboard and navigate to:
   • Dashboard  → see live summary cards
-  • Plants     → Herb Garden with 4 plants
+  • Plants     → Herb Garden with 6 plants
   • Devices    → GrowNex Hub 01 (claimed)
   • Analytics  → select "Herb Garden" for charts and health score
 

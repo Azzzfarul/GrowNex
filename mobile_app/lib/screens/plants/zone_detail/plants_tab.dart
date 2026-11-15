@@ -40,29 +40,23 @@ class _PlantsTabState extends State<PlantsTab> {
         }
 
         final plants = snapshot.data ?? [];
-        const maxPlants = 4;
-        final isFull = plants.length >= maxPlants;
-        final takenSlots = plants.map((p) => p.slotNumber).toSet();
 
         return ListView(
           padding: const EdgeInsets.all(20),
           children: [
             FilledButton.icon(
-              onPressed: isFull
-                  ? null
-                  : () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => AddPlantScreen(
-                            zoneId: widget.zone.id,
-                            takenSlots: takenSlots,
-                            zoneType: widget.zone.zoneType,
-                            userId: widget.zone.userId,
-                          ),
-                        ),
-                      ),
-              icon: Icon(isFull ? Icons.block : Icons.add),
-              label: Text(isFull ? 'Zone full (${plants.length}/$maxPlants)' : 'Add plant'),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AddPlantScreen(
+                    zoneId: widget.zone.id,
+                    zoneType: widget.zone.zoneType,
+                    userId: widget.zone.userId,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('Add plant'),
             ),
             const SizedBox(height: 20),
             if (plants.isEmpty)
@@ -78,20 +72,10 @@ class _PlantsTabState extends State<PlantsTab> {
     );
   }
 
-  num? _slotMoisture(int slot) {
-    switch (slot) {
-      case 1: return widget.zone.latestMoisture1;
-      case 2: return widget.zone.latestMoisture2;
-      case 3: return widget.zone.latestMoisture3;
-      case 4: return widget.zone.latestMoisture4;
-      default: return null;
-    }
-  }
-
   Widget _buildPlantCard(BuildContext context, Plant plant) {
     final tt = Theme.of(context).textTheme;
     final cs       = Theme.of(context).colorScheme;
-    final moisture = _slotMoisture(plant.slotNumber);
+    final moisture = widget.zone.latestMoisture;
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -131,15 +115,10 @@ class _PlantsTabState extends State<PlantsTab> {
               ),
               const SizedBox(height: 10),
               Text(plant.species, style: TextStyle(color: cs.onSurfaceVariant)),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _InfoChip(label: 'Slot', value: plant.slotNumber.toString()),
-                  const SizedBox(width: 8),
-                  if (plant.preferredLightCondition != null)
-                    _InfoChip(label: 'Light', value: plant.preferredLightCondition!),
-                ],
-              ),
+              if (plant.preferredLightCondition != null) ...[
+                const SizedBox(height: 12),
+                _InfoChip(label: 'Light', value: plant.preferredLightCondition!),
+              ],
               if (moisture != null) ...[
                 const SizedBox(height: 14),
                 _MoistureBar(

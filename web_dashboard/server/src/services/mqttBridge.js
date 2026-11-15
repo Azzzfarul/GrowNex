@@ -66,7 +66,6 @@ async function getOrCreateDevice(deviceId) {
       assignedZoneId:      null,
       hasLightingModule:   false,
       hasFertilizerModule: false,
-      totalSlots:          camera ? 0 : 4,
       userId:              '',
       lastSync:            FieldValue.serverTimestamp(),
     }).then(() => true, e => { if (e.code === 6) return false; throw e })  // 6 = ALREADY_EXISTS
@@ -78,14 +77,12 @@ async function getOrCreateDevice(deviceId) {
 
 // ─── Sensor message handler ───────────────────────────────────────────────────
 // Topic: grownex/{deviceId}/sensors
-// Payload: { deviceId, temperature, humidity, lightLevel, soilMoisture1–4 }
+// Payload: { deviceId, temperature, humidity, lightLevel, soilMoisture }
 async function handleSensors(deviceId, payload) {
-  const { temperature, humidity, lightLevel,
-          soilMoisture1, soilMoisture2, soilMoisture3, soilMoisture4 } = payload
-
-  // Average of non-null slot readings — used for threshold checks and backward compat
-  const slotValues = [soilMoisture1, soilMoisture2, soilMoisture3, soilMoisture4].filter(v => v != null)
-  const moisture = slotValues.length ? slotValues.reduce((a, b) => a + b) / slotValues.length : null
+  const { temperature, humidity, lightLevel } = payload
+  // The zone's one soil probe, shared by all its plants. Boards not yet reflashed still send
+  // soilMoisture1..4: their first probe stands in, so threshold watering keeps working.
+  const moisture = payload.soilMoisture ?? payload.soilMoisture1 ?? null
 
   const device = await getOrCreateDevice(deviceId)
   const { assignedZoneId } = device
@@ -105,12 +102,7 @@ async function handleSensors(deviceId, payload) {
   const statsHour = nowIso.slice(11, 13)
 
   const sensorFields = {
-    temperature, humidity, lightLevel,
-    soilMoisture1: soilMoisture1 ?? null,
-    soilMoisture2: soilMoisture2 ?? null,
-    soilMoisture3: soilMoisture3 ?? null,
-    soilMoisture4: soilMoisture4 ?? null,
-    moisture,
+    temperature, humidity, lightLevel, moisture,
   }
 
   // After a restart the cache is empty until this zone's first write: fall back to the stored status.
@@ -136,10 +128,6 @@ async function handleSensors(deviceId, payload) {
 
     db.collection('zones').doc(assignedZoneId).update({
       latestMoisture:  moisture,
-      latestMoisture1: soilMoisture1 ?? null,
-      latestMoisture2: soilMoisture2 ?? null,
-      latestMoisture3: soilMoisture3 ?? null,
-      latestMoisture4: soilMoisture4 ?? null,
       latestTemp:      temperature,
       latestHumid:     humidity,
       latestLight:     lightLevel,
@@ -421,7 +409,7 @@ export function computeZoneStatus(sensorFields, plants, prevStatus) {
   const check = (val, min, max, label, unit) => {
     if (min == null || max == null) return
     if (val == null) { missing.push(label.toLowerCase()); return }
-    const v = Math.round(val * 10) / 10  // moisture is an average, e.g. 41.666…
+    const v = Math.round(val * 10) / 10  // one decimal in the summary
     if (val < min) issues.push(`${label} too low (${v}${unit}, ideal ≥ ${min.toFixed(1)}${unit})`)
     else if (val > max) issues.push(`${label} too high (${v}${unit}, ideal ≤ ${max.toFixed(1)}${unit})`)
   }

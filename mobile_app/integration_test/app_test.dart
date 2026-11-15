@@ -142,7 +142,6 @@ void main() {
     await type(t, field('Species (e.g. Phalaenopsis)'), 'Basil');
     await tap(t, find.text('Suggest'));
     await t.pump(const Duration(seconds: 2));
-    await tap(t, find.text('Slot 1'));
     await tap(t, button('Add plant'));
     await pumpUntil(t, find.text('Basil'));
 
@@ -180,7 +179,7 @@ void main() {
       await db.doc('zones/$zoneId/statsDaily/${iso.substring(0, 10)}').set({
         'hours': {
           iso.substring(11, 13): {
-            'temperature': 22, 'humidity': 60, 'moisture': 45, 'soilMoisture1': 45,
+            'temperature': 22, 'humidity': 60, 'moisture': 45,
             'timestamp': Timestamp.fromDate(now.subtract(ago)),
           },
         },

@@ -24,7 +24,6 @@ const HELP = `Usage: npm start -- [options]
   --camera-id ESP32CAM-…      camera node ID (default: stable per computer)
   --interval <seconds>        time between readings (default: 300, like the firmware;
                               try 10 while testing)
-  --slots 1-4                 soil probes to report (default: 4, like the firmware)
   --images <folder>           JPEGs for the camera (default: ./images)
   --pump-limit <seconds>      pump safety limit for both pumps (default: 1200 irrigation,
                               2400 fertilizer, like the firmware); shorten it to test it
@@ -54,7 +53,6 @@ try {
     id: { type: 'string' },
     'camera-id': { type: 'string' },
     interval: { type: 'string', default: '300' },
-    slots: { type: 'string', default: '4' },
     images: { type: 'string', default: path.join(HERE, 'images') },
     'pump-limit': { type: 'string' },
     help: { type: 'boolean', short: 'h' },
@@ -67,11 +65,9 @@ if (opt.help) { console.log(HELP); process.exit(0) }
 const runSensor = opt.node === 'sensor' || opt.node === 'both'
 const runCamera = opt.node === 'camera' || opt.node === 'both'
 const intervalMs = Number(opt.interval) * 1000
-const slots = Number(opt.slots)
 if (!runSensor && !runCamera) fail(`--node must be sensor, camera or both\n\n${HELP}`)
 // setInterval treats anything over 2^31-1 ms as 1 ms, which would flood the broker.
 if (!(intervalMs >= 1000 && intervalMs <= 2147483647)) fail('--interval must be 1 to 2147483 seconds')
-if (![1, 2, 3, 4].includes(slots)) fail('--slots must be 1, 2, 3 or 4')
 const pumpLimitS = opt['pump-limit'] === undefined ? null : Number(opt['pump-limit'])
 if (pumpLimitS !== null && !(pumpLimitS >= 1 && pumpLimitS <= 2147483)) fail('--pump-limit must be 1 to 2147483 seconds')
 
@@ -190,8 +186,8 @@ function shutdown(client, id) {
 // ─── Sensor / relay node (firmware/) ──────────────────────────────────────────
 
 const sim = {
-  moisture: [55, 62, 48, 58].slice(0, slots),  // % per soil probe
-  tempOffset: 0,                               // set by hot / cold
+  moisture: 55,    // % from the zone's one soil probe
+  tempOffset: 0,   // set by hot / cold
   actuators: { lightState: false, fertilizerState: false, irrigationState: false },
 }
 
@@ -225,7 +221,7 @@ const DRY_PER_SEC = 0.01
 const WATER_PER_SEC = 0.25
 setInterval(() => {
   const delta = sim.actuators.irrigationState ? WATER_PER_SEC : -DRY_PER_SEC
-  sim.moisture = sim.moisture.map(m => clamp(m + delta, 0, 100))
+  sim.moisture = clamp(sim.moisture + delta, 0, 100)
 }, 1000).unref()
 
 function readSensors() {
@@ -237,8 +233,8 @@ function readSensors() {
     humidity: round1(clamp(65 - 10 * day + noise(1), 0, 100)),
     // Like the firmware's LDR reading: 0–100 % brightness, high under the grow light.
     lightLevel: sim.actuators.lightState ? 85 : 30,
+    soilMoisture: round1(clamp(sim.moisture + noise(0.5), 0, 100)),
   }
-  sim.moisture.forEach((m, i) => { reading[`soilMoisture${i + 1}`] = round1(clamp(m + noise(0.5), 0, 100)) })
   return reading
 }
 
@@ -261,8 +257,7 @@ function startSensor() {
     const r = readSensors()
     sensorClient.publish(topics.sensors, JSON.stringify(r))
     publishState()  // the firmware republishes actuator state with every reading
-    const soil = sim.moisture.map((_, i) => `soil${i + 1}=${r[`soilMoisture${i + 1}`]}%`).join(' ')
-    log(sensorId, `sensors → temp=${r.temperature}°C humid=${r.humidity}% ${soil} light=${r.lightLevel}`)
+    log(sensorId, `sensors → temp=${r.temperature}°C humid=${r.humidity}% soil=${r.soilMoisture}% light=${r.lightLevel}`)
   }
 
   // Like the firmware's failSafe(): no connection, no relays, since no "off" could reach us. The
@@ -387,7 +382,7 @@ function startCamera() {
 console.log(`GrowNex device simulator — broker ${broker.host}:${broker.port} (from ${broker.source})`)
 const sensor = runSensor ? startSensor() : null
 const camera = runCamera ? startCamera() : null
-if (runSensor) console.log(`  sensor node  ${sensorId}  every ${intervalMs / 1000}s, ${slots} soil probe(s)`)
+if (runSensor) console.log(`  sensor node  ${sensorId}  every ${intervalMs / 1000}s`)
 if (runCamera) console.log(`  camera node  ${cameraId}  ${camera.imageCount} image(s) from ${opt.images}`)
 console.log('Claim them in the app: Devices → Add device (they show under "New devices nearby" while online).')
 
@@ -411,8 +406,8 @@ if (process.stdin.isTTY) console.log(`\n${COMMANDS}\n`)
   rl.on('line', async line => {
     const cmd = line.trim().toLowerCase()
     switch (cmd) {
-      case 'dry': sim.moisture = sim.moisture.map(() => 15); log('sim', 'soil moisture → 15%'); sensor?.publishReading(); break
-      case 'wet': sim.moisture = sim.moisture.map(() => 85); log('sim', 'soil moisture → 85%'); sensor?.publishReading(); break
+      case 'dry': sim.moisture = 15; log('sim', 'soil moisture → 15%'); sensor?.publishReading(); break
+      case 'wet': sim.moisture = 85; log('sim', 'soil moisture → 85%'); sensor?.publishReading(); break
       case 'hot': sim.tempOffset = 12; log('sim', 'temperature +12 °C'); sensor?.publishReading(); break
       case 'cold': sim.tempOffset = -12; log('sim', 'temperature −12 °C'); sensor?.publishReading(); break
       case 'normal': sim.tempOffset = 0; log('sim', 'temperature back to normal'); sensor?.publishReading(); break
@@ -432,7 +427,7 @@ if (process.stdin.isTTY) console.log(`\n${COMMANDS}\n`)
         break
       case 'online': clients().forEach(([c, id]) => { powerOn(c); log(id, 'power back on') }); break
       case 'state':
-        console.log({ moisture: sim.moisture.map(round1), tempOffset: sim.tempOffset, ...sim.actuators,
+        console.log({ moisture: round1(sim.moisture), tempOffset: sim.tempOffset, ...sim.actuators,
           pumpTimedOut: Object.fromEntries(Object.entries(pumps).map(([n, p]) => [n, p.timedOut])),
           connected: Object.fromEntries(clients().map(([c, id]) => [id, c.connected])) })
         break

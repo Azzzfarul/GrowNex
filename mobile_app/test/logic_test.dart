@@ -8,30 +8,25 @@ import 'package:mobile_app/utils/analytics.dart';
 import 'package:mobile_app/utils/plant_health.dart';
 import 'package:mobile_app/utils/zone_fit.dart';
 
-SensorReading reading(DateTime t, {num? temperature, num? moisture, num? s1, num? s2}) => SensorReading(
+SensorReading reading(DateTime t, {num? temperature, num? moisture}) => SensorReading(
       id: t.toIso8601String(),
       timestamp: t,
       temperature: temperature,
       moisture: moisture,
-      soilMoisture1: s1,
-      soilMoisture2: s2,
     );
 
-Zone zone({num? m1, num? m, num? temp, String? deviceId}) => Zone(
+Zone zone({num? m, num? temp, String? deviceId}) => Zone(
       id: 'z',
       userId: 'u',
       zoneName: 'Z',
       zoneType: 'indoor',
       status: 'healthy',
-      totalPlantSlots: 4,
-      latestMoisture1: m1,
       latestMoisture: m,
       latestTemp: temp,
       deviceId: deviceId,
     );
 
 Plant plant({
-  int slot = 1,
   num? mMin, num? mMax, num? tMin, num? tMax,
   String? light, String id = 'p',
 }) =>
@@ -41,7 +36,6 @@ Plant plant({
       plantName: id,
       species: '',
       status: 'healthy',
-      slotNumber: slot,
       preferredMoistureMin: mMin,
       preferredMoistureMax: mMax,
       preferredTemperatureMin: tMin,
@@ -102,11 +96,18 @@ void main() {
     test('every series gets the same buckets, so chart lines stay aligned', () {
       final t = DateTime(now.year, now.month, now.day, now.hour, 30);
       final rs = [
-        reading(t.subtract(const Duration(hours: 1)), s1: 40),      // slot 2 missing this hour
-        reading(t, s1: 42, s2: 60),
+        reading(t.subtract(const Duration(hours: 1)), moisture: 40),  // no temperature this hour
+        reading(t, moisture: 42, temperature: 25),
       ];
-      expect(groupByTime(rs, 'today', (r) => r.soilMoisture2).map((e) => e.value), [null, 60]);
-      expect(groupByTime(rs, 'today', (r) => r.soilMoisture1).map((e) => e.value), [40, 42]);
+      expect(groupByTime(rs, 'today', (r) => r.temperature).map((e) => e.value), [null, 25]);
+      expect(groupByTime(rs, 'today', (r) => r.moisture).map((e) => e.value), [40, 42]);
+    });
+
+    test('moisture series is the zone reading; old per-slot fields are not counted again', () {
+      final t = DateTime(now.year, now.month, now.day, now.hour, 30);
+      final old = SensorReading.fromMap('h', {'moisture': 40, 'soilMoisture1': 50, 'timestamp': t});
+      expect(old.moisture, 40);
+      expect(moistureBucketSeries([old], 'today'), [40]);
     });
   });
 
@@ -143,9 +144,12 @@ void main() {
 
     test('plant status follows the live health score', () {
       final p = plant(mMin: 40, mMax: 60, tMin: 20, tMax: 30);
-      expect(plantStatus(zone(m1: 50, temp: 25), p), 'healthy');
-      expect(plantStatus(zone(m1: 90, temp: 25), p), 'needs attention');
-      expect(plantStatus(zone(m1: 90, temp: 40), p), 'critical');
+      expect(plantStatus(zone(m: 50, temp: 25), p), 'healthy');
+      expect(plantStatus(zone(m: 90, temp: 25), p), 'needs attention');
+      expect(plantStatus(zone(m: 90, temp: 40), p), 'critical');
+      // A zone doc from before the change still carries a stale slot value: ignored.
+      final old = Zone.fromMap('z', {'latestMoisture': 50, 'latestMoisture1': 90, 'latestTemp': 25});
+      expect(plantStatus(old, p), 'healthy');
       expect(plantStatus(zone(), p), null);
     });
 
@@ -163,7 +167,7 @@ void main() {
 
     test('a range missing its max is skipped, not scored or crashed on', () {
       final p = plant(mMin: 40, mMax: 60, tMin: 20);
-      final z = zone(m1: 50, m: 50, temp: 25);
+      final z = zone(m: 50, temp: 25);
       expect(healthScoreForPlant(z, p), 100);
       expect(generateInsights(z, [p], []).map((i) => i.ok), [true]);
       // Only half ranges: nothing was checked, so it must not claim everything is fine.
@@ -176,23 +180,29 @@ void main() {
     final basil = plant(mMin: 40, mMax: 60, tMin: 20, tMax: 30);
 
     test('perfect conditions score 100', () {
-      final h = plantHealth(basil, zone(m1: 50, m: 10, temp: 25), [reading(now, s1: 50, temperature: 25)]);
+      final h = plantHealth(basil, zone(m: 50, temp: 25), [reading(now, moisture: 50, temperature: 25)]);
       expect(h.score, 100);
       expect(h.metrics['humidity']!.state, 'no-range');
       expect(plantHealthSummary(h), 'All conditions in range.');
     });
 
     test('dry soil drags the score down (moisture counts double)', () {
-      final h = plantHealth(basil, zone(m1: 20, temp: 25), [reading(now, s1: 20, temperature: 25)]);
+      final h = plantHealth(basil, zone(m: 20, temp: 25), [reading(now, moisture: 20, temperature: 25)]);
       expect(h.metrics['moisture']!.state, 'low');
       expect(h.score, 33);
       expect(plantHealthSummary(h), startsWith('Soil moisture below range — 20% vs 40–60%'));
     });
 
-    test('a slot without its own probe falls back to the zone average', () {
-      final slot2 = plant(slot: 2, mMin: 40, mMax: 60);
-      final h = plantHealth(slot2, zone(m: 50), [reading(now, moisture: 50), reading(now, moisture: 10)]);
+    test('old slot fields on plants, zones and history are ignored', () {
+      final old = Plant.fromMap('p', {'zoneId': 'z', 'slotNumber': 2, 'preferredMoistureMin': 40, 'preferredMoistureMax': 60});
+      final z = Zone.fromMap('z', {'latestMoisture': 50, 'latestMoisture2': 90});
+      final rs = [
+        SensorReading.fromMap('a', {'moisture': 50, 'soilMoisture2': 90, 'timestamp': now}),
+        SensorReading.fromMap('b', {'moisture': 10, 'soilMoisture2': 90, 'timestamp': now}),
+      ];
+      final h = plantHealth(old, z, rs);
       expect(h.metrics['moisture']!.compliance, 50);
+      expect(h.metrics['moisture']!.latest, 50);
     });
 
     test('no readings means waiting', () {

@@ -3,7 +3,7 @@
 //
 // Temperature, light and moisture are weighted higher than humidity: in GrowNex
 // they are zone-wide (shared air, one grow light, one irrigation pump + one
-// wateringThreshold per zone) and can't be tuned per plant slot, so a mismatch
+// wateringThreshold per zone) and can't be tuned per plant, so a mismatch
 // on any forces a "wrong zone" call. Humidity isn't actuated, so it only nudges.
 
 import '../models/plant_model.dart';
