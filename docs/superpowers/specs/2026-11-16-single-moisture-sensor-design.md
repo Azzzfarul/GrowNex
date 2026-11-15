@@ -33,7 +33,7 @@ so a zone is capped at 4 plants.
 ## Design
 - **MQTT contract:** `grownex/{id}/sensors` payload becomes `{deviceId, temperature, humidity, lightLevel, soilMoisture}`.
 - **Firmware:** one probe on GPIO 34 (the old slot 1 pin), with one `MOISTURE_DRY` / `MOISTURE_WET` calibration pair.
-- **Bridge:** `moisture = soilMoisture ?? soilMoisture1` (my call: a board not yet reflashed keeps working).
+- **Bridge:** `moisture = soilMoisture ?? average(soilMoisture1..4)` (a board not yet reflashed keeps its old zone reading; changed from `soilMoisture1` after review).
   It writes `latestMoisture` and `statsDaily` `moisture` only. It no longer writes `latestMoisture1..4`,
   `soilMoisture1..4` or `totalSlots`.
 - **Plants:** no `slotNumber` on create or edit. No cap.

@@ -14,7 +14,7 @@ reading and stop reading or writing anything slot-shaped.
 
 ## Global Constraints
 - MQTT sensor payload: `{deviceId, temperature, humidity, lightLevel, soilMoisture}`.
-- Bridge: `moisture = soilMoisture ?? soilMoisture1 ?? null`. Never write `latestMoisture1..4`, `soilMoisture1..4` or `totalSlots`.
+- Bridge: `moisture = soilMoisture ?? average(soilMoisture1..4) ?? null` (was `soilMoisture1`; changed after review). Never write `latestMoisture1..4`, `soilMoisture1..4` or `totalSlots`.
 - Clients: never write `slotNumber` or `totalPlantSlots`. No plant cap anywhere.
 - Firestore cost per reading cycle is unchanged (3 writes, 2 reads).
 - Web and mobile logic must keep passing the same test cases (the two ports must agree).
