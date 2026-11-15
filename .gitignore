@@ -50,3 +50,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# graphify: share the graph, keep machine-local state out
+graphify-out/*
+!graphify-out/graph.json
+!graphify-out/GRAPH_REPORT.md
+!graphify-out/manifest.json
+!graphify-out/.graphify_build.json
+!graphify-out/.graphify_labels.json

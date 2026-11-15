@@ -135,3 +135,14 @@ The two clients implement the same features separately, and some logic is hand-p
 - Mobile Firebase is wired for Android only: `main.dart` calls `Firebase.initializeApp()` with no options, relying on `android/app/google-services.json`. There's no iOS `GoogleService-Info.plist`, and `firebase_options.dart` throws on web/desktop, so iOS and `flutter run -d chrome` need `flutterfire configure` plus `options: DefaultFirebaseOptions.currentPlatform` first.
 - The server needs `FIREBASE_STORAGE_BUCKET` (`firebase-admin.js` → `getStorage().bucket()` is called when `dailySummary.js` is imported, so a missing bucket breaks bridge startup). Web Storage uses the bucket from the client Firebase config.
 - Security rules are `web_dashboard/firestore.rules` and `storage.rules` (deploy from `web_dashboard/`: `npx firebase-tools deploy --only firestore:rules,storage --project grownex-iot`). Both apps hit Firestore/Storage directly, so the rules are the only thing keeping users apart: every collection a client reads or writes needs a rule, and a rule may only use what the query or doc provides (e.g. plants are checked through their zone's `userId`). The emulators load them through `firebase.json`, so `npm run test:integration` enforces them (its security-rules test checks a second user is refused); the run-grownex sandbox uses open rules unless switched with `sandbox.sh rules real`. Composite indexes still live only in the Firebase console: a new query combining `where` and `orderBy` on different fields needs one created there.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
