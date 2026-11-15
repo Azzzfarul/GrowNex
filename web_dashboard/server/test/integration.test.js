@@ -236,15 +236,15 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await sleep(500)
     assert.equal((await notifs(users.alice.uid, 'threshold')).length, 1)
 
-    // A board still on the old 4-probe firmware: its first probe is the zone reading
+    // A board still on the old 4-probe firmware keeps its old zone reading: the probes' average
     await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture1: 60, soilMoisture2: 10 })
     const after = await waitFor(async () => {
       const s = await statsNow(ids.zoneA)
-      return s.moisture === 60 && s
+      return s.moisture === 35 && s
     }, 'stats updated again')
     assert.equal(after.soilMoisture1, undefined)
     assert.equal(after.temperature, 35)
-    assert.equal((await docData(`zones/${ids.zoneA}`)).latestMoisture, 60)
+    assert.equal((await docData(`zones/${ids.zoneA}`)).latestMoisture, 35)
   })
 
   test('manual toggles publish one debounced command and ignore the device echo', async () => {

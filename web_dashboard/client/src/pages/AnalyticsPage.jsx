@@ -377,15 +377,12 @@ export default function AnalyticsPage() {
             { title: 'Temperature (°C)', key: 'temp',     color: 'var(--chart-2)', kind: 'temperature' },
             { title: 'Humidity (%)',     key: 'humidity', color: 'var(--chart-3)', kind: 'humidity' },
             { title: 'Light (%)',        key: 'light',    color: 'var(--chart-4)', kind: 'light' },
+            { title: 'Soil moisture (%)', key: 'moisture', color: 'var(--chart-1)', kind: 'moisture' },
           ].map(({ title, key, color, kind }) => (
             <ChartCard key={key} title={title} caption={<SummaryLine text={aiMap[kind] ?? graphRes[kind].text} isAi={aiMap[kind] != null} />}>
               {noReadings ? <EmptyChart /> : chart(key, color)}
             </ChartCard>
           ))}
-
-          <ChartCard title="Soil moisture (%)" caption={<SummaryLine text={aiMap.moisture ?? moistRes.text} isAi={aiMap.moisture != null} />}>
-            {noReadings ? <EmptyChart /> : chart('moisture', 'var(--chart-1)')}
-          </ChartCard>
         </div>
 
         {/* Zone-specific sections */}

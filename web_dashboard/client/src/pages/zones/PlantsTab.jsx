@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  collection, query, where, onSnapshot, getDocs,
+  collection, query, where, orderBy, onSnapshot, getDocs,
   setDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../../firebase'
@@ -514,7 +514,8 @@ export default function PlantsTab({ zone }) {
 
   useEffect(() => {
     const unsub = onSnapshot(
-      query(collection(db, 'plants'), where('zoneId', '==', zone.id)),
+      // Newest first, like mobile's watchPlantsByZone (same query, so the same composite index).
+      query(collection(db, 'plants'), where('zoneId', '==', zone.id), orderBy('createdAt', 'desc')),
       (snap) => {
         setPlants(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
         setLoading(false)

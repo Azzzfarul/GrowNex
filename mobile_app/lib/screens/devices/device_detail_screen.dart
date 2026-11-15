@@ -225,7 +225,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                 child: Column(
                   children: [
                     _buildInfoRow('Assigned zone', zone?.zoneName ?? 'Not assigned'),
-                    if (!isCamera && zone != null) ...[
+                    if (!isCamera && device.assignedZoneId != null) ...[
                       const SizedBox(height: 10),
                       _buildInfoRow(
                         'Plants',

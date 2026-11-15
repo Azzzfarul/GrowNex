@@ -81,8 +81,9 @@ async function getOrCreateDevice(deviceId) {
 async function handleSensors(deviceId, payload) {
   const { temperature, humidity, lightLevel } = payload
   // The zone's one soil probe, shared by all its plants. Boards not yet reflashed still send
-  // soilMoisture1..4: their first probe stands in, so threshold watering keeps working.
-  const moisture = payload.soilMoisture ?? payload.soilMoisture1 ?? null
+  // soilMoisture1..4: keep their old zone reading (the probes' average) until they are.
+  const legacy = [1, 2, 3, 4].map(i => payload[`soilMoisture${i}`]).filter(v => v != null)
+  const moisture = payload.soilMoisture ?? (legacy.length ? legacy.reduce((a, b) => a + b) / legacy.length : null)
 
   const device = await getOrCreateDevice(deviceId)
   const { assignedZoneId } = device
