@@ -9,6 +9,10 @@ service cloud.firestore {
     function uid() { return request.auth.uid; }
     function doc(path) { return get(/databases/$(database)/documents/$(path)); }
     function ownsZone(zoneId) { return doc(/zones/$(zoneId)).data.userId == uid(); }
+    // Owner, or a member the owner added (zones.memberIds, written only by the server). Zones from
+    // before sharing have no memberIds, so the owner check comes first.
+    function canUse(zone) { return zone.userId == uid() || uid() in zone.get('memberIds', []); }
+    function memberOf(zoneId) { return canUse(doc(/zones/$(zoneId)).data); }
     function ownsDevice(deviceId) { return doc(/devices/$(deviceId)).data.get('userId', '') == uid(); }
     function changed(field) { return field in request.resource.data.diff(resource.data).affectedKeys(); }
 
@@ -27,35 +31,45 @@ service cloud.firestore {
 
     match /zones/{zoneId} {
       // resource == null: a listener on a zone that was just deleted gets "missing", not an error.
-      allow read: if signedIn() && (resource == null || resource.data.userId == uid());
-      allow create: if signedIn() && request.resource.data.userId == uid() && zoneDevicesOk(true);
-      allow update: if signedIn() && resource.data.userId == uid()
-        && request.resource.data.userId == uid() && zoneDevicesOk(false);
+      allow read: if signedIn() && (resource == null || canUse(resource.data));
+      // A new zone's members are its owner alone (or absent, from app versions before sharing).
+      allow create: if signedIn() && request.resource.data.userId == uid() && zoneDevicesOk(true)
+        && request.resource.data.get('memberIds', [uid()]) == [uid()]
+        && request.resource.data.get('members', {}).keys().hasOnly([uid()]);
+      // Owner and members edit the zone; nobody changes its owner or members here (the server's
+      // member routes do), and only the owner changes its boards, which belong to the owner.
+      allow update: if signedIn() && canUse(resource.data)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['userId', 'memberIds', 'members'])
+        && (resource.data.userId == uid()
+          ? zoneDevicesOk(false)
+          : !request.resource.data.diff(resource.data).affectedKeys().hasAny(['deviceId', 'cameraDeviceId', 'hasLight', 'hasFertilizer']));
       allow delete: if signedIn() && resource.data.userId == uid();
 
       // statsDaily, aiCache, snapshots, plus legacy sensorReadings, stats, automationHistory
       // (the server writes most of them).
       match /{subcollection}/{docId} {
-        allow read, write: if signedIn() && ownsZone(zoneId);
+        allow read, write: if signedIn() && memberOf(zoneId);
       }
     }
 
     match /plants/{plantId} {
-      allow read: if signedIn() && (resource == null || ownsZone(resource.data.zoneId));
-      allow create: if signedIn() && ownsZone(request.resource.data.zoneId);
-      allow update: if signedIn() && ownsZone(resource.data.zoneId) && ownsZone(request.resource.data.zoneId);
-      allow delete: if signedIn() && ownsZone(resource.data.zoneId);
+      allow read: if signedIn() && (resource == null || memberOf(resource.data.zoneId));
+      allow create: if signedIn() && memberOf(request.resource.data.zoneId);
+      allow update: if signedIn() && memberOf(resource.data.zoneId) && memberOf(request.resource.data.zoneId);
+      allow delete: if signedIn() && memberOf(resource.data.zoneId);
     }
 
     match /automationConfig/{zoneId} {
-      allow read, write: if signedIn() && ownsZone(zoneId);
+      allow read, write: if signedIn() && memberOf(zoneId);
     }
 
     // Created by the bridge when a board first connects, with userId '' (unclaimed).
     match /devices/{deviceId} {
       // Own boards, unclaimed ones (the Add device list), and a missing one (so a lookup by ID can
       // say "not found"). Another user's board is refused, which the apps show as "already registered".
-      allow get: if signedIn() && (resource == null || resource.data.get('userId', '') in ['', uid()]);
+      // Members of the zone a board is assigned to may read it too (its live state and controls).
+      allow get: if signedIn() && (resource == null || resource.data.get('userId', '') in ['', uid()]
+        || (resource.data.get('assignedZoneId', null) != null && memberOf(resource.data.assignedZoneId)));
       // A list must filter on userId == '' or the user's uid: with get()'s default, an unfiltered
       // query passed too and returned every user's boards.
       allow list: if signedIn() && resource.data.userId in ['', uid()];
@@ -68,6 +82,9 @@ service cloud.firestore {
         || (resource.data.get('userId', '') == uid() && request.resource.data.get('userId', '') == uid()
           && (!changed('assignedZoneId') || request.resource.data.get('assignedZoneId', null) == null
               || ownsZone(request.resource.data.assignedZoneId)))
+        // A member of the board's zone may switch its pumps and light, and nothing else.
+        || (resource.data.get('assignedZoneId', null) != null && memberOf(resource.data.assignedZoneId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['irrigationActive', 'fertilizerActive', 'lightActive']))
       );
       allow delete: if signedIn() && resource.data.get('userId', '') == uid();
     }

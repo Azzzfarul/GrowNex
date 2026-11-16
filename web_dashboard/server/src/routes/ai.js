@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import express, { Router } from 'express'
 import { createHash } from 'crypto'
 import { randomUUID } from 'crypto'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
@@ -11,14 +11,17 @@ import {
 } from '../services/aiAnalytics.js'
 import { buildPlantProfileMessages, validatePlantProfile } from '../services/aiPlant.js'
 import { diagnosePlantImage, isJpeg, MAX_IMAGE_BYTES } from '../services/aiVision.js'
+import { isMember } from '../services/zoneMembers.js'
+import { identifyPlant, isPlantPhoto } from '../services/plantId.js'
 
 const router = Router()
 const TTL_MS = parseInt(process.env.AI_CACHE_TTL_MS || '1800000')
 const MODEL  = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini'
 
+// The zone, if `uid` is its owner or a member; else null.
 async function loadOwnedZone(db, zoneId, uid) {
   const snap = await db.collection('zones').doc(zoneId).get()
-  if (!snap.exists || snap.data().userId !== uid) return null
+  if (!snap.exists || !isMember(snap.data(), uid)) return null
   return snap
 }
 
@@ -284,6 +287,23 @@ router.post('/plant-diagnosis', verifyToken, async (req, res) => {
     }
   } catch (err) {
     res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/ai/identify-plant ────────────────────────────────────────────
+// Body: the photo itself (Content-Type image/jpeg or image/png, ≤ 4 MB).
+// → { source: 'plantnet', results: [{ species, commonName, score }] } (best first, [] = no match),
+//   or { source: 'unavailable', results: [] } without PLANTNET_API_KEY.
+// shortcut: no per-user limit, so one user can spend the shared 500/day; add one if that happens.
+router.post('/identify-plant', verifyToken, express.raw({ type: ['image/jpeg', 'image/png'], limit: '4mb' }), async (req, res) => {
+  if (!isPlantPhoto(req.body)) return res.status(400).json({ error: 'Send a JPEG or PNG photo.' })
+  const key = process.env.PLANTNET_API_KEY
+  if (!key) return res.json({ source: 'unavailable', results: [] })
+  try {
+    res.json({ source: 'plantnet', results: await identifyPlant(key, req.body, req.headers['content-type']) })
+  } catch (err) {
+    console.warn('[ai] identify-plant failed:', err.message)
+    res.status(502).json({ error: 'Plant identification failed. Try again later.' })
   }
 })
 

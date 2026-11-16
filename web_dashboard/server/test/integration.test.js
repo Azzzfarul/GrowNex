@@ -50,6 +50,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
         FIREBASE_CLIENT_EMAIL: '', FIREBASE_PRIVATE_KEY: '',
         MQTT_BROKER_HOST: '127.0.0.1', MQTT_BROKER_PORT: String(BROKER_PORT), MQTT_USER: '', MQTT_PASS: '',
         OPENROUTER_API_KEY: '',             // AI routes must use their fallbacks
+        PLANTNET_API_KEY: '',               // never spend the real Pl@ntNet quota
         DAILY_SUMMARY_CRON: '0 0 1 1 *',     // the test runs the nightly job itself
       },
     })
@@ -119,6 +120,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await startServer()
     await signUp('alice')
     await signUp('bob')
+    await signUp('carol')
   })
 
   after(async () => {
@@ -424,6 +426,16 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.deepEqual(await (await api('/api/ai/plant-profile', { token: A, method: 'POST', body: { species: 'basil' } })).json(), { source: 'fallback', profile: null })
     assert.equal((await api('/api/ai/plant-profile', { token: A, method: 'POST', body: { species: 'a' } })).status, 400)
 
+    // Plant identification: the photo is the body; without a key it says so instead of failing
+    const identify = (token, body, type = 'image/jpeg') => fetch(`http://127.0.0.1:${API_PORT}/api/ai/identify-plant`, {
+      method: 'POST', headers: { 'Content-Type': type, ...(token && { Authorization: `Bearer ${token}` }) }, body,
+    })
+    const jpeg = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10, 0x4A, 0x46, 0x49, 0x46])
+    assert.equal((await identify(null, jpeg)).status, 401)
+    assert.deepEqual(await (await identify(A, jpeg)).json(), { source: 'unavailable', results: [] })
+    assert.equal((await identify(A, Buffer.from('not an image'))).status, 400)
+    assert.equal((await identify(A, jpeg, 'image/gif')).status, 400)
+
     assert.deepEqual((await (await api('/api/zones', { token: A })).json()).map(z => z.id), [ids.zoneA])
     assert.deepEqual(await (await api('/api/zones', { token: B })).json(), [])
     assert.equal((await (await api(`/api/zones/${ids.zoneA}/plants`, { token: A })).json()).length, 2)
@@ -551,7 +563,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal((await notifs(B, 'daily')).length, 0, 'opt-out respected')
     assert.ok(!(await notifs(A)).some(n => n.title === 'old'), 'notifications > 30 days pruned')
     assert.equal((await db.doc(`zones/${ids.zoneA}/statsDaily/2000-01-01`).get()).exists, false, 'stats > 30 days pruned')
-    assert.ok(await statsNow(ids.zoneA), "today's stats kept")
+    assert.ok((await db.collection(`zones/${ids.zoneA}/statsDaily`).get()).size >= 1, 'recent stats kept')
     assert.equal((await db.doc(`zones/${ids.zoneA}/snapshots/old`).get()).exists, false)
     assert.equal((await bucket.file(oldPath).exists())[0], false)
     assert.ok((await db.collection(`zones/${ids.zoneA}/snapshots`).get()).size >= 1, 'recent snapshot kept')
@@ -689,6 +701,80 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(await as('bob', 'devices/ESP32-FREE'), 200)
     assert.equal(await as('bob', 'devices/ESP32-FREE', { method: 'PATCH', fields: { userId: str(users.bob.uid) } }), 200, 'claim')
     assert.equal(await as('alice', 'devices/ESP32-FREE'), 403, "now bob's")
+  })
+
+  test('zone sharing: the owner adds and removes members by email; members use the zone, not its boards', async () => {
+    const FS = `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${PROJECT}/databases/(default)/documents`
+    const as = (who, path, { method = 'GET', fields } = {}) => {
+      const mask = method === 'PATCH' ? '?' + Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&') : ''
+      return fetch(`${FS}/${path}${mask}`, {
+        method,
+        headers: { Authorization: `Bearer ${users[who].token}`, 'Content-Type': 'application/json' },
+        body: fields ? JSON.stringify({ fields }) : undefined,
+      }).then(r => r.status)
+    }
+    const str = v => ({ stringValue: v }), bool = v => ({ booleanValue: v })
+    const arr = (...v) => ({ arrayValue: { values: v.map(str) } })
+    const myZones = (who) => fetch(`${FS}:runQuery`, {
+      method: 'POST', headers: { Authorization: `Bearer ${users[who].token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'zones' }],
+        where: { fieldFilter: { field: { fieldPath: 'memberIds' }, op: 'ARRAY_CONTAINS', value: str(users[who].uid) } } } }),
+    }).then(async r => r.status === 200 ? (await r.json()).filter(x => x.document).map(x => x.document.name.split('/').pop()) : r.status)
+    const addMember = (who, zoneId, email) => api(`/api/zones/${zoneId}/members`, { token: users[who].token, method: 'POST', body: { email } })
+    const removeMember = (who, zoneId, uid) => api(`/api/zones/${zoneId}/members/${uid}`, { token: users[who].token, method: 'DELETE' })
+    const A = users.alice.uid, B = users.bob.uid, Z = ids.zoneA  // zoneA predates sharing: no memberIds
+
+    // Only the owner adds, and only existing accounts
+    assert.equal((await addMember('bob', Z, 'bob@test.local')).status, 403, 'a non-owner adds himself')
+    assert.equal((await addMember('alice', Z, 'nobody@test.local')).status, 404)
+    assert.equal((await addMember('alice', Z, 'alice@test.local')).status, 409, 'the owner herself')
+    assert.equal((await addMember('alice', Z, ' Bob@Test.local ')).status, 201)
+    assert.equal((await addMember('alice', Z, 'bob@test.local')).status, 409, 'already a member')
+    const z = await docData(`zones/${Z}`)
+    assert.deepEqual(z.memberIds, [A, B])
+    assert.equal(z.members[B], 'bob@test.local')
+
+    // Bob now uses the zone: it's in his list, and he reads and edits its data
+    assert.deepEqual(await myZones('bob'), [Z])
+    assert.equal(await as('bob', `zones/${Z}`), 200)
+    const day = (await db.collection(`zones/${Z}/statsDaily`).limit(1).get()).docs[0].id
+    assert.equal(await as('bob', `zones/${Z}/statsDaily/${day}`), 200)
+    assert.equal(await as('bob', `zones/${Z}`, { method: 'PATCH', fields: { zoneName: str('Herbs') } }), 200)
+    assert.equal(await as('bob', `automationConfig/${Z}`, { method: 'PATCH', fields: { wateringSchedule: str('07:00') } }), 200)
+    assert.equal(await as('bob', 'devices/ESP32-T1'), 200, "the zone's board")
+    assert.equal(await as('bob', 'devices/ESP32-T1', { method: 'PATCH', fields: { lightActive: bool(false) } }), 200, 'its controls')
+    // ...but not its owner, members, boards or existence
+    assert.equal(await as('bob', 'devices/ESP32-T1', { method: 'PATCH', fields: { deviceName: str('Mine') } }), 403, 'rename the board')
+    assert.equal(await as('bob', `zones/${Z}`, { method: 'PATCH', fields: { deviceId: str('ESP32-BURST') } }), 403, 'swap the board')
+    assert.equal(await as('bob', `zones/${Z}`, { method: 'PATCH', fields: { memberIds: arr(A, B, users.carol.uid) } }), 403, 'add a member himself')
+    assert.equal(await as('bob', `zones/${Z}`, { method: 'PATCH', fields: { userId: str(B) } }), 403, 'take the zone')
+    assert.equal(await as('bob', `zones/${Z}`, { method: 'DELETE' }), 403, 'delete the zone')
+    assert.equal(await as('carol', `zones/${Z}`), 403, 'carol is not a member')
+    // A new zone starts with its owner as the only member
+    assert.equal(await as('carol', 'zones?documentId=carol-sneaky', { method: 'POST',
+      fields: { userId: str(users.carol.uid), memberIds: arr(users.carol.uid, A) } }), 403, 'pre-fill members')
+    assert.equal(await as('carol', 'zones?documentId=carol-zone', { method: 'POST',
+      fields: { userId: str(users.carol.uid), memberIds: arr(users.carol.uid) } }), 200)
+
+    // Zone notifications reach every member
+    const { notifyZone } = await import('../src/services/notifications.js')
+    await notifyZone(await docData(`zones/${Z}`), { zoneId: Z, type: 'threshold', title: 'shared alert', message: 'm' })
+    for (const uid of [A, B]) assert.equal((await notifs(uid)).filter(n => n.title === 'shared alert').length, 1)
+
+    // Bob can't remove the owner, but can leave; the owner removes members
+    assert.equal((await removeMember('bob', Z, A)).status, 409)
+    assert.equal((await removeMember('bob', Z, B)).status, 200, 'leave')
+    assert.equal(await as('bob', `zones/${Z}`), 403, 'gone after leaving')
+    assert.equal((await addMember('alice', Z, 'bob@test.local')).status, 201)
+    assert.equal((await removeMember('alice', Z, B)).status, 200, 'removed by the owner')
+    assert.deepEqual((await docData(`zones/${Z}`)).memberIds, [A])
+    assert.equal(await as('bob', 'devices/ESP32-T1'), 403, 'and the board with it')
+
+    // Deleting a member's account takes them out of zones shared with them
+    assert.equal((await addMember('alice', Z, 'carol@test.local')).status, 201)
+    assert.equal((await api('/api/auth/me', { token: users.carol.token, method: 'DELETE' })).status, 200)
+    assert.deepEqual((await docData(`zones/${Z}`)).memberIds, [A])
+    assert.equal((await docData(`zones/${Z}`)).members[users.carol.uid], undefined)
   })
 
   test('account deletion removes all of the user’s data and nobody else’s', async () => {

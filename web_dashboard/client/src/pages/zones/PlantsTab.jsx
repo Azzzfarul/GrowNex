@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   collection, query, where, orderBy, onSnapshot, getDocs,
   setDoc, updateDoc, deleteDoc, doc, serverTimestamp,
@@ -10,7 +10,7 @@ import TextField from '../../components/ui/TextField'
 import Dialog, { Sheet } from '../../components/ui/Dialog'
 import Loading from '../../components/ui/Loading'
 import { useAuth } from '../../context/AuthContext'
-import { fetchPlantProfile } from '../../lib/aiSummary'
+import { fetchPlantProfile, identifyPlant } from '../../lib/aiSummary'
 import { zoneFitHint } from '../../lib/zoneFit'
 import { plantHealth, plantHealthSummary } from '../../lib/plantHealth'
 import { scoreBadge, plantStatus } from '../../lib/analytics'
@@ -115,19 +115,56 @@ function AddPlantModal({ zone, onClose }) {
   const [hintDismissed, setHintDismissed] = useState(false)
   const [photoFile,    setPhotoFile]   = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
+  const [idLoading,    setIdLoading]   = useState(false)
+  const [idResult,     setIdResult]    = useState(null)   // { results } | { error } from identifyPlant
+  const suggestSeq = useRef(0)  // only the latest Suggest's answer is applied
 
   function handlePhotoPick(e) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file) return null
     setPhotoFile(file)
     setPhotoPreview(URL.createObjectURL(file))
+    setIdResult(null)
+    return file
   }
 
-  // Load the user's other zones + their plants once — for the wrong-zone hint (Feature 2)
+  async function identify(file = photoFile) {
+    if (!file || !user) return
+    setIdLoading(true)
+    setIdResult(await identifyPlant(await user.getIdToken(), file))
+    setIdLoading(false)
+  }
+
+  // The one line under the species tools: the latest result, or how to use them
+  function speciesHelper() {
+    if (aiMeta?.source === 'fallback' || aiMeta?.source === 'error') return 'Couldn’t fetch suggestions. Enter the conditions manually.'
+    if (aiMeta) return <>
+      {aiMeta.commonName && <>Interpreted as <span className="font-medium text-on-surface">{aiMeta.commonName}</span>. </>}
+      {aiMeta.confidence === 'low' && <span className="text-warning">Low-confidence guess, so double-check these. </span>}
+      {aiMeta.careNotes && 'Care tips added to Notes.'}
+    </>
+    if (idResult?.error) return <span className="text-error">{idResult.error}</span>
+    if (idResult?.results?.length === 0) return 'No match. Try a closer, well-lit photo of a leaf or flower.'
+    if (idResult?.results?.length) {
+      return idResult.results[0].score < 0.3
+        ? <span className="text-warning">Low confidence: pick only if one looks right.</span>
+        : 'Pick the match that looks right.'
+    }
+    return 'Type a name and tap Suggest, or let a photo name it.'
+  }
+
+  // A Pl@ntNet match fills in the species (and the nickname, if empty), then its conditions
+  function pickMatch(m) {
+    setSpecies(m.species)
+    if (!name.trim() && m.commonName) setName(m.commonName)
+    suggestConditions(m.species)
+  }
+
+  // Load the user's other zones (own and shared) + their plants once — for the wrong-zone hint
   useEffect(() => {
-    if (!zone.userId) return
+    if (!user) return
     let cancelled = false
-    getDocs(query(collection(db, 'zones'), where('userId', '==', zone.userId))).then(async (zs) => {
+    getDocs(query(collection(db, 'zones'), where('memberIds', 'array-contains', user.uid))).then(async (zs) => {
       const zones = zs.docs.map((d) => ({ id: d.id, ...d.data() }))
       const map = {}
       await Promise.all(zones.map(async (z) => {
@@ -137,16 +174,21 @@ function AddPlantModal({ zone, onClose }) {
       if (!cancelled) setZonesById(map)
     })
     return () => { cancelled = true }
-  }, [zone.userId])
+  }, [user])
 
-  async function suggestConditions() {
-    if (species.trim().length < 3 || !user) return
+  async function suggestConditions(sp = species) {
+    if (sp.trim().length < 3 || !user) return
+    const seq = ++suggestSeq.current
     setAiLoading(true)
+    setAiMeta(null)
     try {
       const { source, profile } = await fetchPlantProfile(await user.getIdToken(), {
-        species: species.trim(),
+        species: sp.trim(),
         zoneType: zone.zoneType ?? 'indoor',
       })
+      // A newer pick, Suggest or edit of the species replaced this one: its answer would
+      // save another plant's conditions under this species
+      if (seq !== suggestSeq.current) return
       if (profile) {
         setPrefs((p) => ({ ...p, ...profile }))
         setShowPrefs(true)
@@ -160,7 +202,7 @@ function AddPlantModal({ zone, onClose }) {
         setAiMeta({ source: 'fallback' })
       }
     } finally {
-      setAiLoading(false)
+      if (seq === suggestSeq.current) setAiLoading(false)
     }
   }
 
@@ -232,36 +274,51 @@ function AddPlantModal({ zone, onClose }) {
               : <Icon name="add_photo_alternate" className="text-on-surface-variant" />}
             <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
           </label>
-          <div className="flex-1 space-y-4">
-            <div className="flex items-start gap-2">
-              <TextField
-                label="Species *"
-                value={species}
-                onChange={(e) => { setSpecies(e.target.value); setAiMeta(null) }}
-                placeholder="e.g. Phalaenopsis"
-                error={errors.species}
-                className="flex-1"
-                autoFocus
-              />
-              <button type="button" onClick={suggestConditions} disabled={aiLoading || species.trim().length < 3} className="btn-tonal h-12">
+          <div className="flex-1 min-w-0 space-y-2">
+            <TextField
+              label="Species *"
+              value={species}
+              onChange={(e) => { setSpecies(e.target.value); setAiMeta(null); suggestSeq.current++; setAiLoading(false) }}
+              placeholder="e.g. basil"
+              error={errors.species}
+              autoFocus
+            />
+            {/* The two ways to fill it in: a photo (Pl@ntNet) or a typed name (Suggest) */}
+            <div className="flex flex-wrap gap-2">
+              <label className={`btn-tonal btn-sm cursor-pointer ${idLoading ? 'pointer-events-none opacity-60' : ''}`}
+                onClick={(e) => { if (photoFile) { e.preventDefault(); identify() } }}>
+                <Icon name="image_search" />{idLoading ? 'Identifying…' : 'Identify from photo'}
+                {/* No photo yet: pick one, then identify it right away */}
+                <input type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={(e) => { const f = handlePhotoPick(e); if (f) identify(f) }} />
+              </label>
+              <button type="button" onClick={() => suggestConditions()} disabled={aiLoading || species.trim().length < 3} className="btn-tonal btn-sm">
                 <Icon name="auto_awesome" />{aiLoading ? 'Thinking…' : 'Suggest'}
               </button>
             </div>
-            <TextField label="Nickname (optional)" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My Orchid" />
+            {idResult?.results?.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {idResult.results.map((m) => (
+                  <button type="button" key={m.species} onClick={() => pickMatch(m)} aria-pressed={species === m.species}
+                    className={`chip ${species === m.species ? 'bg-secondary-container text-on-secondary-container' : ''}`}>
+                    {m.commonName && <span>{m.commonName} ·</span>}<i>{m.species}</i>
+                    <span className="text-on-surface-variant">{Math.round(m.score * 100)}%</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-body-sm text-on-surface-variant">{speciesHelper()}</p>
+            {/* Credit suggested by the Pl@ntNet API terms for free use */}
+            {idResult?.results && (
+              <p className="text-label-sm text-on-surface-variant">
+                Species identification powered by{' '}
+                <a href="https://my.plantnet.org/" target="_blank" rel="noopener noreferrer" className="underline">Pl@ntNet</a>
+              </p>
+            )}
           </div>
         </div>
 
-        <p className="text-body-sm text-on-surface-variant -mt-2">
-          {aiMeta?.source === 'fallback' || aiMeta?.source === 'error'
-            ? 'Couldn’t fetch suggestions — enter the conditions manually.'
-            : aiMeta ? (
-              <>
-                {aiMeta.commonName && <>Interpreted as <span className="font-medium text-on-surface">{aiMeta.commonName}</span>. </>}
-                {aiMeta.confidence === 'low' && <span className="text-warning">Low-confidence guess — double-check these. </span>}
-                {aiMeta.careNotes && <span>Care tips added to Notes. </span>}
-              </>
-            ) : 'Suggest fills in the preferred conditions and adds care tips for this species to Notes.'}
-        </p>
+        <TextField label="Nickname (optional)" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My basil" />
 
         <div className="rounded-xl border border-outline-variant overflow-hidden">
           <button

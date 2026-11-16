@@ -5,7 +5,7 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import { aiEnabled } from './aiClient.js'
 import { checkZoneImage, worseZoneStatus } from './aiVision.js'
-import { notify } from './notifications.js'
+import { notifyZone } from './notifications.js'
 
 const db = getFirestore()
 // Default only: set it from the dev-set calibration table in the evaluation report.
@@ -68,7 +68,7 @@ export async function checkZoneSnapshot(zoneId, bucketId, jpeg) {
       zoneRef.collection('statsDaily').doc(now.slice(0, 10))
         .set({ hours: { [now.slice(11, 13)]: out.statsHour } }, { merge: true }),
     ])
-    if (out.notification) await notify({ ...out.notification, zoneId })
+    if (out.notification) await notifyZone(zone, { ...out.notification, zoneId })
     console.log(`[vision] zone ${zoneId} / ${bucketId}: ${result.status} (${result.confidence})`)
   } catch (e) {
     console.warn(`[vision] zone ${zoneId} check failed:`, e.message)

@@ -42,6 +42,8 @@ export default function AddZoneDialog({ onClose }) {
         const zoneRef = doc(collection(db, 'zones'))
         await setDoc(zoneRef, {
           userId: user.uid,
+          memberIds: [user.uid],  // owner + members (the owner adds more on the zone's Overview tab)
+          members: { [user.uid]: user.email ?? '' },
           zoneName: zoneName.trim(),
           zoneType,
           status: 'healthy',

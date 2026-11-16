@@ -42,6 +42,14 @@ class AutomationPlanResult {
   const AutomationPlanResult(this.source, this.plan, this.rationale);
 }
 
+// One Pl@ntNet guess for a plant photo; score is 0..1.
+class PlantMatch {
+  final String species;
+  final String? commonName;
+  final double score;
+  const PlantMatch(this.species, this.commonName, this.score);
+}
+
 class PlantProfileResult {
   final String source; // 'ai' | 'cache' | 'fallback' | 'error'
   final Map<String, dynamic>? profile;
@@ -125,4 +133,37 @@ class AiSummaryService {
     }
   }
 
+
+  /// Pl@ntNet species guesses for a plant photo (server: POST /api/ai/identify-plant, which holds
+  /// the key). Returns the matches, best first ([] = no match), or an error message to show.
+  /// Web: identifyPlant in client/src/lib/aiSummary.js.
+  Future<({List<PlantMatch> matches, String? error})> identifyPlant(List<int> photo) async {
+    try {
+      final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (token == null) return (matches: const <PlantMatch>[], error: 'Not signed in.');
+      final isPng = photo.length > 3 && photo[0] == 0x89 && photo[1] == 0x50;
+      final res = await http
+          .post(
+            Uri.parse('$apiBaseUrl/api/ai/identify-plant'),
+            headers: {'Content-Type': isPng ? 'image/png' : 'image/jpeg', 'Authorization': 'Bearer $token'},
+            body: photo,
+          )
+          .timeout(const Duration(seconds: 30));
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode != 200) {
+        return (matches: const <PlantMatch>[], error: data['error'] as String? ?? 'Identification failed (${res.statusCode})');
+      }
+      if (data['source'] == 'unavailable') {
+        return (matches: const <PlantMatch>[], error: "Plant identification isn't set up on the server.");
+      }
+      final matches = (data['results'] as List? ?? [])
+          .whereType<Map>()
+          .where((m) => m['species'] is String)
+          .map((m) => PlantMatch(m['species'] as String, m['commonName'] as String?, (m['score'] as num?)?.toDouble() ?? 0))
+          .toList();
+      return (matches: matches, error: null);
+    } catch (_) {
+      return (matches: const <PlantMatch>[], error: "Couldn't identify the photo. Check that the server is running.");
+    }
+  }
 }

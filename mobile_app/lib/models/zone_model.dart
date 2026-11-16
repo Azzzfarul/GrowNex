@@ -19,6 +19,12 @@ class Zone {
   final bool hasFertilizer;
   final bool hasLight;
   final bool? deviceOnline;
+  // Owner + the users the owner added (written by the server); { uid: email } for display.
+  final List<String> memberIds;
+  final Map<String, String> members;
+
+  /// Everyone who can use the zone; zones from before sharing have no memberIds.
+  List<String> get allMemberIds => memberIds.isNotEmpty ? memberIds : [userId];
 
   // The server's camera check (services/zoneVisualCheck.js). Read-only here: not in toMap().
   final String? visualStatus;
@@ -47,6 +53,8 @@ class Zone {
     this.visualStatus,
     this.visualSummary,
     this.visualCheckedAt,
+    this.memberIds = const [],
+    this.members = const {},
   });
 
   factory Zone.fromDocument(DocumentSnapshot doc) {
@@ -107,6 +115,8 @@ class Zone {
       visualStatus: map['visualStatus'] as String?,
       visualSummary: map['visualSummary'] as String?,
       visualCheckedAt: map['visualCheckedAt'] is Timestamp ? (map['visualCheckedAt'] as Timestamp).toDate() : null,
+      memberIds: (map['memberIds'] as List?)?.whereType<String>().toList() ?? const [],
+      members: (map['members'] as Map?)?.map((k, v) => MapEntry('$k', '$v')) ?? const {},
     );
   }
 
@@ -114,6 +124,8 @@ class Zone {
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
+      'memberIds': memberIds,
+      'members': members,
       'zoneName': zoneName,
       'zoneType': zoneType,
       'status': status,

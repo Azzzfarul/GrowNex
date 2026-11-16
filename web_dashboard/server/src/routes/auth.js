@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getFirestore } from 'firebase-admin/firestore'
+import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import { getAuth } from 'firebase-admin/auth'
 import { getStorage } from 'firebase-admin/storage'
 import verifyToken from '../middleware/verifyToken.js'
@@ -78,6 +78,20 @@ router.delete('/me', verifyToken, async (req, res) => {
       await bucket.deleteFiles({ prefix: `plantDiagnoses/${uid}/` })
       const diagSnap = await db.collection('plantDiagnoses').where('userId', '==', uid).get()
       diagSnap.docs.forEach(d => del(d.ref))
+      // ...and the ones other members made on plants in this user's zones, which went with the zones.
+      for (const zoneDoc of zonesSnap.docs) {
+        const theirs = await db.collection('plantDiagnoses').where('zoneId', '==', zoneDoc.id).get()
+        for (const d of theirs.docs) {
+          if (d.data().storagePath) await delFile(d.data().storagePath)
+          del(d.ref)
+        }
+      }
+      // Zones shared with this user (owned ones are gone by now): leave them.
+      const sharedSnap = await db.collection('zones').where('memberIds', 'array-contains', uid).get()
+      for (const z of sharedSnap.docs) {
+        writer.update(z.ref, { memberIds: FieldValue.arrayRemove(uid), [`members.${uid}`]: FieldValue.delete() })
+          .catch(e => failed.push(e))
+      }
 
       const notifSnap = await db.collection('notifications').where('userId', '==', uid).get()
       notifSnap.docs.forEach(d => del(d.ref))

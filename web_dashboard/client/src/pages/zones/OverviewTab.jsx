@@ -8,6 +8,7 @@ import { uploadZonePhoto, removeZonePhoto } from '../../lib/photoUpload'
 import StatusLabel from '../../components/ui/StatusLabel'
 import { conditionTone } from '../../lib/plantDiagnosis'
 import { formatRelative } from '../../hooks/useNotifications'
+import MembersCard from './MembersCard'
 
 function ModuleChip({ icon, label }) {
   return <span className="tag bg-secondary-container text-on-secondary-container"><Icon name={icon} />{label}</span>
@@ -28,9 +29,11 @@ function LinkedDevice({ dev, icon, missing, onRemove, busy, children }) {
         </p>
         {children}
       </div>
-      <button onClick={onRemove} disabled={busy} className="btn-text btn-sm text-error">
-        <Icon name="link_off" />{busy ? 'Removing…' : 'Unassign'}
-      </button>
+      {onRemove && (
+        <button onClick={onRemove} disabled={busy} className="btn-text btn-sm text-error">
+          <Icon name="link_off" />{busy ? 'Removing…' : 'Unassign'}
+        </button>
+      )}
     </div>
   )
 }
@@ -52,6 +55,8 @@ function AssignRow({ label, options, value, onChange, onAssign, busy }) {
 
 export default function OverviewTab({ zone }) {
   const { user } = useAuth()
+  // The boards belong to the owner's account: only they assign or unassign them (security rules too)
+  const isOwner = zone.userId === user?.uid
   const [device, setDevice] = useState(undefined) // undefined=loading, null=not found, obj=found
 
   // Dropdown state
@@ -273,7 +278,7 @@ export default function OverviewTab({ zone }) {
           <p className="text-body-sm text-on-surface-variant mb-4">Reads the zone's sensors and drives its pumps and light.</p>
           {devError && <p className="banner banner-error mb-3"><Icon name="error" />{devError}</p>}
           {zone.deviceId ? (
-            <LinkedDevice dev={device} icon="sensors" missing="Device not found." onRemove={remove} busy={removing}>
+            <LinkedDevice dev={device} icon="sensors" missing="Device not found." onRemove={isOwner && remove} busy={removing}>
               {(zone.hasFertilizer || zone.hasLight) && (
                 <div className="flex gap-1.5 mt-2">
                   {zone.hasFertilizer && <ModuleChip icon="compost" label="Fertilizer" />}
@@ -281,6 +286,8 @@ export default function OverviewTab({ zone }) {
                 </div>
               )}
             </LinkedDevice>
+          ) : !isOwner ? (
+            <p className="text-body-md text-on-surface-variant">No sensor node yet. The zone owner assigns one.</p>
           ) : devicesLoading ? (
             <p className="text-body-md text-on-surface-variant">Loading devices…</p>
           ) : availableDevices.length === 0 ? (
@@ -297,7 +304,8 @@ export default function OverviewTab({ zone }) {
           )}
         </section>
 
-        <CameraCard zone={zone} user={user} />
+        <CameraCard zone={zone} user={user} isOwner={isOwner} />
+        <MembersCard zone={zone} />
       </div>
     </div>
   )
@@ -305,7 +313,7 @@ export default function OverviewTab({ zone }) {
 
 // ESP32-CAM node (firmware_cam/) that auto-uploads the zone's camera feed. Linked via
 // zones.cameraDeviceId ⇄ devices.assignedZoneId — separate from the sensor node's zones.deviceId.
-function CameraCard({ zone, user }) {
+function CameraCard({ zone, user, isOwner }) {
   const [camera,           setCamera]           = useState(undefined) // undefined=loading, null=not found
   const [availableCameras, setAvailableCameras] = useState([])
   const [camerasLoading,   setCamerasLoading]   = useState(false)
@@ -381,7 +389,9 @@ function CameraCard({ zone, user }) {
         </div>
       )}
       {zone.cameraDeviceId ? (
-        <LinkedDevice dev={camera} icon="photo_camera" missing="Camera not found." onRemove={remove} busy={busy} />
+        <LinkedDevice dev={camera} icon="photo_camera" missing="Camera not found." onRemove={isOwner && remove} busy={busy} />
+      ) : !isOwner ? (
+        <p className="text-body-md text-on-surface-variant">No camera yet. The zone owner assigns one.</p>
       ) : camerasLoading ? (
         <p className="text-body-md text-on-surface-variant">Loading cameras…</p>
       ) : availableCameras.length === 0 ? (
