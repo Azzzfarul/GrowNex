@@ -143,7 +143,9 @@ export default function DashboardPage() {
       (snap) => {
         setZones(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
         setLoading(false)
-      }
+      },
+      // Refused (e.g. live security rules older than zone sharing): stop loading instead of spinning
+      (err) => { console.error('Zones listener failed:', err); setLoading(false) },
     )
     return unsub
   }, [user])

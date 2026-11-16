@@ -121,7 +121,9 @@ export default function AnalyticsPage() {
       snap => {
         setZones(snap.docs.map(d => ({ id: d.id, ...d.data() })))
         setLoadingZones(false)
-      }
+      },
+      // Refused (e.g. live security rules older than zone sharing): stop loading instead of spinning
+      err => { console.error('Zones listener failed:', err); setLoadingZones(false) },
     )
   }, [user])
 
