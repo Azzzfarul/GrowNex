@@ -402,6 +402,9 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.ok(exists, 'image stored')
     const [buf] = await bucket.file(snap.storagePath).download()
     assert.equal(buf.length, jpeg.length)
+    // No AI key: the visual check is skipped and the snapshot is exactly what it was before.
+    assert.equal(snap.visual, undefined)
+    assert.equal((await docData(`zones/${ids.zoneA}`)).visualStatus, undefined)
   })
 
   test('REST routes enforce ownership and fall back without an AI key', async () => {

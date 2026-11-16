@@ -268,3 +268,44 @@ test('cohenKappa is 1 for identical ratings and 0 for chance agreement', () => {
   assert.equal(k.agreement, 0.5)
   assert.equal(k.matrix.a.b, 1)
 })
+
+// ── zoneVisualCheck: what one camera check writes and whether it alerts ──────
+
+const { applyZoneCheck } = await import('../src/services/zoneVisualCheck.js')
+const check = (status, confidence = 0.9) => ({ status, confidence, observations: ['o'], summary: 's' })
+const meta = { model: 'm', promptV: '1' }
+
+test('an unclear camera check changes nothing on the zone and never alerts', () => {
+  const r = applyZoneCheck({ zone: { visualStatus: 'healthy', status: 'healthy' }, result: check('unclear'), meta })
+  assert.equal(r.zoneUpdate, null)
+  assert.equal(r.notification, null)
+  assert.equal(r.snapshotVisual.status, 'unclear')
+})
+
+test('the first camera check sets the status without alerting', () => {
+  const r = applyZoneCheck({ zone: { status: 'healthy' }, result: check('unhealthy'), meta })
+  assert.equal(r.zoneUpdate.visualStatus, 'unhealthy')
+  assert.equal(r.zoneUpdate.visualSummary, 's')
+  assert.equal(r.notification, null)
+})
+
+test('a worsening camera status alerts only at or above the confidence threshold', () => {
+  const zone = { visualStatus: 'healthy', status: 'healthy', zoneName: 'Herbs', userId: 'u1' }
+  const sure = applyZoneCheck({ zone, result: check('stressed', 0.7), meta, minConfidence: 0.6 })
+  assert.equal(sure.notification.type, 'threshold')
+  assert.equal(sure.notification.severity, 'warn')
+  assert.equal(sure.notification.userId, 'u1')
+  assert.match(sure.notification.title, /Herbs/)
+  const unsure = applyZoneCheck({ zone, result: check('stressed', 0.5), meta, minConfidence: 0.6 })
+  assert.equal(unsure.notification, null)
+  assert.equal(unsure.zoneUpdate.visualStatus, 'stressed')
+  const better = applyZoneCheck({ zone: { ...zone, visualStatus: 'stressed' }, result: check('healthy'), meta })
+  assert.equal(better.notification, null)
+})
+
+test('every camera check records the visual and sensor status of that hour', () => {
+  const r = applyZoneCheck({ zone: { status: 'attention' }, result: check('healthy', 0.8), meta })
+  assert.deepEqual(r.statsHour, { visualStatus: 'healthy', visualConfidence: 0.8, sensorStatus: 'attention' })
+  assert.deepEqual(applyZoneCheck({ zone: {}, result: check('unclear', 0.2), meta }).statsHour,
+    { visualStatus: 'unclear', visualConfidence: 0.2, sensorStatus: 'unknown' })
+})

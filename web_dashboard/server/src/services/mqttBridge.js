@@ -4,6 +4,7 @@ import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { notify } from './notifications.js'
 import { runDailySummary } from './dailySummary.js'
 import { saveZoneSnapshot } from './cameraSnapshots.js'
+import { checkZoneSnapshot } from './zoneVisualCheck.js'
 
 const BROKER      = process.env.MQTT_BROKER_HOST || 'broker.hivemq.com'
 const DEVICE_SYNC_MS = 4 * 60 * 1000
@@ -212,6 +213,7 @@ async function handleCameraImage(deviceId, buf) {
 
   const { bucketId } = await saveZoneSnapshot(assignedZoneId, buf, deviceId)
   console.log(`[MQTT bridge] camera snapshot (${Math.round(buf.length / 1024)} KB) → zone ${assignedZoneId} / ${bucketId}`)
+  checkZoneSnapshot(assignedZoneId, bucketId, buf)  // not awaited, never throws: the AI call must not hold up the bridge
 }
 
 // ─── Actuator state handler ───────────────────────────────────────────────────
