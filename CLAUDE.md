@@ -32,7 +32,7 @@ docker compose up -d --build           # client built with client/.env, served b
 
 # mobile_app
 flutter pub get
-flutter run --dart-define=API_BASE_URL=http://<host-ip>:5000   # default 10.0.2.2:5000 (Android emulator → host); only AI calls and account deletion use it
+flutter run --dart-define=API_BASE_URL=http://localhost:5000   # real phone, after `adb reverse tcp:5000 tcp:5000` (the Docker server is 127.0.0.1-only); default 10.0.2.2:5000 (Android emulator → host); only AI calls and account deletion use it
 flutter analyze
 flutter test                                                  # logic tests (test/logic_test.dart; same cases as web client/test)
 flutter test integration_test --dart-define=USE_FIREBASE_EMULATORS=true   # on-device walkthrough; needs the sandbox in web_dashboard/README.md
