@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/device_service.dart';
+import '../../../services/firestore/diagnosis_service.dart';
 import '../../../services/firestore/plant_service.dart';
 import '../../../services/firestore/zone_service.dart';
 import '../../../services/photo_service.dart';
@@ -83,6 +84,7 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
       final plants = await PlantService().getPlantsByZone(zone.id);
       for (final plant in plants) {
         await photos.deletePlantPhotoFile(plant.id);
+        await DiagnosisService().deleteForPlant(zone.userId, plant.id);
         await PlantService().deletePlant(plant.id);
       }
       await photos.deleteFile('zonePhotos/${zone.id}.jpg');

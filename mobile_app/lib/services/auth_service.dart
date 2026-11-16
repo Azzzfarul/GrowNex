@@ -172,6 +172,12 @@ class AuthService {
       await _deleteFile('zonePhotos/${zone.id}.jpg');
       await zoneRef.delete();
     }
+    // Plant diagnoses: photo first, then the doc (same order as the server's DELETE /api/auth/me).
+    for (final d in (await _firestore.collection('plantDiagnoses').where('userId', isEqualTo: uid).get()).docs) {
+      final path = d.data()['storagePath'];
+      if (path is String) await _deleteFile(path);
+      await d.reference.delete();
+    }
     try {
       await _deleteAll(_firestore.collection('notifications').where('userId', isEqualTo: uid));
     } catch (e) {

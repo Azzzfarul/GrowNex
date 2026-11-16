@@ -20,6 +20,11 @@ class Zone {
   final bool hasLight;
   final bool? deviceOnline;
 
+  // The server's camera check (services/zoneVisualCheck.js). Read-only here: not in toMap().
+  final String? visualStatus;
+  final String? visualSummary;
+  final DateTime? visualCheckedAt;
+
   Zone({
     required this.id,
     required this.userId,
@@ -39,6 +44,9 @@ class Zone {
     this.hasFertilizer = false,
     this.hasLight = false,
     this.deviceOnline,
+    this.visualStatus,
+    this.visualSummary,
+    this.visualCheckedAt,
   });
 
   factory Zone.fromDocument(DocumentSnapshot doc) {
@@ -96,6 +104,9 @@ class Zone {
       hasFertilizer: map['hasFertilizer'] as bool? ?? false,
       hasLight: map['hasLight'] as bool? ?? false,
       deviceOnline: map['deviceOnline'] as bool?,
+      visualStatus: map['visualStatus'] as String?,
+      visualSummary: map['visualSummary'] as String?,
+      visualCheckedAt: map['visualCheckedAt'] is Timestamp ? (map['visualCheckedAt'] as Timestamp).toDate() : null,
     );
   }
 

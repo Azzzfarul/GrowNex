@@ -5,6 +5,7 @@ import 'package:mobile_app/models/plant_model.dart';
 import 'package:mobile_app/models/sensor_reading_model.dart';
 import 'package:mobile_app/models/zone_model.dart';
 import 'package:mobile_app/utils/analytics.dart';
+import 'package:mobile_app/utils/plant_diagnosis.dart';
 import 'package:mobile_app/utils/plant_health.dart';
 import 'package:mobile_app/utils/zone_fit.dart';
 
@@ -60,6 +61,17 @@ void main() {
       };
       expect(flattenDailyStats(days, t0).map((x) => x.temperature).toList(), [22, 23, 21]);
       expect(flattenDailyStats({}, t0), isEmpty);
+    });
+
+    test('ignores the camera check fields the server adds to an hour', () {
+      final t0 = DateTime.utc(2026, 1, 1, 22);
+      final days = <String, Map<String, dynamic>>{
+        '2026-01-01': {'hours': {
+          '22': {'timestamp': t0, 'temperature': 22, 'visualStatus': 'stressed', 'visualConfidence': 0.7, 'sensorStatus': 'healthy'},
+          '23': {'visualStatus': 'healthy', 'visualConfidence': 0.9, 'sensorStatus': 'healthy'},  // camera only: no reading
+        }},
+      };
+      expect(flattenDailyStats(days, t0).map((x) => x.temperature).toList(), [22]);
     });
   });
 
@@ -225,5 +237,37 @@ void main() {
     test('fits its own zone', () => expect(hint('hot', zones), isNull));
     test('suggests the better zone', () => expect(hint('cold', zones)?.kind, 'move'));
     test('suggests a new zone when nothing fits', () => expect(hint('cold', {'cold': zones['cold']!})?.kind, 'new'));
+  });
+
+  // Same cases as the web's "plant diagnosis labels" tests.
+  group('plant diagnosis labels', () {
+    test('every diagnosis condition has a readable label', () {
+      expect(diagnosisConditions.length, 10);
+      for (final c in diagnosisConditions) {
+        expect(conditionLabel(c), matches(RegExp(r'^[A-Z][a-z /]+$')), reason: c);
+      }
+      expect(conditionLabel('fungal_disease'), 'Fungal disease');
+      expect(conditionLabel('light_heat_stress'), 'Light / heat stress');
+      expect(conditionLabel('something_new'), 'Unclear');
+    });
+
+    test('conditionTone maps a diagnosis onto the status colours', () {
+      expect(conditionTone('healthy', 'none'), 'healthy');
+      expect(conditionTone('unclear', 'none'), 'unknown');
+      expect(conditionTone('not_plant', 'none'), 'unknown');
+      expect(conditionTone('pest_damage', 'mild'), 'attention');
+      expect(conditionTone('pest_damage', 'moderate'), 'attention');
+      expect(conditionTone('fungal_disease', 'severe'), 'critical');
+      expect(conditionTone('stressed'), 'attention');
+      expect(conditionTone('unhealthy'), 'critical');
+    });
+
+    test('diagnosisError explains each way a diagnosis can fail', () {
+      expect(diagnosisError('limit'), 'Daily diagnosis limit reached. Try again tomorrow.');
+      expect(diagnosisError('image'), 'Use a JPEG photo under 1.5 MB.');
+      expect(diagnosisError('disabled'), 'Diagnosis unavailable right now.');
+      expect(diagnosisError('error'), 'Diagnosis unavailable right now.');
+      expect(diagnosisError(null), 'Diagnosis unavailable right now.');
+    });
   });
 }
