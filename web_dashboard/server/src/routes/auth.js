@@ -58,6 +58,14 @@ router.delete('/me', verifyToken, async (req, res) => {
       for (const zoneDoc of zonesSnap.docs) {
         const zoneId = zoneDoc.id
 
+        // Every member's diagnoses of this zone's plants, photo first. Here, not after the
+        // loop: once the zone is gone a retry could no longer find the other members' ones.
+        const diagSnap = await db.collection('plantDiagnoses').where('zoneId', '==', zoneId).get()
+        for (const d of diagSnap.docs) {
+          if (d.data().storagePath) await delFile(d.data().storagePath)
+          del(d.ref)
+        }
+
         const plantsSnap = await db.collection('plants').where('zoneId', '==', zoneId).get()
         for (const p of plantsSnap.docs) {
           await delFile(`plantPhotos/${p.id}.jpg`)  // before the doc, so a retry still finds the plant
@@ -74,6 +82,12 @@ router.delete('/me', verifyToken, async (req, res) => {
         await db.recursiveDelete(zoneDoc.ref)
       }
 
+      // The user's own diagnoses left elsewhere (zones shared with them, or ones they left;
+      // photos first, so a retry still finds them through the docs), and their daily count.
+      await bucket.deleteFiles({ prefix: `plantDiagnoses/${uid}/` })
+      const ownDiagSnap = await db.collection('plantDiagnoses').where('userId', '==', uid).get()
+      ownDiagSnap.docs.forEach(d => del(d.ref))
+      del(db.collection('diagnosisQuota').doc(uid))
       // Zones shared with this user (owned ones are gone by now): leave them.
       const sharedSnap = await db.collection('zones').where('memberIds', 'array-contains', uid).get()
       for (const z of sharedSnap.docs) {

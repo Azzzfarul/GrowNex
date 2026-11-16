@@ -16,6 +16,8 @@ import { plantHealth, plantHealthSummary } from '../../lib/plantHealth'
 import { scoreBadge, plantStatus } from '../../lib/analytics'
 import { fetchZoneStats } from '../../lib/zoneStats'
 import { uploadPlantPhoto, removePlantPhoto, removePlantPhotoFile } from '../../lib/photoUpload'
+import { deletePlantDiagnoses } from '../../lib/diagnosisApi'
+import PlantDiagnosisCard from '../../components/PlantDiagnosisCard'
 
 const LIGHT_OPTIONS = ['', 'low', 'medium', 'high']
 
@@ -27,46 +29,6 @@ const ZONE_HINT_REASON = {
 }
 
 
-function MoistureBar({ moisture, min, max }) {
-  if (moisture == null) return null
-  const hasRange = min != null && max != null
-  const inRange  = hasRange && moisture >= min && moisture <= max
-  const tooLow   = hasRange && moisture < min
-
-  const color = !hasRange ? 'text-tertiary'
-    : inRange ? 'text-primary'
-    : tooLow  ? 'text-warning'
-    : 'text-error'
-
-  const barColor = !hasRange ? 'bg-tertiary'
-    : inRange ? 'bg-primary'
-    : tooLow  ? 'bg-warning'
-    : 'bg-error'
-
-  const label = !hasRange ? null
-    : inRange ? 'Within preferred range'
-    : tooLow  ? 'Too dry'
-    : 'Too wet'
-
-  return (
-    <div>
-      <div className="flex justify-between text-body-sm mb-1.5">
-        <span className="text-on-surface-variant">Soil moisture</span>
-        <span className={`font-medium ${color}`}>{Number(moisture).toFixed(1)}%{label && ` · ${label}`}</span>
-      </div>
-      <div className="relative w-full bg-surface-container-highest rounded-full h-1.5">
-        {hasRange && (
-          <div className="absolute inset-y-0 bg-primary/20 rounded-full"
-            style={{ left: `${Math.max(min, 0)}%`, width: `${Math.max(Math.min(max, 100) - Math.max(min, 0), 0)}%` }} />
-        )}
-        <div className={`relative h-1.5 rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(Math.max(moisture, 0), 100)}%` }} />
-      </div>
-      {hasRange && <p className="text-body-sm text-on-surface-variant mt-1">Ideal {Number(min).toFixed(0)}–{Number(max).toFixed(0)}%</p>}
-    </div>
-  )
-}
-
-/* ── Preferred Conditions Fields ─────────────────────────────────────── */
 function ConditionFields({ prefs, onChange }) {
   const num = (key, label) => (
     <TextField
@@ -270,7 +232,7 @@ function AddPlantModal({ zone, onClose }) {
             {photoPreview
               ? <img src={photoPreview} alt="Plant preview" className="w-full h-full object-cover" />
               : <Icon name="add_photo_alternate" className="text-on-surface-variant" />}
-            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
+            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="sr-only" />
           </label>
           <div className="flex-1 min-w-0 space-y-2">
             <TextField
@@ -287,7 +249,7 @@ function AddPlantModal({ zone, onClose }) {
                 onClick={(e) => { if (photoFile) { e.preventDefault(); identify() } }}>
                 <Icon name="image_search" />{idLoading ? 'Identifying…' : 'Identify from photo'}
                 {/* No photo yet: pick one, then identify it right away */}
-                <input type="file" accept="image/*" capture="environment" className="hidden"
+                <input type="file" accept="image/*" capture="environment" className="sr-only" disabled={idLoading}
                   onChange={(e) => { const f = handlePhotoPick(e); if (f) identify(f) }} />
               </label>
               <button type="button" onClick={() => suggestConditions()} disabled={aiLoading || species.trim().length < 3} className="btn-tonal btn-sm">
@@ -451,6 +413,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
     setDeleting(true)
     try {
       if (photoUrl) await removePlantPhotoFile(plant.id)
+      await deletePlantDiagnoses(plant.zoneId, plant.id)
       await deleteDoc(doc(db, 'plants', plant.id))
       onClose()
     } catch (e) {
@@ -489,7 +452,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
             <button onClick={handleDelete} disabled={deleting} className="btn-error">{deleting ? 'Removing…' : 'Remove'}</button>
           </>}
         >
-          <span className="font-medium text-on-surface">{plant.plantName}</span> and its photo will be deleted. This can't be undone.
+          <span className="font-medium text-on-surface">{plant.plantName}</span> and its photos and diagnoses will be deleted. This can't be undone.
         </Dialog>
       )}
 
@@ -501,7 +464,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
           <label className="btn-tonal btn-sm cursor-pointer shadow-elevation-1">
             <Icon name="add_photo_alternate" />
             {photoBusy ? 'Working…' : photoUrl ? 'Change' : 'Add photo'}
-            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoFile} disabled={photoBusy} className="hidden" />
+            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoFile} disabled={photoBusy} className="sr-only" />
           </label>
           {photoUrl && (
             <button type="button" onClick={handleRemovePhoto} disabled={photoBusy}
@@ -522,6 +485,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
         <TextField label="Species" value={species} onChange={(e) => { setSpecies(e.target.value); setSaved(false) }} />
 
         {zone && <ConditionCard plant={plant} zone={zone} />}
+        <PlantDiagnosisCard plant={plant} />
 
         <h3 className="text-title-sm text-on-surface pt-2">Preferred growing conditions</h3>
         <ConditionFields prefs={prefs} onChange={(p) => { setPrefs(p); setSaved(false) }} />
@@ -555,9 +519,6 @@ function PlantCard({ plant, zone, onOpen }) {
             <Icon name="light_mode" />{plant.preferredLightCondition} light
           </span>
         )}
-        <div className="mt-auto">
-          <MoistureBar moisture={zone.latestMoisture ?? null} min={plant.preferredMoistureMin ?? null} max={plant.preferredMoistureMax ?? null} />
-        </div>
       </div>
     </button>
   )

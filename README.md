@@ -71,6 +71,7 @@ MQTT_PASS=your_mqtt_password
 # Optional — leave OPENROUTER_API_KEY blank to disable AI (rule-based fallback is used)
 OPENROUTER_API_KEY=
 OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_VISION_MODEL=            # optional: image diagnosis model (must accept images); defaults to OPENROUTER_MODEL
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 AI_CACHE_TTL_MS=1800000
 
@@ -177,12 +178,22 @@ flutter pub get
 
 ```bash
 flutter devices          # list connected devices / emulators
-flutter run --dart-define=API_BASE_URL=http://<your-computer-ip>:5000
+flutter run              # on an emulator; for a real phone see below
 ```
 
 The app reads and writes Firestore directly; only the AI features and account deletion call the server.
 `API_BASE_URL` defaults to `http://10.0.2.2:5000` (your computer, as seen from an Android emulator), so
-on an emulator a plain `flutter run` works. On a real phone, use your computer's LAN IP.
+on an emulator a plain `flutter run` works. That address means nothing on a real phone, and the AI
+features then quietly fall back to the app's local output. On a phone connected for debugging (USB or
+wireless), tunnel the port over ADB instead:
+
+```bash
+adb reverse tcp:5000 tcp:5000      # again after each reconnect; check with: adb reverse --list
+flutter run --dart-define=API_BASE_URL=http://localhost:5000
+```
+
+This works with both `npm run dev` and Docker. Your computer's LAN IP works only with `npm run dev`:
+the Docker server listens on `127.0.0.1` only (see `docker-compose.yml`).
 
 Common targets: `flutter run -d <deviceId>`, `flutter emulators --launch <id>` to start an Android emulator first.
 

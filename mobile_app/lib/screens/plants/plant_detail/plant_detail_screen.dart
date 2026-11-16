@@ -5,11 +5,13 @@ import 'package:image_picker/image_picker.dart';
 import '../../../models/plant_model.dart';
 import '../../../models/sensor_reading_model.dart';
 import '../../../models/zone_model.dart';
+import '../../../services/firestore/diagnosis_service.dart';
 import '../../../services/firestore/plant_service.dart';
 import '../../../services/firestore/zone_service.dart';
 import '../../../services/photo_service.dart';
 import '../../../utils/plant_health.dart';
 import '../../../theme.dart';
+import '../../../widgets/plant_diagnosis_card.dart';
 import '../../../widgets/status_label.dart';
 
 class PlantDetailScreen extends StatefulWidget {
@@ -154,6 +156,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     try {
       // Photo first: the Storage rules check the plant doc to see whose photo it is.
       if (_photoUrl != null) await PhotoService().deletePlantPhotoFile(widget.plant.id);
+      await DiagnosisService().deleteForPlant(widget.plant.zoneId, widget.plant.id);
       await PlantService().deletePlant(widget.plant.id);
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -197,6 +200,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
             const SizedBox(height: 20),
             _buildConditionCard(cs),
           ],
+          const SizedBox(height: 20),
+          PlantDiagnosisCard(plant: widget.plant),
           const SizedBox(height: 20),
           _buildNotesField(),
           const SizedBox(height: 24),

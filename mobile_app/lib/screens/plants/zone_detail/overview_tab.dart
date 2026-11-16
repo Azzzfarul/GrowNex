@@ -8,6 +8,8 @@ import '../../../models/plant_model.dart';
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/device_service.dart';
 import '../../../services/firestore/plant_service.dart';
+import '../../../utils/plant_diagnosis.dart';
+import '../../../widgets/status_label.dart';
 import '../../../services/firestore/zone_service.dart';
 import '../../../services/photo_service.dart';
 import '../../../services/zone_member_service.dart';
@@ -614,12 +616,49 @@ class _CameraCardState extends State<_CameraCard> {
             style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 14),
+          if (_cameraStream != null && widget.zone.visualStatus != null) ...[
+            _buildVisualCheck(tt, cs),
+            const SizedBox(height: 14),
+          ],
           if (_cameraStream != null)
             _buildAssignedCamera()
           else if (!_ownsZone(widget.zone))
             Text('No camera yet. The zone owner assigns one.', style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant))
           else
             _buildAssignDropdown(cs),
+        ],
+      ),
+    );
+  }
+
+  // The server's AI check of the latest camera photo (zones.visualStatus). Web: CameraCard.
+  Widget _buildVisualCheck(TextTheme tt, ColorScheme cs) {
+    final zone = widget.zone;
+    final at = zone.visualCheckedAt;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: cs.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              StatusLabel('Looks ${zone.visualStatus}', tone: conditionTone(zone.visualStatus)),
+              if (at != null)
+                Text('Camera check · ${TimeOfDay.fromDateTime(at.toLocal()).format(context)}, ${at.toLocal().day}/${at.toLocal().month}',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+            ],
+          ),
+          if ((zone.visualSummary ?? '').isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(zone.visualSummary!, style: tt.bodyMedium),
+          ],
+          const SizedBox(height: 4),
+          Text('AI estimate from the latest camera photo.', style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
         ],
       ),
     );

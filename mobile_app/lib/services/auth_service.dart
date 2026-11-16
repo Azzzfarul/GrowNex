@@ -164,6 +164,12 @@ class AuthService {
       for (final sub in ZoneService.zoneSubcollections) {
         await _deleteAll(zoneRef.collection(sub));
       }
+      // Every member's diagnoses of this zone's plants (the user's own elsewhere go below), as the server does.
+      for (final d in (await _firestore.collection('plantDiagnoses').where('zoneId', isEqualTo: zone.id).get()).docs) {
+        final path = d.data()['storagePath'];
+        if (path is String) await _deleteFile(path);
+        await d.reference.delete();
+      }
       for (final plant in (await _firestore.collection('plants').where('zoneId', isEqualTo: zone.id).get()).docs) {
         await _deleteFile('plantPhotos/${plant.id}.jpg');
         await plant.reference.delete();
@@ -171,6 +177,12 @@ class AuthService {
       await _firestore.collection('automationConfig').doc(zone.id).delete();
       await _deleteFile('zonePhotos/${zone.id}.jpg');
       await zoneRef.delete();
+    }
+    // Plant diagnoses: photo first, then the doc (same order as the server's DELETE /api/auth/me).
+    for (final d in (await _firestore.collection('plantDiagnoses').where('userId', isEqualTo: uid).get()).docs) {
+      final path = d.data()['storagePath'];
+      if (path is String) await _deleteFile(path);
+      await d.reference.delete();
     }
     try {
       await _deleteAll(_firestore.collection('notifications').where('userId', isEqualTo: uid));

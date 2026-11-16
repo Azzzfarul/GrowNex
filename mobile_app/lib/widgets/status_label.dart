@@ -28,11 +28,14 @@ import '../theme.dart';
 /// M3 label chip for a zone/plant status (same mapping as the web's StatusLabel).
 class StatusLabel extends StatelessWidget {
   final String status;
-  const StatusLabel(this.status, {super.key});
+
+  /// Colour by this status instead, when the text shown is something else (a diagnosis).
+  final String? tone;
+  const StatusLabel(this.status, {super.key, this.tone});
 
   @override
   Widget build(BuildContext context) {
-    final c = statusColors(context, status);
+    final c = statusColors(context, tone ?? status);
     final text = status.isEmpty ? 'Unknown' : status[0].toUpperCase() + status.substring(1);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

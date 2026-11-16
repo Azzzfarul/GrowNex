@@ -174,3 +174,43 @@ test('zoneFitHint suggests a better zone, a new zone, or nothing', () => {
   assert.equal(move.zone.id, 'hot')
   assert.equal(zoneFitHint(tropical, 'cold', { cold: zones.cold }).kind, 'new')
 })
+
+// ── plant diagnosis labels (mobile: utils/plant_diagnosis.dart) ──────────────
+
+import { CONDITIONS, conditionLabel, conditionTone, diagnosisError } from '../src/lib/plantDiagnosis.js'
+
+test('every diagnosis condition has a readable label', () => {
+  assert.equal(CONDITIONS.length, 10)
+  for (const c of CONDITIONS) assert.match(conditionLabel(c), /^[A-Z][a-z /]+$/, c)
+  assert.equal(conditionLabel('fungal_disease'), 'Fungal disease')
+  assert.equal(conditionLabel('light_heat_stress'), 'Light / heat stress')
+  assert.equal(conditionLabel('something_new'), 'Unclear')
+})
+
+test('conditionTone maps a diagnosis onto the status colours', () => {
+  assert.equal(conditionTone('healthy', 'none'), 'healthy')
+  assert.equal(conditionTone('unclear', 'none'), 'unknown')
+  assert.equal(conditionTone('not_plant', 'none'), 'unknown')
+  assert.equal(conditionTone('pest_damage', 'mild'), 'attention')
+  assert.equal(conditionTone('pest_damage', 'moderate'), 'attention')
+  assert.equal(conditionTone('fungal_disease', 'severe'), 'critical')
+  assert.equal(conditionTone('stressed'), 'attention')    // zone check statuses use the same colours
+  assert.equal(conditionTone('unhealthy'), 'critical')
+})
+
+test('diagnosisError explains each way a diagnosis can fail', () => {
+  assert.equal(diagnosisError('limit'), 'Daily diagnosis limit reached. Try again tomorrow.')
+  assert.equal(diagnosisError('image'), 'Use a JPEG photo under 1.5 MB.')
+  assert.equal(diagnosisError('disabled'), 'Diagnosis unavailable right now.')
+  assert.equal(diagnosisError('error'), 'Diagnosis unavailable right now.')
+  assert.equal(diagnosisError(undefined), 'Diagnosis unavailable right now.')
+})
+
+test('flattenDailyStats ignores the camera check fields the server adds to an hour', () => {
+  const t0 = Date.UTC(2026, 0, 1, 22)
+  const days = [{ hours: {
+    '22': { ...reading(t0, 22), visualStatus: 'stressed', visualConfidence: 0.7, sensorStatus: 'healthy' },
+    '23': { visualStatus: 'healthy', visualConfidence: 0.9, sensorStatus: 'healthy' },  // camera only: no reading
+  } }]
+  assert.deepEqual(flattenDailyStats(days, t0).map(r => r.temperature), [22])
+})

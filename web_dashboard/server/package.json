@@ -19,6 +19,7 @@
     "openai": "^4.77.0"
   },
   "devDependencies": {
-    "aedes": "^1.2.0"
+    "aedes": "^1.2.0",
+    "sharp": "^0.35.5"
   }
 }

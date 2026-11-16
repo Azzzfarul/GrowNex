@@ -1,6 +1,8 @@
 import express, { Router } from 'express'
 import { createHash } from 'crypto'
-import { getFirestore } from 'firebase-admin/firestore'
+import { randomUUID } from 'crypto'
+import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+import { getStorage } from 'firebase-admin/storage'
 import verifyToken from '../middleware/verifyToken.js'
 import { aiEnabled, chatJson } from '../services/aiClient.js'
 import {
@@ -8,8 +10,10 @@ import {
   buildPlanMessages, validatePlan, fallbackPlan,
 } from '../services/aiAnalytics.js'
 import { buildPlantProfileMessages, validatePlantProfile } from '../services/aiPlant.js'
+import { diagnosePlantImage, isJpeg, MAX_IMAGE_BYTES } from '../services/aiVision.js'
 import { isMember } from '../services/zoneMembers.js'
 import { identifyPlant, isPlantPhoto } from '../services/plantId.js'
+import { reserveDiagnosis } from '../services/diagnosisQuota.js'
 
 const router = Router()
 const TTL_MS = parseInt(process.env.AI_CACHE_TTL_MS || '1800000')
@@ -168,6 +172,135 @@ router.post('/plant-profile', verifyToken, async (req, res) => {
       console.warn('[ai] plant-profile fallback:', aiErr.message)
       return res.json({ source: 'fallback', profile: null })
     }
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/ai/plant-diagnosis ────────────────────────────────────────────
+// Body: { plantId, diagnosisId }. The client has already uploaded the close-up to
+// plantDiagnoses/{uid}/{diagnosisId}.jpg; the path is built here from IDs, so the server never
+// fetches a URL a client supplied.
+// Returns: { source: 'ai', diagnosis } | { source: 'fallback', reason: 'disabled'|'limit'|'error' }
+// (409 when that diagnosisId is already taken). The server writes plantDiagnoses/{diagnosisId}
+// (clients can only read and delete it). Whenever no diagnosis is saved, the uploaded image is
+// deleted again; once one is saved, nothing here deletes its photo.
+const KEEP_PER_PLANT = 20
+const ALREADY_EXISTS = 6   // gRPC status code of a create() on a doc that exists
+
+router.post('/plant-diagnosis', verifyToken, async (req, res) => {
+  try {
+    const db = getFirestore()
+    const bucket = getStorage().bucket()
+    const uid = req.user.uid
+    const plantId = String(req.body?.plantId ?? '')
+    const diagnosisId = String(req.body?.diagnosisId ?? '')
+    if (!plantId || plantId.includes('/') || !/^[A-Za-z0-9]{10,40}$/.test(diagnosisId)) {
+      return res.status(400).json({ error: 'plantId and diagnosisId are required' })
+    }
+
+    const plantRef = db.collection('plants').doc(plantId)
+    const plantSnap = await plantRef.get()
+    const zoneSnap = plantSnap.exists ? await loadOwnedZone(db, plantSnap.data().zoneId, uid) : null
+    if (!zoneSnap) return res.status(403).json({ error: 'Forbidden' })
+
+    // A taken ID is refused before anything below touches the photo at its path, which belongs
+    // to the saved diagnosis.
+    const ref = db.collection('plantDiagnoses').doc(diagnosisId)
+    if ((await ref.get()).exists) return res.status(409).json({ error: 'That diagnosis already exists' })
+
+    const storagePath = `plantDiagnoses/${uid}/${diagnosisId}.jpg`
+    const file = bucket.file(storagePath)
+    const discard = () => file.delete({ ignoreNotFound: true }).catch(() => {})
+
+    let jpeg = null, token = null
+    try {
+      const [meta] = await file.getMetadata()
+      // Firebase client uploads come with a download token. Reuse it rather than replace it:
+      // replacing it would break the imageUrl of a request with the same ID that saved first.
+      token = String(meta.metadata?.firebaseStorageDownloadTokens ?? '').split(',')[0] || null
+      if (Number(meta.size) <= MAX_IMAGE_BYTES) [jpeg] = await file.download()
+    } catch { /* not uploaded */ }
+    if (!isJpeg(jpeg)) {
+      await discard()
+      return res.status(400).json({ error: 'Use a JPEG photo under 1.5 MB' })
+    }
+
+    if (!aiEnabled()) {
+      await discard()
+      return res.json({ source: 'fallback', reason: 'disabled' })
+    }
+
+    const allowed = await reserveDiagnosis(db, uid).catch((e) => {
+      console.warn('[ai] plant-diagnosis quota check failed:', e.message)
+      return null
+    })
+    if (!allowed) {
+      await discard()
+      return res.json({ source: 'fallback', reason: allowed === false ? 'limit' : 'error' })
+    }
+
+    let doc
+    try {
+      const plant = plantSnap.data(), zone = zoneSnap.data()
+      const { result, meta } = await diagnosePlantImage({
+        jpeg,
+        context: {
+          species: plant.species || plant.plantName || null,
+          preferred: {
+            moisture: [plant.preferredMoistureMin ?? null, plant.preferredMoistureMax ?? null],
+            humidity: [plant.preferredHumidityMin ?? null, plant.preferredHumidityMax ?? null],
+            temperature: [plant.preferredTemperatureMin ?? null, plant.preferredTemperatureMax ?? null],
+            light: plant.preferredLightCondition ?? null,
+          },
+          latest: {
+            moisturePct: zone.latestMoisture ?? null, humidityPct: zone.latestHumid ?? null,
+            temperatureC: zone.latestTemp ?? null, lightPct: zone.latestLight ?? null,
+          },
+        },
+      })
+
+      // The plant may have been deleted while the model was thinking; don't leave an orphan.
+      if (!(await plantRef.get()).exists) throw new Error('plant was deleted')
+      // Nor a diagnosis whose photo is gone: a client that stopped waiting (mobile times out at
+      // 45 s; a rate-limited model can take longer) deletes it.
+      if (!(await file.exists())[0]) throw new Error('photo was removed')
+
+      // Same token-URL trick as cameraSnapshots.js, so both apps can show the image directly.
+      if (!token) {
+        token = randomUUID()
+        await file.setMetadata({ metadata: { firebaseStorageDownloadTokens: token } })
+      }
+      doc = {
+        userId: uid, plantId, zoneId: zoneSnap.id, storagePath,
+        imageUrl: `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`,
+        model: meta.model, promptV: meta.promptV,
+        ...result,
+      }
+      await ref.create({ ...doc, createdAt: FieldValue.serverTimestamp() })  // create: never overwrite another doc
+    } catch (aiErr) {
+      // A parallel request with the same ID saved first: the photo is now that diagnosis's.
+      if (aiErr.code === ALREADY_EXISTS) return res.status(409).json({ error: 'That diagnosis already exists' })
+      console.warn('[ai] plant-diagnosis fallback:', aiErr.message)
+      await discard()
+      return res.json({ source: 'fallback', reason: 'error' })
+    }
+
+    // Saved. Keep the newest KEEP_PER_PLANT; best effort, a failure here doesn't fail the diagnosis.
+    try {
+      const all = await db.collection('plantDiagnoses').where('plantId', '==', plantId).get()
+      const old = all.docs
+        .sort((a, b) => (b.data().createdAt?.toMillis() ?? 0) - (a.data().createdAt?.toMillis() ?? 0))
+        .slice(KEEP_PER_PLANT)
+      for (const d of old) {
+        if (d.data().storagePath) await bucket.file(d.data().storagePath).delete({ ignoreNotFound: true })
+        await d.ref.delete()
+      }
+    } catch (e) {
+      console.warn('[ai] plant-diagnosis prune failed:', e.message)
+    }
+
+    return res.json({ source: 'ai', diagnosis: { id: diagnosisId, ...doc, createdAt: new Date().toISOString() } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

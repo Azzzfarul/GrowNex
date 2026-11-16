@@ -42,7 +42,7 @@ export default function Sidebar({ onAddZone }) {
 
       <button
         onClick={() => setTheme(dark ? 'light' : 'dark')}
-        className="icon-btn lg:ml-2"
+        className="icon-btn tip-up lg:ml-2"
         aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
         data-tip={dark ? 'Light theme' : 'Dark theme'}
       >

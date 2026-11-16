@@ -150,7 +150,8 @@
   :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated, .icon-btn,
       .chip, .tab, .segmented > button, .menu-item):disabled::before { opacity: 0; }
   :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated, .icon-btn, .fab,
-      .chip, .tab, .nav-item, .segmented > button, .card-link, .menu-item, .switch, .checkbox):focus-visible {
+      .chip, .tab, .nav-item, .segmented > button, .card-link, .menu-item, .switch, .checkbox):is(
+      :focus-visible, :has(> input[type='file']:focus-visible)) {  /* a <label> button around an sr-only file input */
     @apply outline outline-2 outline-offset-2 outline-primary;
   }
 
@@ -193,6 +194,8 @@
     transform: translateX(-50%);
   }
   .icon-btn[data-tip]:is(:hover, :focus-visible)::after { @apply opacity-100 delay-500; }
+  /* Above the button, for buttons at the bottom of the window: a hidden tooltip below them still makes the page scroll */
+  .icon-btn[data-tip].tip-up::after { @apply top-auto bottom-full mt-0 mb-1; }
 
   /* ── FAB (extended on the drawer, icon-only in the rail) ── */
   .fab {

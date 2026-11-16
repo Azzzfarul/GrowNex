@@ -188,7 +188,7 @@ export default function MonitoringTab({ zone }) {
           <label className="btn-tonal cursor-pointer">
             <Icon name={uploading ? 'progress_activity' : 'add_a_photo'} className={uploading ? 'animate-spin' : ''} />
             {uploading ? 'Uploading…' : 'Add photo'}
-            <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleSnapshotFile} disabled={uploading} className="hidden" />
+            <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleSnapshotFile} disabled={uploading} className="sr-only" />
           </label>
         </div>
         {uploadError && <p className="banner banner-error mb-4"><Icon name="error" />{uploadError}</p>}

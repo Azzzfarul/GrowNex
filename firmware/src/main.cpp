@@ -44,6 +44,9 @@ const unsigned long REBOOT_AFTER_MS     = 10UL * 60000;   // offline this long �
 //  light: covered vs. under the grow light).
 #define MOISTURE_DRY 2800
 #define MOISTURE_WET 1200
+// Raw soil readings this far outside the dry/wet calibration mean a missing or faulty probe
+// (an unplugged AOUT reads ~0 or ~4095): send null instead of a clamped 0 % / 100 %.
+#define MOISTURE_MARGIN 400
 #define LIGHT_DARK   4095  // LDR modules read high in the dark
 #define LIGHT_BRIGHT 0
 
@@ -206,11 +209,15 @@ void publishSensors() {
   doc["lightLevel"] = lightLevel;
 
   int rawSoil = readAdc(MOISTURE_PIN);
+  int soilLo = min(MOISTURE_DRY, MOISTURE_WET) - MOISTURE_MARGIN;
+  int soilHi = max(MOISTURE_DRY, MOISTURE_WET) + MOISTURE_MARGIN;
+  bool soilOk = rawSoil >= soilLo && rawSoil <= soilHi;
   int moisture = toPercent(rawSoil, MOISTURE_DRY, MOISTURE_WET);
-  doc["soilMoisture"] = moisture;
+  if (soilOk) doc["soilMoisture"] = moisture; else doc["soilMoisture"] = nullptr;
+  if (!soilOk) Serial.printf("[SOIL] raw %d outside %d..%d — probe missing? sending null\n", rawSoil, soilLo, soilHi);
 
   Serial.printf("[MQTT] sensors → temp=%.1f°C  humid=%.1f%%  light=%d%% (raw %d)  soil=%d%% (raw %d)\n",
-                temperature, humidity, lightLevel, rawLight, moisture, rawSoil);
+                temperature, humidity, lightLevel, rawLight, soilOk ? moisture : -1, rawSoil);
 
   char buf[256];  // max payload ≈ 130 bytes, inside PubSubClient's default 256-byte packet
   serializeJson(doc, buf);

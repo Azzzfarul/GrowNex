@@ -5,6 +5,9 @@ import { db } from '../../firebase'
 import Icon from '../../components/ui/Icon'
 import TextField from '../../components/ui/TextField'
 import { uploadZonePhoto, removeZonePhoto } from '../../lib/photoUpload'
+import StatusLabel from '../../components/ui/StatusLabel'
+import { conditionTone } from '../../lib/plantDiagnosis'
+import { formatRelative } from '../../hooks/useNotifications'
 import MembersCard from './MembersCard'
 
 function ModuleChip({ icon, label }) {
@@ -212,7 +215,7 @@ export default function OverviewTab({ zone }) {
             <label className="btn-tonal btn-sm cursor-pointer shadow-elevation-1">
               <Icon name="add_photo_alternate" />
               {photoBusy ? 'Working…' : zone.zonePhotoUrl ? 'Change photo' : 'Add photo'}
-              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoFile} disabled={photoBusy} className="hidden" />
+              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoFile} disabled={photoBusy} className="sr-only" />
             </label>
             {zone.zonePhotoUrl && (
               <button type="button" onClick={handleRemovePhoto} disabled={photoBusy}
@@ -375,6 +378,16 @@ function CameraCard({ zone, user, isOwner }) {
       <h3 className="card-title mb-1">Camera</h3>
       <p className="text-body-sm text-on-surface-variant mb-4">Uploads a photo to the Camera feed every 4 hours.</p>
       {error && <p className="banner banner-error mb-3"><Icon name="error" />{error}</p>}
+      {zone.cameraDeviceId && zone.visualStatus && (
+        <div className="card-filled p-3 mb-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <StatusLabel status={`Looks ${zone.visualStatus}`} tone={conditionTone(zone.visualStatus)} />
+            <span className="text-body-sm text-on-surface-variant">Camera check · {formatRelative(zone.visualCheckedAt)}</span>
+          </div>
+          {zone.visualSummary && <p className="text-body-md text-on-surface mt-2">{zone.visualSummary}</p>}
+          <p className="text-body-sm text-on-surface-variant mt-1">AI estimate from the latest camera photo.</p>
+        </div>
+      )}
       {zone.cameraDeviceId ? (
         <LinkedDevice dev={camera} icon="photo_camera" missing="Camera not found." onRemove={isOwner && remove} busy={busy} />
       ) : !isOwner ? (

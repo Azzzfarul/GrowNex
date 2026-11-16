@@ -23,6 +23,20 @@ service firebase.storage {
       allow read, write: if ownsZone(zoneId);
     }
 
+    // Close-ups for a plant diagnosis, under their author's uid; the server reads them (and
+    // bypasses these rules). Only the author uploads, once (create, never update, so a saved
+    // diagnosis's photo can't be swapped), and only what the server accepts: a JPEG of at most
+    // 1.5 MB (MAX_IMAGE_BYTES). Members of the diagnosis's zone may delete one too (history and
+    // the plant delete cascade): both apps delete the photo before its plantDiagnoses doc.
+    match /plantDiagnoses/{userId}/{fileName} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      // resource == null: no object there yet (an upload over an existing one can count as a create)
+      allow create: if signedIn() && request.auth.uid == userId && resource == null
+        && request.resource.size <= 1572864 && request.resource.contentType == 'image/jpeg';
+      allow delete: if (signedIn() && request.auth.uid == userId)
+        || ownsZone(fsDoc(/plantDiagnoses/$(idOf(fileName))).data.zoneId);
+    }
+
     // The plant doc must exist: both apps create it before uploading, and delete the photo first.
     match /plantPhotos/{fileName} {
       allow read, write: if signedIn() && ownsZone(fsDoc(/plants/$(idOf(fileName))).data.zoneId);
