@@ -74,6 +74,11 @@ router.delete('/me', verifyToken, async (req, res) => {
         await db.recursiveDelete(zoneDoc.ref)
       }
 
+      // Plant diagnoses: photos first, so a retry still finds them through the docs.
+      await bucket.deleteFiles({ prefix: `plantDiagnoses/${uid}/` })
+      const diagSnap = await db.collection('plantDiagnoses').where('userId', '==', uid).get()
+      diagSnap.docs.forEach(d => del(d.ref))
+
       const notifSnap = await db.collection('notifications').where('userId', '==', uid).get()
       notifSnap.docs.forEach(d => del(d.ref))
     } finally {

@@ -80,6 +80,12 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
     }
 
+    // Image diagnoses of a plant, written only by the server (POST /api/ai/plant-diagnosis);
+    // users read their own and delete them (history, plant/zone delete cascades).
+    match /plantDiagnoses/{diagnosisId} {
+      allow read, delete: if signedIn() && resource.data.userId == uid();
+    }
+
     // Everything else (aiPlantProfiles, ...) is server-only.
   }
 }

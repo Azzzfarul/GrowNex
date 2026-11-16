@@ -601,6 +601,29 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
 
   // Both apps talk to Firestore and Storage directly, so the security rules (web_dashboard/*.rules,
   // which the emulators load through firebase.json) are what keep one user out of another's data.
+  test('plant diagnosis: owner only, JPEG only, and no AI key leaves nothing behind', async () => {
+    const A = users.alice, B = users.bob
+    const path = (id) => `plantDiagnoses/${A.uid}/${id}.jpg`
+    const diagnose = (token, diagnosisId, plantId = ids.basil) =>
+      api('/api/ai/plant-diagnosis', { token, method: 'POST', body: { plantId, diagnosisId } })
+    const jpeg = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(512, 7)])
+
+    assert.equal((await diagnose(B.token, 'diagBob0000001')).status, 403, "bob diagnosing alice's plant")
+    assert.equal((await diagnose(A.token, '../etc')).status, 400, 'bad diagnosis id')
+    assert.equal((await diagnose(A.token, 'diagMissing001')).status, 400, 'no uploaded image')
+
+    await bucket.file(path('diagPng0000001')).save(Buffer.from([0x89, 0x50, 0x4E, 0x47, 1, 2, 3]))
+    const png = await diagnose(A.token, 'diagPng0000001')
+    assert.equal(png.status, 400)
+    assert.match((await png.json()).error, /JPEG/)
+    assert.equal((await bucket.file(path('diagPng0000001')).exists())[0], false, 'rejected image removed')
+
+    await bucket.file(path('diagJpeg000001')).save(jpeg)
+    assert.deepEqual(await (await diagnose(A.token, 'diagJpeg000001')).json(), { source: 'fallback', reason: 'disabled' })
+    assert.equal((await bucket.file(path('diagJpeg000001')).exists())[0], false, 'unused image removed')
+    assert.equal((await db.collection('plantDiagnoses').get()).size, 0, 'nothing written')
+  })
+
   test('security rules keep each user to their own data and boards', async () => {
     const FS = `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${PROJECT}/databases/(default)/documents`
     const as = (who, path, { method = 'GET', fields } = {}) => {
@@ -639,6 +662,19 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(await list('bob', 'devices', users.alice.uid), 403, "list alice's boards")
     assert.equal(await list('bob', 'devices', users.bob.uid), 200, 'list his own boards')
     assert.equal(await list('bob', 'devices', ''), 200, 'list unclaimed boards')
+    // Plant diagnoses: written by the server only; each user reads and deletes their own
+    await db.doc('plantDiagnoses/diagRulesA').set({ userId: users.alice.uid, plantId: ids.basil })
+    assert.equal(await as('alice', 'plantDiagnoses/diagRulesA'), 200)
+    assert.equal(await list('alice', 'plantDiagnoses', users.alice.uid), 200)
+    assert.equal(await as('bob', 'plantDiagnoses/diagRulesA'), 403, "read alice's diagnosis")
+    assert.equal(await list('bob', 'plantDiagnoses', users.alice.uid), 403, "list alice's diagnoses")
+    assert.equal(await as('bob', 'plantDiagnoses/diagRulesA', { method: 'DELETE' }), 403, "delete alice's diagnosis")
+    assert.equal(await as('alice', 'plantDiagnoses?documentId=forged', { method: 'POST',
+      fields: { userId: str(users.alice.uid), condition: str('healthy') } }), 403, 'forge a diagnosis')
+    assert.equal(await as('alice', 'plantDiagnoses/diagRulesA', { method: 'PATCH', fields: { condition: str('healthy') } }), 403, 'edit a diagnosis')
+    assert.equal(await upload('alice', `plantDiagnoses/${users.alice.uid}/x.jpg`), 200)
+    assert.equal(await upload('bob', `plantDiagnoses/${users.alice.uid}/y.jpg`), 403, "upload into alice's diagnoses")
+    assert.equal(await as('alice', 'plantDiagnoses/diagRulesA', { method: 'DELETE' }), 200)
     // ...not even through his own zone or board (the bridge acts on zones.deviceId / devices.assignedZoneId)
     assert.equal(await as('bob', 'zones?documentId=bob-zone', { method: 'POST',
       fields: { userId: str(users.bob.uid), zoneName: str('Mine'), deviceId: str('ESP32-T1') } }), 403, "point his zone at alice's board")
@@ -658,6 +694,12 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await bucket.file(`zonePhotos/${ids.zoneA}.jpg`).save(Buffer.from('z'))
     await bucket.file(`plantPhotos/${ids.basil}.jpg`).save(Buffer.from('p'))
 
+    for (const [who, id] of [['alice', 'diagDelA'], ['bob', 'diagDelB']]) {
+      const storagePath = `plantDiagnoses/${users[who].uid}/${id}.jpg`
+      await bucket.file(storagePath).save(Buffer.from('d'))
+      await db.doc(`plantDiagnoses/${id}`).set({ userId: users[who].uid, plantId: 'p', storagePath })
+    }
+
     const res = await api('/api/auth/me', { token: users.alice.token, method: 'DELETE' })
     assert.equal(res.status, 200, await res.text())
 
@@ -675,6 +717,10 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     const [left] = await bucket.getFiles({ prefix: `zoneSnapshots/${ids.zoneA}/` })
     assert.equal(left.length, 0)
 
+    assert.equal((await db.collection('plantDiagnoses').where('userId', '==', A).get()).size, 0, 'diagnoses deleted')
+    assert.equal((await bucket.getFiles({ prefix: `plantDiagnoses/${A}/` }))[0].length, 0, 'diagnosis photos deleted')
+    assert.equal((await db.doc('plantDiagnoses/diagDelB').get()).exists, true, "bob's diagnosis untouched")
+    assert.equal((await bucket.file(`plantDiagnoses/${users.bob.uid}/diagDelB.jpg`).exists())[0], true, "bob's diagnosis photo untouched")
     assert.equal((await db.doc(`zones/${ids.zoneB}`).get()).exists, true, "bob's zone untouched")
     await auth.getUser(users.bob.uid)
   })

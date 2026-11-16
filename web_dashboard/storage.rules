@@ -19,6 +19,11 @@ service firebase.storage {
       allow read, write: if ownsZone(zoneId);
     }
 
+    // Close-ups for a plant diagnosis; the server reads them (and bypasses these rules).
+    match /plantDiagnoses/{userId}/{fileName} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
     // The plant doc must exist: both apps create it before uploading, and delete the photo first.
     match /plantPhotos/{fileName} {
       allow read, write: if signedIn() && ownsZone(fsDoc(/plants/$(idOf(fileName))).data.zoneId);
