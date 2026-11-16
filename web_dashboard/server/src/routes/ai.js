@@ -8,14 +8,16 @@ import {
   buildPlanMessages, validatePlan, fallbackPlan,
 } from '../services/aiAnalytics.js'
 import { buildPlantProfileMessages, validatePlantProfile } from '../services/aiPlant.js'
+import { isMember } from '../services/zoneMembers.js'
 
 const router = Router()
 const TTL_MS = parseInt(process.env.AI_CACHE_TTL_MS || '1800000')
 const MODEL  = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini'
 
+// The zone, if `uid` is its owner or a member; else null.
 async function loadOwnedZone(db, zoneId, uid) {
   const snap = await db.collection('zones').doc(zoneId).get()
-  if (!snap.exists || snap.data().userId !== uid) return null
+  if (!snap.exists || !isMember(snap.data(), uid)) return null
   return snap
 }
 

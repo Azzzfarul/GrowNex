@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, deleteDoc, updateDoc, onSnapshot, collection, query, where, getDocs, limit, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
+import { useAuth } from '../context/AuthContext'
 import StatusLabel from '../components/ui/StatusLabel'
 import Icon from '../components/ui/Icon'
 import Dialog from '../components/ui/Dialog'
@@ -35,6 +36,7 @@ async function deleteAll(col) {
 export default function ZoneDetailPage() {
   const { zoneId } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [zone, setZone] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState(0)
@@ -76,6 +78,10 @@ export default function ZoneDetailPage() {
     const unsub = onSnapshot(doc(db, 'zones', zoneId), (snap) => {
       setZone(snap.exists() ? { id: snap.id, ...snap.data() } : null)
       setLoading(false)
+    }, () => {
+      // Permission denied: not (or no longer) a member, e.g. just removed or left
+      setZone(null)
+      setLoading(false)
     })
     return unsub
   }, [zoneId])
@@ -85,7 +91,7 @@ export default function ZoneDetailPage() {
     return (
       <div>
         <PageHeader title="Zone not found" back="/plants" />
-        <EmptyState icon="search_off" title="This zone doesn't exist" body="It may have been deleted." />
+        <EmptyState icon="search_off" title="This zone isn't available" body="It may have been deleted, or you're no longer a member." />
       </div>
     )
   }
@@ -112,11 +118,11 @@ export default function ZoneDetailPage() {
         back="/plants"
         title={zone.zoneName}
         subtitle={<span className="capitalize">{zone.zoneType} · {zone.totalPlantSlots ?? 0} slot{zone.totalPlantSlots !== 1 ? 's' : ''}</span>}
-        actions={
+        actions={zone.userId === user?.uid && (
           <button onClick={() => setShowDeleteConfirm(true)} className="btn-outlined btn-danger">
             <Icon name="delete" />Delete zone
           </button>
-        }
+        )}
       >
         <StatusLabel status={zone.status} />
       </PageHeader>

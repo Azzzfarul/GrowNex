@@ -47,13 +47,15 @@ class ZoneService {
     await zoneRef.delete();
   }
 
+  // Zones the user owns or was added to, newest first. Sorted here rather than with orderBy, which
+  // with array-contains would need a composite index.
   Stream<List<Zone>> watchZones(String userId) {
     return _firestore
         .collection('zones')
-        .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
+        .where('memberIds', arrayContains: userId)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => Zone.fromDocument(d)).toList());
+        .map((snap) => snap.docs.map((d) => Zone.fromDocument(d)).toList()
+          ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0))));
   }
 
   Future<Zone?> getZone(String zoneId) async {

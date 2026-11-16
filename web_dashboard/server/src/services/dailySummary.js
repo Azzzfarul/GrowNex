@@ -4,6 +4,7 @@
 import { getFirestore, Timestamp, FieldPath } from 'firebase-admin/firestore'
 import { getStorage } from 'firebase-admin/storage'
 import { notify } from './notifications.js'
+import { memberIdsOf } from './zoneMembers.js'
 
 const db = getFirestore()
 const bucket = getStorage().bucket()
@@ -50,12 +51,14 @@ async function pruneZoneSnapshots(zoneRefs) {
 export async function runDailySummary() {
   const zonesSnap = await db.collection('zones').get()
 
+  // Every member gets a summary of the zones they can use, shared ones included.
   const byUser = new Map()
   zonesSnap.forEach(d => {
     const z = { id: d.id, ...d.data() }
-    if (!z.userId) return
-    if (!byUser.has(z.userId)) byUser.set(z.userId, [])
-    byUser.get(z.userId).push(z)
+    for (const uid of memberIdsOf(z)) {
+      if (!byUser.has(uid)) byUser.set(uid, [])
+      byUser.get(uid).push(z)
+    }
   })
 
   const startOfToday = new Date()

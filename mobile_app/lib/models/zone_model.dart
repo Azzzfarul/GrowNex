@@ -24,6 +24,12 @@ class Zone {
   final bool hasFertilizer;
   final bool hasLight;
   final bool? deviceOnline;
+  // Owner + the users the owner added (written by the server); { uid: email } for display.
+  final List<String> memberIds;
+  final Map<String, String> members;
+
+  /// Everyone who can use the zone; zones from before sharing have no memberIds.
+  List<String> get allMemberIds => memberIds.isNotEmpty ? memberIds : [userId];
 
   Zone({
     required this.id,
@@ -49,6 +55,8 @@ class Zone {
     this.hasFertilizer = false,
     this.hasLight = false,
     this.deviceOnline,
+    this.memberIds = const [],
+    this.members = const {},
   });
 
   factory Zone.fromDocument(DocumentSnapshot doc) {
@@ -111,6 +119,8 @@ class Zone {
       hasFertilizer: map['hasFertilizer'] as bool? ?? false,
       hasLight: map['hasLight'] as bool? ?? false,
       deviceOnline: map['deviceOnline'] as bool?,
+      memberIds: (map['memberIds'] as List?)?.whereType<String>().toList() ?? const [],
+      members: (map['members'] as Map?)?.map((k, v) => MapEntry('$k', '$v')) ?? const {},
     );
   }
 
@@ -118,6 +128,8 @@ class Zone {
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
+      'memberIds': memberIds,
+      'members': members,
       'zoneName': zoneName,
       'zoneType': zoneType,
       'status': status,

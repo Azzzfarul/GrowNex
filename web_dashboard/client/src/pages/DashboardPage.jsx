@@ -139,7 +139,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return
     const unsub = onSnapshot(
-      query(collection(db, 'zones'), where('userId', '==', user.uid)),
+      query(collection(db, 'zones'), where('memberIds', 'array-contains', user.uid)),
       (snap) => {
         setZones(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
         setLoading(false)

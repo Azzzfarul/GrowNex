@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getFirestore } from 'firebase-admin/firestore'
+import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import { getAuth } from 'firebase-admin/auth'
 import { getStorage } from 'firebase-admin/storage'
 import verifyToken from '../middleware/verifyToken.js'
@@ -72,6 +72,13 @@ router.delete('/me', verifyToken, async (req, res) => {
         if (failed.length) throw new Error(`${failed.length} document(s) could not be deleted`)
         // Zone doc plus every subcollection (statsDaily, aiCache, snapshots, and any left from older versions)
         await db.recursiveDelete(zoneDoc.ref)
+      }
+
+      // Zones shared with this user (owned ones are gone by now): leave them.
+      const sharedSnap = await db.collection('zones').where('memberIds', 'array-contains', uid).get()
+      for (const z of sharedSnap.docs) {
+        writer.update(z.ref, { memberIds: FieldValue.arrayRemove(uid), [`members.${uid}`]: FieldValue.delete() })
+          .catch(e => failed.push(e))
       }
 
       const notifSnap = await db.collection('notifications').where('userId', '==', uid).get()

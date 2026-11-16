@@ -57,7 +57,6 @@ class _PlantsTabState extends State<PlantsTab> {
                             zoneId: widget.zone.id,
                             takenSlots: takenSlots,
                             zoneType: widget.zone.zoneType,
-                            userId: widget.zone.userId,
                           ),
                         ),
                       ),

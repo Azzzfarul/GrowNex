@@ -104,6 +104,7 @@ async function seed() {
   await zoneRef.set({
     _demo:            true,
     userId:           USER_ID,
+    memberIds:        [USER_ID],  // owner + members; what the apps query
     deviceId:         deviceRef.id,
     zoneName:         'Herb Garden',
     zoneType:         'indoor',

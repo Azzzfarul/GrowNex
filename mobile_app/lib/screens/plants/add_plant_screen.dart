@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -17,14 +18,12 @@ class AddPlantScreen extends StatefulWidget {
   final String zoneId;
   final Set<int> takenSlots;
   final String zoneType;
-  final String userId;
 
   const AddPlantScreen({
     super.key,
     required this.zoneId,
     required this.takenSlots,
     this.zoneType = 'indoor',
-    this.userId = '',
   });
 
   @override
@@ -66,11 +65,13 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     _loadSiblingZones();
   }
 
+  // The user's other zones (own and shared) + their plants, for the wrong-zone hint
   Future<void> _loadSiblingZones() async {
-    if (widget.userId.isEmpty) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
     try {
       final db = FirebaseFirestore.instance;
-      final zonesSnap = await db.collection('zones').where('userId', isEqualTo: widget.userId).get();
+      final zonesSnap = await db.collection('zones').where('memberIds', arrayContains: uid).get();
       final map = <String, ({Zone zone, List<Plant> plants})>{};
       for (final zd in zonesSnap.docs) {
         final zone = Zone.fromMap(zd.id, zd.data());

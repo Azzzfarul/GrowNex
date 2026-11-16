@@ -160,11 +160,11 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
     setPhotoPreview(URL.createObjectURL(file))
   }
 
-  // Load the user's other zones + their plants once — for the wrong-zone hint (Feature 2)
+  // Load the user's other zones (own and shared) + their plants once — for the wrong-zone hint
   useEffect(() => {
-    if (!zone.userId) return
+    if (!user) return
     let cancelled = false
-    getDocs(query(collection(db, 'zones'), where('userId', '==', zone.userId))).then(async (zs) => {
+    getDocs(query(collection(db, 'zones'), where('memberIds', 'array-contains', user.uid))).then(async (zs) => {
       const zones = zs.docs.map((d) => ({ id: d.id, ...d.data() }))
       const map = {}
       await Promise.all(zones.map(async (z) => {
@@ -174,7 +174,7 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
       if (!cancelled) setZonesById(map)
     })
     return () => { cancelled = true }
-  }, [zone.userId])
+  }, [user])
 
   async function suggestConditions() {
     if (species.trim().length < 3 || !user) return
