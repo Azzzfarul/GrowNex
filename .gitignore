@@ -58,3 +58,7 @@ graphify-out/*
 !graphify-out/manifest.json
 !graphify-out/.graphify_build.json
 !graphify-out/.graphify_labels.json
+
+# Vision evaluation data and reports
+web_dashboard/server/eval/data/
+web_dashboard/server/eval/out/
