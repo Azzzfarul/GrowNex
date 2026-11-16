@@ -10,6 +10,10 @@ import '../../../services/firestore/device_service.dart';
 import '../../../services/firestore/plant_service.dart';
 import '../../../services/firestore/zone_service.dart';
 import '../../../services/photo_service.dart';
+import '../../../services/zone_member_service.dart';
+
+// The boards belong to the owner's account: only they assign or unassign them (security rules too).
+bool _ownsZone(Zone zone) => zone.userId == FirebaseAuth.instance.currentUser?.uid;
 
 class OverviewTab extends StatefulWidget {
   final Zone zone;
@@ -142,6 +146,8 @@ class _OverviewTabState extends State<OverviewTab> {
         _buildDeviceCard(),
         const SizedBox(height: 20),
         _CameraCard(zone: widget.zone),
+        const SizedBox(height: 20),
+        _MembersCard(zone: widget.zone),
       ],
     );
   }
@@ -389,6 +395,9 @@ class _OverviewTabState extends State<OverviewTab> {
           const SizedBox(height: 14),
           if (widget.zone.deviceId != null)
             _buildAssignedDevice()
+          else if (!_ownsZone(widget.zone))
+            Text('No sensor node yet. The zone owner assigns one.',
+                style: tt.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))
           else
             _buildAssignDropdown(),
         ],
@@ -438,9 +447,12 @@ class _OverviewTabState extends State<OverviewTab> {
                 ],
               ),
             ),
-            _removeLoading
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : TextButton.icon(
+            if (!_ownsZone(widget.zone))
+              const SizedBox.shrink()
+            else if (_removeLoading)
+              const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            else
+              TextButton.icon(
                     onPressed: _remove,
                     icon: const Icon(Icons.link_off, size: 18),
                     label: const Text('Remove'),
@@ -604,6 +616,8 @@ class _CameraCardState extends State<_CameraCard> {
           const SizedBox(height: 14),
           if (_cameraStream != null)
             _buildAssignedCamera()
+          else if (!_ownsZone(widget.zone))
+            Text('No camera yet. The zone owner assigns one.', style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant))
           else
             _buildAssignDropdown(cs),
         ],
@@ -648,9 +662,12 @@ class _CameraCardState extends State<_CameraCard> {
                 ],
               ),
             ),
-            _busy
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : TextButton.icon(
+            if (!_ownsZone(widget.zone))
+              const SizedBox.shrink()
+            else if (_busy)
+              const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            else
+              TextButton.icon(
                     onPressed: _remove,
                     icon: const Icon(Icons.link_off, size: 18),
                     label: const Text('Remove'),
@@ -752,6 +769,138 @@ class _SectionCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: child,
+      ),
+    );
+  }
+}
+
+// Who can use this zone. The owner adds people by email and removes them; a member can leave.
+// Web: MembersCard in client/src/pages/zones/MembersCard.jsx.
+class _MembersCard extends StatefulWidget {
+  final Zone zone;
+
+  const _MembersCard({required this.zone});
+
+  @override
+  State<_MembersCard> createState() => _MembersCardState();
+}
+
+class _MembersCardState extends State<_MembersCard> {
+  final _emailCtrl = TextEditingController();
+  String? _busy;  // 'add', or the uid being removed
+  String? _error;
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _add() async {
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty) return;
+    setState(() { _busy = 'add'; _error = null; });
+    final error = await ZoneMemberService().addMember(widget.zone.id, email);
+    if (!mounted) return;
+    setState(() { _busy = null; _error = error; });
+    if (error == null) _emailCtrl.clear();
+  }
+
+  Future<void> _remove(String uid) async {
+    final me = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == me) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Leave zone?'),
+          content: Text("You'll lose access to \"${widget.zone.zoneName}\" until the owner adds you again."),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(foregroundColor: Theme.of(ctx).colorScheme.error),
+              child: const Text('Leave'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    setState(() { _busy = uid; _error = null; });
+    final error = await ZoneMemberService().removeMember(widget.zone.id, uid);
+    if (!mounted) return;
+    setState(() { _busy = null; _error = error; });
+    // Left: the zone screen switches to "not available" by itself; go back to the list.
+    if (error == null && uid == me) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final zone = widget.zone;
+    final me = FirebaseAuth.instance.currentUser;
+    final isOwner = _ownsZone(zone);
+    String emailOf(String uid) => zone.members[uid]?.isNotEmpty == true
+        ? zone.members[uid]!
+        : uid == me?.uid ? (me?.email ?? 'You') : 'Unknown user';
+
+    return _SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Members', style: tt.titleSmall),
+          const SizedBox(height: 4),
+          Text(
+            isOwner
+                ? 'People you add can see this zone, edit its plants and automation, and switch its pumps and light.'
+                : 'Shared with you by the owner.',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(_error!, style: tt.bodyMedium?.copyWith(color: cs.error)),
+          ],
+          const SizedBox(height: 8),
+          for (final uid in zone.allMemberIds)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(uid == zone.userId ? Icons.admin_panel_settings_outlined : Icons.person_outline),
+              title: Text(emailOf(uid), overflow: TextOverflow.ellipsis),
+              subtitle: Text('${uid == zone.userId ? 'Owner' : 'Member'}${uid == me?.uid ? ' · You' : ''}'),
+              trailing: _busy == uid
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : (isOwner && uid != zone.userId) || (!isOwner && uid == me?.uid)
+                      ? TextButton(
+                          onPressed: _busy == null ? () => _remove(uid) : null,
+                          style: TextButton.styleFrom(foregroundColor: cs.error),
+                          child: Text(isOwner ? 'Remove' : 'Leave'),
+                        )
+                      : null,
+            ),
+          if (isOwner) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    decoration: const InputDecoration(labelText: 'Add by email', border: OutlineInputBorder(), isDense: true),
+                    onSubmitted: (_) => _add(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonal(
+                  onPressed: _busy == null ? _add : null,
+                  child: Text(_busy == 'add' ? 'Adding…' : 'Add'),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }

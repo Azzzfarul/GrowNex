@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,13 +17,11 @@ import '../../theme.dart';
 class AddPlantScreen extends StatefulWidget {
   final String zoneId;
   final String zoneType;
-  final String userId;
 
   const AddPlantScreen({
     super.key,
     required this.zoneId,
     this.zoneType = 'indoor',
-    this.userId = '',
   });
 
   @override
@@ -50,6 +49,10 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   Map<String, ({Zone zone, List<Plant> plants})> _zonesById = {};
   bool _hintDismissed = false;
   XFile? _photoFile;
+  bool _idLoading = false;
+  List<PlantMatch>? _idMatches;  // Pl@ntNet guesses for _photoFile; null = not asked yet
+  String? _idError;
+  int _suggestSeq = 0;  // only the latest Suggest's answer is applied
 
   @override
   void initState() {
@@ -57,11 +60,13 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     _loadSiblingZones();
   }
 
+  // The user's other zones (own and shared) + their plants, for the wrong-zone hint
   Future<void> _loadSiblingZones() async {
-    if (widget.userId.isEmpty) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
     try {
       final db = FirebaseFirestore.instance;
-      final zonesSnap = await db.collection('zones').where('userId', isEqualTo: widget.userId).get();
+      final zonesSnap = await db.collection('zones').where('memberIds', arrayContains: uid).get();
       final map = <String, ({Zone zone, List<Plant> plants})>{};
       for (final zd in zonesSnap.docs) {
         final zone = Zone.fromMap(zd.id, zd.data());
@@ -87,9 +92,34 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     );
   }
 
+  // No photo yet: pick one (it also becomes the plant photo), then identify it right away
+  Future<void> _identifyOrPick() async {
+    if (_photoFile == null) await _pickPhoto();
+    if (_photoFile != null && mounted) await _identify();
+  }
+
+  Future<void> _identify() async {
+    final photo = _photoFile;
+    if (photo == null) return;
+    setState(() { _idLoading = true; _idError = null; });
+    final res = await const AiSummaryService().identifyPlant(await photo.readAsBytes());
+    if (!mounted) return;
+    setState(() { _idLoading = false; _idMatches = res.error == null ? res.matches : null; _idError = res.error; });
+  }
+
+  // A Pl@ntNet match fills in the species (and the nickname, if empty), then its conditions
+  void _pickMatch(PlantMatch m) {
+    setState(() {
+      _speciesCtrl.text = m.species;
+      if (_nameCtrl.text.trim().isEmpty && m.commonName != null) _nameCtrl.text = m.commonName!;
+    });
+    _suggestConditions();
+  }
+
   Future<void> _suggestConditions() async {
     final species = _speciesCtrl.text.trim();
     if (species.length < 3) return;
+    final seq = ++_suggestSeq;
     setState(() => _aiLoading = true);
     try {
       final res = await const AiSummaryService().fetchPlantProfile({
@@ -97,7 +127,9 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         'zoneType': widget.zoneType,
       });
       final p = res.profile;
-      if (!mounted) return;
+      // A newer pick, Suggest or edit of the species replaced this one: its answer would
+      // save another plant's conditions under this species. Web: suggestSeq in PlantsTab.jsx.
+      if (!mounted || seq != _suggestSeq) return;
       setState(() {
         _aiSource = res.source;
         if (p != null) {
@@ -116,7 +148,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         }
       });
     } finally {
-      if (mounted) setState(() => _aiLoading = false);
+      if (mounted && seq == _suggestSeq) setState(() => _aiLoading = false);
     }
   }
 
@@ -198,33 +230,59 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
           children: [
             _buildPhotoPicker(),
             const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            TextFormField(
+              controller: _speciesCtrl,
+              decoration: const InputDecoration(labelText: 'Species', hintText: 'e.g. basil'),
+              onChanged: (_) => setState(() { _aiSource = ''; _aiCommonName = null; _suggestSeq++; _aiLoading = false; }),
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter the plant species' : null,
+            ),
+            const SizedBox(height: 10),
+            // The two ways to fill it in: a photo (Pl@ntNet) or a typed name (Suggest)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _speciesCtrl,
-                    decoration: const InputDecoration(labelText: 'Species (e.g. Phalaenopsis)'),
-                    onChanged: (_) => setState(() { _aiSource = ''; _aiCommonName = null; }),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter the plant species' : null,
-                  ),
+                FilledButton.tonalIcon(
+                  onPressed: _idLoading ? null : _identifyOrPick,
+                  icon: _idLoading
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.image_search),
+                  label: Text(_idLoading ? 'Identifying…' : 'Identify from photo'),
                 ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 56,
-                  child: FilledButton.tonalIcon(
-                    onPressed: _aiLoading || _speciesCtrl.text.trim().length < 3 ? null : _suggestConditions,
-                    icon: _aiLoading
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.auto_awesome),
-                    label: const Text('Suggest'),
-                  ),
+                FilledButton.tonalIcon(
+                  onPressed: _aiLoading || _speciesCtrl.text.trim().length < 3 ? null : _suggestConditions,
+                  icon: _aiLoading
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.auto_awesome),
+                  label: const Text('Suggest'),
                 ),
               ],
             ),
+            if (_idMatches?.isNotEmpty == true) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final m in _idMatches!)
+                    ChoiceChip(
+                      selected: _speciesCtrl.text.trim() == m.species,
+                      onSelected: (_) => _pickMatch(m),
+                      label: Text('${m.commonName != null ? '${m.commonName} · ' : ''}${m.species} ${(m.score * 100).round()}%'),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
             _buildSpeciesCaption(),
-            const SizedBox(height: 12),
+            // Credit suggested by the Pl@ntNet API terms for free use
+            if (_idMatches != null) ...[
+              const SizedBox(height: 4),
+              Text('Species identification powered by Pl@ntNet (my.plantnet.org)',
+                  style: Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
+            const SizedBox(height: 16),
             TextFormField(
               controller: _nameCtrl,
               decoration: const InputDecoration(labelText: 'Plant nickname (optional)'),
@@ -302,38 +360,40 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     );
     if (source == null) return;
     final file = await ImagePicker().pickImage(source: source, maxWidth: 1280, imageQuality: 80);
-    if (file != null && mounted) setState(() => _photoFile = file);
+    if (file != null && mounted) setState(() { _photoFile = file; _idMatches = null; _idError = null; });
   }
 
   bool get _aiApplied => _aiSource == 'ai' || _aiSource == 'cache';
 
+  // The one line under the species tools: the latest result, or how to use them.
+  // Web: speciesHelper in AddPlantModal, pages/zones/PlantsTab.jsx.
   Widget _buildSpeciesCaption() {
     final cs = Theme.of(context).colorScheme;
     final app = AppColors.of(context);
     final tt = Theme.of(context).textTheme;
+    Text line(String text, [Color? color]) => Text(text, style: tt.bodySmall?.copyWith(color: color ?? cs.onSurfaceVariant));
     if (_aiSource == 'fallback' || _aiSource == 'error') {
-      return Text('Couldn’t fetch suggestions — enter the conditions manually.',
-          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant));
+      return line('Couldn’t fetch suggestions. Enter the conditions manually.');
     }
     if (_aiApplied) {
       return Wrap(
         children: [
           if (_aiCommonName != null && _aiCommonName!.trim().isNotEmpty)
-            Text('Interpreted as $_aiCommonName. ',
-                style: tt.labelMedium?.copyWith(color: cs.onSurface)),
-          if (_aiConfidence == 'low')
-            Text('Low-confidence guess — double-check these. ',
-                style: tt.bodySmall?.copyWith(color: app.warning)),
-          if (_aiCareNotes != null && _aiCareNotes!.trim().isNotEmpty)
-            Text('Care tips added to Notes below.',
-                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+            Text('Interpreted as $_aiCommonName. ', style: tt.labelMedium?.copyWith(color: cs.onSurface)),
+          if (_aiConfidence == 'low') line('Low-confidence guess, so double-check these. ', app.warning),
+          if (_aiCareNotes != null && _aiCareNotes!.trim().isNotEmpty) line('Care tips added to Notes below.'),
         ],
       );
     }
-    return Text(
-      'Suggest fills in the preferred conditions below and adds care tips for this species to Notes.',
-      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-    );
+    final matches = _idMatches;
+    if (_idError != null) return line(_idError!, cs.error);
+    if (matches != null && matches.isEmpty) return line('No match. Try a closer, well-lit photo of a leaf or flower.');
+    if (matches != null) {
+      return matches.first.score < 0.3
+          ? line('Low confidence: pick only if one looks right.', app.warning)
+          : line('Pick the match that looks right.');
+    }
+    return line('Type a name and tap Suggest, or let a photo name it.');
   }
 
   static const _hintReason = {

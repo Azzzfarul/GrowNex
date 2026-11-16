@@ -76,11 +76,13 @@ export default function PlantsPage() {
   useEffect(() => {
     if (!user) return
     return onSnapshot(
-      query(collection(db, 'zones'), where('userId', '==', user.uid)),
+      query(collection(db, 'zones'), where('memberIds', 'array-contains', user.uid)),
       (snap) => {
         setZones(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
         setLoading(false)
-      }
+      },
+      // Refused (e.g. live security rules older than zone sharing): stop loading instead of spinning
+      (err) => { console.error('Zones listener failed:', err); setLoading(false) },
     )
   }, [user])
 

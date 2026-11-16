@@ -6,6 +6,7 @@
 
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { getMessaging } from 'firebase-admin/messaging'
+import { memberIdsOf } from './zoneMembers.js'
 
 const db = getFirestore()
 const TTL_MS = 30 * 24 * 60 * 60 * 1000 // notifications kept ~30 days
@@ -67,4 +68,10 @@ export async function notify({ userId, zoneId = null, zoneName = null, type, sev
   } catch (err) {
     console.error('[notify] failed:', err.message)
   }
+}
+
+/** notify() every member of zone `z` (owner included); `fallbackUserId` if the zone doc is gone. */
+export async function notifyZone(z, n, fallbackUserId = null) {
+  const ids = z?.userId || z?.memberIds?.length ? memberIdsOf(z) : [fallbackUserId].filter(Boolean)
+  await Promise.all(ids.map(userId => notify({ ...n, userId })))
 }

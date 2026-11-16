@@ -33,11 +33,14 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
 
     setState(() => _loading = true);
     try {
-      final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final user = FirebaseAuth.instance.currentUser;
+      final userId = user?.uid ?? '';
       final zoneRef = ZoneService().newZoneRef();
       final zone = Zone(
         id: zoneRef.id,
         userId: userId,
+        memberIds: [userId],  // owner + members (the owner adds more on the zone's Overview tab)
+        members: {userId: user?.email ?? ''},
         zoneName: _nameCtrl.text.trim(),
         zoneType: _zoneType,
         status: 'healthy',

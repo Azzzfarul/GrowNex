@@ -139,7 +139,7 @@ void main() {
     // ── Add a plant (Suggest falls back without an AI key) ──
     await tap(t, find.text('Plants').last);
     await tap(t, find.text('Add plant'));
-    await type(t, field('Species (e.g. Phalaenopsis)'), 'Basil');
+    await type(t, field('Species'), 'Basil');
     await tap(t, find.text('Suggest'));
     await t.pump(const Duration(seconds: 2));
     await tap(t, button('Add plant'));

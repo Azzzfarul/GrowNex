@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/zone_model.dart';
@@ -117,13 +118,17 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
           );
         }
 
-        final zone = snapshot.data;
+        // An error is "permission denied": not (or no longer) a member, e.g. just removed or left.
+        // StreamBuilder keeps the last data after an error, so check it first.
+        final zone = snapshot.hasError ? null : snapshot.data;
         if (zone == null) {
           return Scaffold(
             appBar: AppBar(),
-            body: const Center(child: Text('Zone not found.')),
+            body: const Center(child: Text("This zone isn't available. It may have been deleted, or you're no longer a member.",
+                textAlign: TextAlign.center)),
           );
         }
+        final isOwner = zone.userId == FirebaseAuth.instance.currentUser?.uid;
 
         return Scaffold(
           appBar: AppBar(
@@ -135,11 +140,12 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
               ],
             ),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.delete_outline),
-                tooltip: 'Delete zone',
-                onPressed: () => _confirmDeleteZone(zone),
-              ),
+              if (isOwner)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Delete zone',
+                  onPressed: () => _confirmDeleteZone(zone),
+                ),
             ],
             bottom: TabBar(
               controller: _tabController,

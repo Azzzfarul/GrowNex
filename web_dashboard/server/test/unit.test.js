@@ -4,6 +4,43 @@ import assert from 'node:assert/strict'
 import { initializeApp } from 'firebase-admin/app'
 import { validatePlan, fallbackPlan, validateSummary } from '../src/services/aiAnalytics.js'
 import { validatePlantProfile } from '../src/services/aiPlant.js'
+import { parsePlantNetResults, isPlantPhoto } from '../src/services/plantId.js'
+import { memberIdsOf } from '../src/services/zoneMembers.js'
+
+// ── Pl@ntNet answers are outside data ────────────────────────────────────────
+
+test('parsePlantNetResults keeps the top matches, typed and capped', () => {
+  const json = { results: [
+    { score: 0.874, species: { scientificNameWithoutAuthor: ' Ocimum basilicum ', commonNames: ['', 'Basil', 'Sweet basil'] } },
+    { score: 1.7, species: { scientificNameWithoutAuthor: 'Mentha spicata', commonNames: [] } },        // clamped
+    { score: 0.3, species: { scientificNameWithoutAuthor: 'X'.repeat(200) } },                          // long name
+    { score: 0.5, species: {} },                                                                         // past the top 3
+  ] }
+  assert.deepEqual(parsePlantNetResults(json), [
+    { species: 'Ocimum basilicum', commonName: 'Basil', score: 0.87 },
+    { species: 'Mentha spicata', commonName: null, score: 1 },
+    { species: 'X'.repeat(80), commonName: null, score: 0.3 },
+  ])
+  // no name, no score, or a ~0% padding guess: dropped
+  assert.deepEqual(parsePlantNetResults({ results: [{ score: 0.9, species: {} }, { score: 'high', species: { scientificNameWithoutAuthor: 'A' } },
+    { score: 0.01, species: { scientificNameWithoutAuthor: 'B' } }] }), [])
+  assert.deepEqual(parsePlantNetResults(null), [])
+  assert.deepEqual(parsePlantNetResults({ results: 'nope' }), [])
+})
+
+test('isPlantPhoto accepts JPEG and PNG only', () => {
+  assert.ok(isPlantPhoto(Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0, 0, 0, 0, 0])))
+  assert.ok(isPlantPhoto(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0])))
+  assert.ok(!isPlantPhoto(Buffer.from('GIF89a....')))
+  assert.ok(!isPlantPhoto({}))
+})
+
+test('memberIdsOf: owner + members, or the owner alone for zones from before sharing', () => {
+  assert.deepEqual(memberIdsOf({ userId: 'a', memberIds: ['a', 'b', 'b', '', 3] }), ['a', 'b'])
+  assert.deepEqual(memberIdsOf({ userId: 'a' }), ['a'])
+  assert.deepEqual(memberIdsOf({ userId: 'a', memberIds: [] }), ['a'])
+  assert.deepEqual(memberIdsOf(undefined), [])
+})
 
 // mqttBridge.js calls getFirestore()/getStorage() at import time; nothing connects until used.
 initializeApp({ projectId: 'demo-unit', storageBucket: 'demo-unit.appspot.com' })

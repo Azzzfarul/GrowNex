@@ -1,7 +1,7 @@
 import mqtt from 'mqtt'
 import cron from 'node-cron'
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
-import { notify } from './notifications.js'
+import { notifyZone } from './notifications.js'
 import { runDailySummary } from './dailySummary.js'
 import { saveZoneSnapshot } from './cameraSnapshots.js'
 
@@ -33,8 +33,7 @@ async function maybeNotifyStatus(zoneId, newStatus, alertSummary) {
   lastAlertAt.set(zoneId, Date.now())
 
   const z = (await db.collection('zones').doc(zoneId).get()).data() ?? {}
-  await notify({
-    userId: z.userId,
+  await notifyZone(z, {
     zoneId,
     zoneName: z.zoneName ?? null,
     type: 'threshold',
@@ -249,8 +248,7 @@ async function handleActuatorState(deviceId, payload) {
     console.log(`[MQTT bridge] ${deviceId} stopped ${a} at its safety limit`)
     // On this device, whatever the zone doc says; throws on failure, and the next state report retries.
     const z = await triggerActuator(device.assignedZoneId, a, false, deviceId)
-    await notify({
-      userId: z.userId ?? device.userId,
+    await notifyZone(z, {
       zoneId: device.assignedZoneId,
       zoneName: z.zoneName ?? null,
       type: 'actuator',
@@ -258,7 +256,7 @@ async function handleActuatorState(deviceId, payload) {
       always: true,  // a fault, not the routine activity a user may have muted
       title: `${ACTUATOR_LABEL[a]} stopped at its safety limit`,
       message: `${ACTUATOR_LABEL[a]} in ${z.zoneName ?? 'a zone'} ran too long without being switched off, so the device stopped it.`,
-    })
+    }, device.userId)
   }
 }
 
@@ -329,8 +327,7 @@ async function revertUnconfirmed(deviceId, a) {
   console.log(`[MQTT bridge] ${deviceId} never confirmed ${a} on — switching it back off`)
   const z = await fireActuator(d.assignedZoneId, a, false, deviceId)
   if (!z) return  // still failing after the retries (logged)
-  await notify({
-    userId: z.userId ?? d.userId,
+  await notifyZone(z, {
     zoneId: d.assignedZoneId,
     zoneName: z.zoneName ?? null,
     type: 'actuator',
@@ -338,7 +335,7 @@ async function revertUnconfirmed(deviceId, a) {
     always: true,  // a fault, not the routine activity a user may have muted
     title: `${ACTUATOR_LABEL[a]} didn't turn on`,
     message: `The device in ${z.zoneName ?? 'a zone'} didn't respond, so ${ACTUATOR_LABEL[a].toLowerCase()} was switched back off. Check that it's online, then try again.`,
-  })
+  }, d.userId)
 }
 
 // ─── Plant cache ──────────────────────────────────────────────────────────────
@@ -611,8 +608,7 @@ async function applyActuator(zoneId, actuator, state, onDevice = null) {
   // Notify on the "started" event only (automation-driven — manual toggles never
   // call triggerActuator; the auto-off setTimeout passes state=false).
   if (state === true) {
-    await notify({
-      userId: z.userId,
+    await notifyZone(z, {
       zoneId,
       zoneName: z.zoneName ?? null,
       type: 'actuator',
