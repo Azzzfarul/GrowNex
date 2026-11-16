@@ -15,7 +15,7 @@ function fourHourBucketId(date = new Date()) {
   return d.toISOString().slice(0, 13) // e.g. "2026-01-15T12"
 }
 
-function downscaleToJpeg(file, maxEdge = 1280, quality = 0.8) {
+export function downscaleToJpeg(file, maxEdge = 1280, quality = 0.8) {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)

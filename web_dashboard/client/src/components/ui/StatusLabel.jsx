@@ -8,9 +8,10 @@ function tone(status) {
   return 'bg-surface-container-highest text-on-surface-variant'
 }
 
-export default function StatusLabel({ status, className = '' }) {
+// tone: colour by this status instead, when the text shown is something else (a diagnosis)
+export default function StatusLabel({ status, tone: toneStatus, className = '' }) {
   return (
-    <span className={`inline-flex items-center h-6 px-2.5 rounded-lg text-label-md shrink-0 ${tone(status)} ${className}`}>
+    <span className={`inline-flex items-center h-6 px-2.5 rounded-lg text-label-md shrink-0 ${tone(toneStatus ?? status)} ${className}`}>
       {status ? status[0].toUpperCase() + status.slice(1) : 'Unknown'}
     </span>
   )

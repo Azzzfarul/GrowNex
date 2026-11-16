@@ -9,6 +9,7 @@ import Loading from '../components/ui/Loading'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/layout/PageHeader'
 import { deleteFile, removePlantPhotoFile } from '../lib/photoUpload'
+import { deletePlantDiagnoses } from '../lib/diagnosisApi'
 import OverviewTab from './zones/OverviewTab'
 import PlantsTab from './zones/PlantsTab'
 import AutomationTab from './zones/AutomationTab'
@@ -57,6 +58,7 @@ export default function ZoneDetailPage() {
       const plantsSnap = await getDocs(query(collection(db, 'plants'), where('zoneId', '==', zoneId)))
       for (const p of plantsSnap.docs) {
         await removePlantPhotoFile(p.id)
+        await deletePlantDiagnoses(zone.userId, p.id)
         await deleteDoc(p.ref)
       }
       await deleteFile(`zonePhotos/${zoneId}.jpg`)

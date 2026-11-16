@@ -16,6 +16,8 @@ import { plantHealth, plantHealthSummary } from '../../lib/plantHealth'
 import { scoreBadge, plantStatus } from '../../lib/analytics'
 import { fetchZoneStats } from '../../lib/zoneStats'
 import { uploadPlantPhoto, removePlantPhoto, removePlantPhotoFile } from '../../lib/photoUpload'
+import { deletePlantDiagnoses } from '../../lib/diagnosisApi'
+import PlantDiagnosisCard from '../../components/PlantDiagnosisCard'
 
 const LIGHT_OPTIONS = ['', 'low', 'medium', 'high']
 
@@ -333,6 +335,7 @@ function ConditionCard({ plant, zone }) {
 
 /* ── Plant Detail Modal ──────────────────────────────────────────────── */
 function PlantDetailModal({ plant, zone, onClose }) {
+  const { user } = useAuth()
   const [name,    setName]    = useState(plant.plantName)
   const [species, setSpecies] = useState(plant.species)
   const [notes,   setNotes]   = useState(plant.notes ?? '')
@@ -394,6 +397,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
     setDeleting(true)
     try {
       if (photoUrl) await removePlantPhotoFile(plant.id)
+      await deletePlantDiagnoses(user.uid, plant.id)
       await deleteDoc(doc(db, 'plants', plant.id))
       onClose()
     } catch (e) {
@@ -432,7 +436,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
             <button onClick={handleDelete} disabled={deleting} className="btn-error">{deleting ? 'Removing…' : 'Remove'}</button>
           </>}
         >
-          <span className="font-medium text-on-surface">{plant.plantName}</span> and its photo will be deleted. This can't be undone.
+          <span className="font-medium text-on-surface">{plant.plantName}</span> and its photos and diagnoses will be deleted. This can't be undone.
         </Dialog>
       )}
 
@@ -465,6 +469,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
         <TextField label="Species" value={species} onChange={(e) => { setSpecies(e.target.value); setSaved(false) }} />
 
         {zone && <ConditionCard plant={plant} zone={zone} />}
+        <PlantDiagnosisCard plant={plant} />
 
         <h3 className="text-title-sm text-on-surface pt-2">Preferred growing conditions</h3>
         <ConditionFields prefs={prefs} onChange={(p) => { setPrefs(p); setSaved(false) }} />
