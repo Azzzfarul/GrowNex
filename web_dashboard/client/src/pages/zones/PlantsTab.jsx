@@ -310,6 +310,11 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
         </div>
 
         {/* Species from the photo (Pl@ntNet) */}
+        {!photoFile && (
+          <p className="flex items-center gap-2 text-body-sm text-on-surface-variant -mt-1">
+            <Icon name="image_search" size={18} />Not sure of the species? Add a photo and tap Identify to fill it in.
+          </p>
+        )}
         {photoFile && (
           <div className="space-y-2 -mt-1">
             <div className="flex flex-wrap items-center gap-2">

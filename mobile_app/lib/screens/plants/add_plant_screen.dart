@@ -257,7 +257,23 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         child: ListView(
           children: [
             _buildPhotoPicker(),
-            if (_photoFile != null) _buildIdentify(),
+            if (_photoFile != null)
+              _buildIdentify()
+            else
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.image_search, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text('Not sure of the species? Add a photo and tap Identify to fill it in.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 16),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
