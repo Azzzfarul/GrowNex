@@ -1,18 +1,18 @@
 # Graph Report - GrowNex  (2026-11-16)
 
 ## Corpus Check
-- 188 files · ~112,417 words
+- 189 files · ~113,901 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 71 file(s) not represented in the graph (top: (none) 17, .xcconfig 8, .xml 7)
-- WARNING: 71 of 271 files seen (26%) have no supported extractor and are missing from this graph entirely. It may look complete while representing only part of the codebase.
+- WARNING: 71 of 272 files seen (26%) have no supported extractor and are missing from this graph entirely. It may look complete while representing only part of the codebase.
 
 ## Summary
-- 2222 nodes · 3836 edges · 122 communities (102 shown, 20 thin omitted)
+- 2230 nodes · 3848 edges · 126 communities (109 shown, 17 thin omitted)
 - Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 106 edges (avg confidence: 0.9)
 - Token cost: 469,489 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1ddb04ef`
+- Built from commit: `36886ae3`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -58,22 +58,24 @@
 - Mobile Plant Health
 - OverviewTab.jsx
 - MonitoringTab.jsx
-- Icon
+- DashboardPage.jsx
 - .Create
 - login_screen.dart
 - Mobile Zone Detail Screen
 - Mobile Photo Service
 - Mobile Add Zone Screen
 - Docker Compose Setup
+- PlantsTab.jsx
 - Simulator Package Config
 - register_screen.dart
 - Mobile Automation Config Model
 - Mobile Sensor Reading Model
-- Mobile M3 Theme
+- DeviceDetailPage.jsx
 - Server Express & Auth Middleware
 - Mobile Zone Service
 - StatelessWidget
 - Mobile Notification Model
+- device_model.dart
 - State
 - Desktop CMake Build
 - Mobile Logic Tests
@@ -114,6 +116,7 @@
 - status_label.dart
 - Plant health image diagnosis: design
 - Vision evaluation
+- root_screen.dart
 - Review Focus
 - dailySummary.js
 - Labelling guide
@@ -121,35 +124,36 @@
 - cameraSnapshots.js
 - fireActuator
 - app_bottom_nav.dart
+- plants_tab.dart
 - plant_diagnosis.dart
 - seed.js
-- AnalyticsScreen
+- zone_member_service.dart
 - plant_screen.dart
-- AppColors
-- AddPlantScreen
+- MembersCard.jsx
+- fireActuator
 
 ## God Nodes (most connected - your core abstractions)
 1. `Icon()` - 61 edges
-2. `useAuth()` - 36 edges
+2. `useAuth()` - 35 edges
 3. `AnalyticsPage()` - 31 edges
 4. `Win32Window` - 27 edges
 5. `react` - 26 edges
 6. `firebase` - 22 edges
 7. `TextField()` - 21 edges
-8. `PlantDetailModal()` - 20 edges
-9. `Dialog()` - 20 edges
+8. `Dialog()` - 20 edges
+9. `PlantDetailModal()` - 19 edges
 10. `firebase-admin` - 19 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Global Constraints` --references--> `downscaleToJpeg()`  [INFERRED]
   docs/superpowers/plans/2026-11-16-plant-image-diagnosis.md → web_dashboard/client/src/lib/photoUpload.js
-- `Evaluation` --references--> `downscaleToJpeg()`  [INFERRED]
-  docs/superpowers/specs/2026-11-16-plant-image-diagnosis-design.md → web_dashboard/client/src/lib/photoUpload.js
 - `Constraints` --references--> `validatePlan()`  [INFERRED]
   docs/superpowers/specs/2026-11-16-plant-image-diagnosis-design.md → web_dashboard/server/src/services/aiAnalytics.js
-- `MQTT contract (firmware ↔ bridge)` --references--> `Pump`  [INFERRED]
-  CLAUDE.md → firmware/src/main.cpp
-- `Actuators and automation (`mqttBridge.js`)` --references--> `watchAutomationConfig()`  [INFERRED]
+- `Task 5: Zone check on camera snapshots` --references--> `handleCameraImage()`  [INFERRED]
+  docs/superpowers/plans/2026-11-16-plant-image-diagnosis.md → web_dashboard/server/src/services/mqttBridge.js
+- `MQTT contract (firmware ↔ bridge)` --references--> `handleActuatorState()`  [INFERRED]
+  CLAUDE.md → web_dashboard/server/src/services/mqttBridge.js
+- `Actuators and automation (`mqttBridge.js`)` --references--> `expectConfirmation()`  [INFERRED]
   CLAUDE.md → web_dashboard/server/src/services/mqttBridge.js
 
 ## Import Cycles
@@ -162,19 +166,19 @@
 - **Speakers of the shared MQTT contract** — claude_mqtt_contract, claude_firmware_esp32_node, claude_firmware_cam_esp32_cam, claude_device_simulator, claude_mqttbridge [EXTRACTED 1.00]
 - **Actuator command delivery and safety net** — claude_intent_vs_confirmed, claude_reconcilecommands, claude_expectconfirmation, claude_pump_safety_limit, claude_failsafe, claude_topic_actuators_command, claude_topic_actuators_state, claude_in_memory_timers [INFERRED 0.85]
 
-## Communities (122 total, 20 thin omitted)
+## Communities (126 total, 17 thin omitted)
 
 ### Community 0 - "package:flutter/material.dart"
 Cohesion: 0.10
-Nodes (14): createState, _email, icon, initState, _loadingProfile, _loadProfile, onTap, _setTheme (+6 more)
+Nodes (16): build, createState, _email, icon, initState, _loadingProfile, _loadProfile, onTap (+8 more)
 
 ### Community 1 - "mqttBridge.js"
-Cohesion: 0.09
-Nodes (27): ACTUATOR_LABEL, actuatorCache, actuatorQueues, ACTUATORS, ALL_OFF, automationConfigs, BROKER_PORT, cancelCronJobs() (+19 more)
+Cohesion: 0.08
+Nodes (29): ACTUATOR_LABEL, actuatorCache, actuatorQueues, ACTUATORS, ALL_OFF, automationConfigs, BROKER_PORT, cancelCronJobs() (+21 more)
 
 ### Community 2 - "Web Analytics Logic"
 Cohesion: 0.06
-Nodes (64): Architecture, Commands, Environment gotchas, Firestore data model, Firestore is the integration point, graphify, Overview, Web ↔ mobile parity (+56 more)
+Nodes (60): Architecture, Commands, Environment gotchas, Firestore data model, Firestore is the integration point, graphify, Overview, Web ↔ mobile parity (+52 more)
 
 ### Community 3 - "Mobile Analytics Utils"
 Cohesion: 0.03
@@ -201,8 +205,8 @@ Cohesion: 0.05
 Nodes (20): cloud_firestore, Cocoa, file_selector_macos, firebase_auth, firebase_core, firebase_messaging, firebase_storage, Flutter (+12 more)
 
 ### Community 9 - "Mobile Add Device & Model"
-Cohesion: 0.05
-Nodes (41): assignedZoneId, Device, deviceName, deviceType, fertilizerActive, fromDocument, fromMap, hasFertilizerModule (+33 more)
+Cohesion: 0.09
+Nodes (23): AddDeviceScreen, _AddDeviceScreenState, build, _buildFoundCard, _buildManualEntry, _buildNearbyDevices, _buildNearbyTile, _claim (+15 more)
 
 ### Community 10 - "ESP32 Firmware (Node + Cam)"
 Cohesion: 0.08
@@ -218,15 +222,15 @@ Nodes (38): build, _buildConditionCard, _buildField, _buildNotesField, _buildPho
 
 ### Community 13 - "Web Client Deps & Tailwind"
 Cohesion: 0.07
-Nodes (33): autoprefixer, postcss, recharts, tailwindcss, @types/react, @types/react-dom, vite, @vitejs/plugin-react (+25 more)
+Nodes (34): autoprefixer, postcss, react-dom, recharts, tailwindcss, @types/react, @types/react-dom, vite (+26 more)
 
 ### Community 14 - "App.jsx"
-Cohesion: 0.12
-Nodes (28): react, react-dom, react-router-dom, App(), PrivateRoute(), AuthLayout(), FEATURES, Layout() (+20 more)
+Cohesion: 0.14
+Nodes (27): App(), PrivateRoute(), AuthLayout(), FEATURES, Icon(), TextField(), AuthProvider(), useAuth() (+19 more)
 
 ### Community 15 - "Web Zone Detail & Plants Tab"
-Cohesion: 0.10
-Nodes (42): firebase, DiagnosisList(), PlantDiagnosisCard(), handleDelete(), handleFile(), StatusLabel(), tone(), AuthContext (+34 more)
+Cohesion: 0.14
+Nodes (26): DiagnosisList(), PlantDiagnosisCard(), handleDelete(), handleFile(), StatusLabel(), tone(), plantStatus(), deleteDiagnosis() (+18 more)
 
 ### Community 16 - "Linux Flutter Runner"
 Cohesion: 0.08
@@ -237,8 +241,8 @@ Cohesion: 0.07
 Nodes (29): _avgRange, b, byMetric, cur, currentFit, hi, kind, lo (+21 more)
 
 ### Community 18 - "plant_diagnosis_model.dart"
-Cohesion: 0.13
-Nodes (14): advice, condition, confidence, createdAt, fromDocument, id, imageUrl, likelyCause (+6 more)
+Cohesion: 0.06
+Nodes (25): advice, condition, confidence, createdAt, fromDocument, id, imageUrl, likelyCause (+17 more)
 
 ### Community 19 - "Mobile Push & Notifications UI"
 Cohesion: 0.13
@@ -265,20 +269,20 @@ Cohesion: 0.07
 Nodes (21): _admin, adminCount, adminCountWhere, _adminDocs, adminExists, button, deviceId, end (+13 more)
 
 ### Community 25 - "zone_card_widget.dart"
-Cohesion: 0.06
-Nodes (28): Zone, _badge, build, createState, initState, onTap, _plantsStream, _sensorInfo (+20 more)
+Cohesion: 0.09
+Nodes (19): Zone, _badge, build, createState, initState, onTap, _plantsStream, _sensorInfo (+11 more)
 
 ### Community 26 - "Mobile AI Summary Service"
 Cohesion: 0.07
 Nodes (24): Advice, aiSummaryKinds, AiSummaryResult, AiSummaryService, AutomationPlanResult, commonName, empty, fetchAutomationPlan (+16 more)
 
 ### Community 27 - "string"
-Cohesion: 0.18
+Cohesion: 0.19
 Nodes (4): wWinMain(), CreateAndAttachConsole(), GetCommandLineArguments(), Utf8FromUtf16()
 
 ### Community 28 - "Mobile Device Detail"
-Cohesion: 0.10
-Nodes (19): build, _buildField, _buildInfoRow, _buildModuleToggle, _buildSection, _confirmDelete, createState, _deleting (+11 more)
+Cohesion: 0.09
+Nodes (21): build, _buildField, _buildInfoRow, _buildModuleToggle, _buildSection, _confirmDelete, createState, _deleting (+13 more)
 
 ### Community 29 - "Mobile Auth Service"
 Cohesion: 0.10
@@ -294,23 +298,23 @@ Nodes (20): assignDeviceToZone, claimDevice, deleteDevice, DeviceClaimException,
 
 ### Community 32 - "Mobile Plant Model"
 Cohesion: 0.10
-Nodes (19): createdAt, fromDocument, fromMap, id, _n, notes, photoUrl, plantName (+11 more)
+Nodes (20): createdAt, fromDocument, fromMap, id, _n, notes, photoUrl, Plant (+12 more)
 
 ### Community 33 - "Server Dependencies"
 Cohesion: 0.10
 Nodes (23): cors, dotenv, node-cron, openai, sharp, dependencies, cors@^2.8.5, dotenv@^16.4.5 (+15 more)
 
 ### Community 34 - "Mobile Dashboard & Plants Screens"
-Cohesion: 0.06
-Nodes (19): _buildEmptyState, _buildSummaryCard, _contentPadding, createState, initState, _zonesStream, createState, _onTabSelected (+11 more)
+Cohesion: 0.08
+Nodes (15): build, _buildEmptyState, _buildSummaryCard, _contentPadding, createState, initState, _zonesStream, build (+7 more)
 
 ### Community 35 - "Mobile Devices Screen"
-Cohesion: 0.10
-Nodes (16): build, build, _buildDeviceCard, _buildSummaryCard, createState, DevicesScreen, _DevicesScreenState, _devicesStream (+8 more)
+Cohesion: 0.15
+Nodes (10): build, _buildDeviceCard, _buildSummaryCard, createState, DevicesScreen, _DevicesScreenState, _devicesStream, initState (+2 more)
 
 ### Community 36 - "ProfilePage.jsx"
-Cohesion: 0.29
-Nodes (8): Switch(), useTheme(), EditProfileModal(), NOTIF_TYPES, NotificationSettings(), ProfilePage(), SectionTitle(), ToggleSetting()
+Cohesion: 0.18
+Nodes (12): Layout(), nav, Sidebar(), ThemeContext, useTheme(), NotificationsProvider(), DeleteAccountModal(), EditProfileModal() (+4 more)
 
 ### Community 37 - "Mobile Edit Profile"
 Cohesion: 0.11
@@ -321,16 +325,16 @@ Cohesion: 0.12
 Nodes (16): _compliancePercent, defs, dist, MetricHealth, _metricNowScore, metrics, parts, plantHealth (+8 more)
 
 ### Community 39 - "OverviewTab.jsx"
-Cohesion: 0.13
-Nodes (19): Clients, AddZoneDialog(), finish(), handleSubmit(), removeZonePhoto(), uploadZonePhoto(), addZoneMember(), call() (+11 more)
+Cohesion: 0.15
+Nodes (12): AddZoneDialog(), finish(), handleSubmit(), removeZonePhoto(), uploadZonePhoto(), AssignRow(), CameraCard(), LinkedDevice() (+4 more)
 
 ### Community 40 - "MonitoringTab.jsx"
-Cohesion: 0.17
-Nodes (17): Dialog(), Sheet(), useEscape(), useModalFocus(), WIDTH, fourHourBucketId(), uploadZoneSnapshot(), AddDeviceModal() (+9 more)
+Cohesion: 0.23
+Nodes (14): Dialog(), Sheet(), useEscape(), useModalFocus(), WIDTH, fourHourBucketId(), uploadZoneSnapshot(), avg() (+6 more)
 
-### Community 41 - "Icon"
-Cohesion: 0.13
-Nodes (29): PageHeader(), NotificationBell(), SEVERITY, TYPE_ICON, EmptyState(), Icon(), Loading(), Spinner() (+21 more)
+### Community 41 - "DashboardPage.jsx"
+Cohesion: 0.20
+Nodes (16): react-router-dom, PageHeader(), NotificationBell(), SEVERITY, TYPE_ICON, formatRelative(), useNotifications(), DashboardPage() (+8 more)
 
 ### Community 42 - ".Create"
 Cohesion: 0.14
@@ -349,12 +353,16 @@ Cohesion: 0.12
 Nodes (15): bucket, d, deleteFile, deletePlantPhotoFile, _firestore, flooredHour, fourHourBucketId, PhotoService (+7 more)
 
 ### Community 46 - "Mobile Add Zone Screen"
-Cohesion: 0.12
-Nodes (13): AddZoneScreen, _AddZoneScreenState, build, _buildPhotoPicker, createState, dispose, _formKey, _loading (+5 more)
+Cohesion: 0.13
+Nodes (11): build, _buildPhotoPicker, createState, dispose, _formKey, _loading, _nameCtrl, _photoFile (+3 more)
 
 ### Community 47 - "Docker Compose Setup"
 Cohesion: 0.12
 Nodes (17): build, depends_on, logging, ports, restart, options, name, max-file (+9 more)
+
+### Community 48 - "PlantsTab.jsx"
+Cohesion: 0.20
+Nodes (17): firebase, react, AuthContext, analytics, app, auth, db, firebaseConfig (+9 more)
 
 ### Community 49 - "Simulator Package Config"
 Cohesion: 0.13
@@ -372,9 +380,9 @@ Nodes (14): aiRecommended, autoFertilizingEnabled, autoLightingEnabled, Automati
 Cohesion: 0.15
 Nodes (11): fromDocument, fromMap, humidity, id, lightLevel, moisture, _n, plantId (+3 more)
 
-### Community 53 - "Mobile M3 Theme"
+### Community 53 - "DeviceDetailPage.jsx"
 Cohesion: 0.15
-Nodes (10): buildTheme, copyWith, cs, dark, lerp, light, of, onWarningContainer (+2 more)
+Nodes (12): EmptyState(), Loading(), Spinner(), Switch(), fetchAutomationPlan(), DeviceDetailPage(), Fact(), formatLastSync() (+4 more)
 
 ### Community 54 - "Server Express & Auth Middleware"
 Cohesion: 0.28
@@ -392,9 +400,13 @@ Nodes (11): _AdviceTile, _ChartCard, _ComplianceBar, _InsightTile, _MetricCard, 
 Cohesion: 0.14
 Nodes (12): AppNotification, createdAt, fromDocument, id, isRead, message, severity, title (+4 more)
 
+### Community 58 - "device_model.dart"
+Cohesion: 0.10
+Nodes (18): assignedZoneId, Device, deviceName, deviceType, fertilizerActive, fromDocument, fromMap, hasFertilizerModule (+10 more)
+
 ### Community 59 - "State"
-Cohesion: 0.17
-Nodes (14): DashboardScreen, _DashboardScreenState, DeviceDetailScreen, _DeviceDetailScreenState, RootScreen, _RootScreenState, _CameraCard, _CameraCardState (+6 more)
+Cohesion: 0.16
+Nodes (16): AnalyticsScreen, _AnalyticsScreenState, DashboardScreen, _DashboardScreenState, AddPlantScreen, _AddPlantScreenState, AddZoneScreen, _AddZoneScreenState (+8 more)
 
 ### Community 60 - "Desktop CMake Build"
 Cohesion: 0.24
@@ -413,8 +425,8 @@ Cohesion: 0.22
 Nodes (8): Anti-goals, Approaches, Design, Goals, Intent, Left to the builder, Non-goals, One "hero" soil sensor per zone, unlimited plants
 
 ### Community 64 - "AI Plan Validation"
-Cohesion: 0.12
-Nodes (23): AI features (`server/src/routes/ai.js`), TTL_MS, avg(), buildPlanMessages(), buildSummaryMessages(), clamp(), dominantLightCondition(), fallbackPlan() (+15 more)
+Cohesion: 0.11
+Nodes (25): AI features (`server/src/routes/ai.js`), TTL_MS, avg(), buildPlanMessages(), buildSummaryMessages(), clamp(), dominantLightCondition(), fallbackPlan() (+17 more)
 
 ### Community 65 - "Flutter Window Destroy"
 Cohesion: 0.18
@@ -425,8 +437,8 @@ Cohesion: 0.18
 Nodes (10): background_color, description, display, icons, name, orientation, prefer_related_applications, short_name (+2 more)
 
 ### Community 67 - "aiVision.js"
-Cohesion: 0.13
-Nodes (26): aiEnabled(), chatJson(), chatJsonRaw(), getClient(), ask(), buildDiagnosisMessages(), buildZoneCheckMessages(), checkZoneImage() (+18 more)
+Cohesion: 0.11
+Nodes (30): aiEnabled(), chatJson(), chatJsonRaw(), getClient(), ALIASES, ask(), buildDiagnosisMessages(), buildZoneCheckMessages() (+22 more)
 
 ### Community 69 - "mqttBridge.js (sole MQTT speaker)"
 Cohesion: 0.14
@@ -453,12 +465,12 @@ Cohesion: 0.33
 Nodes (5): analyzer, exclude, include, linter, rules
 
 ### Community 78 - "plant_diagnosis_card.dart"
-Cohesion: 0.11
-Nodes (17): Plant, build, _buildResult, _busy, createState, _delete, _error, initState (+9 more)
+Cohesion: 0.12
+Nodes (14): build, _buildResult, _busy, createState, _delete, _error, initState, _openId (+6 more)
 
 ### Community 80 - "diagnosis_service.dart"
-Cohesion: 0.09
-Nodes (14): _col, delete, _delete, deleteForPlant, DiagnosisService, _firestore, _forPlant, run (+6 more)
+Cohesion: 0.12
+Nodes (10): _col, delete, _delete, deleteForPlant, DiagnosisService, _firestore, _forPlant, run (+2 more)
 
 ### Community 81 - "Sim Camera Morning Frame"
 Cohesion: 0.67
@@ -469,8 +481,8 @@ Cohesion: 0.67
 Nodes (4): Four Potted Seedlings on Shelf, Grow Light On at Night (pink/purple overhead bar), Night Grow-Light Camera Frame (simulated ESP32-CAM), GrowNex Simulated ESP32-CAM
 
 ### Community 83 - "Actuators and automation (`mqttBridge.js`)"
-Cohesion: 0.25
-Nodes (14): Actuators and automation (`mqttBridge.js`), applyActuator(), enqueue(), expectConfirmation(), fireActuator(), isOwnEcho(), publishCommand(), reconcileCommands() (+6 more)
+Cohesion: 0.35
+Nodes (11): Actuators and automation (`mqttBridge.js`), applyActuator(), enqueue(), handleActuatorState(), isOwnEcho(), publishCommand(), reconcileCommands(), sameIntent() (+3 more)
 
 ### Community 84 - "README.md"
 Cohesion: 0.24
@@ -497,8 +509,8 @@ Cohesion: 0.29
 Nodes (13): Android-only mobile Firebase config, CORS CLIENT_ORIGIN allow-list, Transactional device claiming (unclaimed discovery), Shared Firebase project (Auth + Firestore + Storage), mobile_app Flutter app, Firestore/Storage security rules, web_dashboard/client React dashboard, web_dashboard/server Express API + MQTT bridge (+5 more)
 
 ### Community 101 - "AutomationTab.jsx"
-Cohesion: 0.13
-Nodes (13): fetchAiSummary(), fetchAutomationPlan(), fetchPlantProfile(), postJson(), AutomationTab(), requestAiPlan(), AddPlantModal(), handleSubmit() (+5 more)
+Cohesion: 0.14
+Nodes (18): Task 6: Web client, Clients, Evaluation, AI_SUMMARY_KINDS, fetchAiSummary(), fetchPlantProfile(), identifyPlant(), postJson() (+10 more)
 
 ### Community 102 - "notify() notification service"
 Cohesion: 0.24
@@ -517,28 +529,32 @@ Cohesion: 0.12
 Nodes (12): AutomationConfigService, _firestore, getConfig, saveConfig, saveFields, _firestore, markAllRead, markRead (+4 more)
 
 ### Community 106 - "visionEval.js"
-Cohesion: 0.11
-Nodes (17): calibration(), cohenKappa(), scoreRows(), wilson(), map, out, [root, devPerClass = '15'], unmapped (+9 more)
+Cohesion: 0.13
+Nodes (14): calibration(), cohenKappa(), scoreRows(), wilson(), map, out, [root, devPerClass = '15'], unmapped (+6 more)
 
 ### Community 107 - "status_label.dart"
 Cohesion: 0.20
 Nodes (9): app, build, cs, s, scoreColors, status, statusColors, StatusLabel (+1 more)
 
 ### Community 108 - "Plant health image diagnosis: design"
-Cohesion: 0.13
-Nodes (14): Anti-goals, Approaches, Calls made by Claude, not the user, Constraints, Data, Docs, Evaluation, Goals (+6 more)
+Cohesion: 0.12
+Nodes (16): MQTT contract (firmware ↔ bridge), Anti-goals, Approaches, Calls made by Claude, not the user, Constraints, Data, Docs, Goals (+8 more)
 
 ### Community 109 - "Vision evaluation"
 Cohesion: 0.33
 Nodes (5): Camera vs sensors (`--task agreement`), Data (gitignored, under `eval/data/`), Protocol (fixed before looking at any result), Run order, Vision evaluation
 
+### Community 110 - "root_screen.dart"
+Cohesion: 0.12
+Nodes (9): build, createState, _onTabSelected, RootScreen, _RootScreenState, routeName, _screens, _selectedIndex (+1 more)
+
 ### Community 111 - "Review Focus"
-Cohesion: 0.17
-Nodes (11): Global Constraints, Plant Image Diagnosis Implementation Plan, Review Focus, Task 1: Vision module (prompts, validators, image calls), Task 2: Evaluation metrics, Task 3: Evaluation scripts and protocol files, Task 4: Plant diagnosis endpoint, rules, account cascade, Task 5: Zone check on camera snapshots (+3 more)
+Cohesion: 0.18
+Nodes (10): Global Constraints, Plant Image Diagnosis Implementation Plan, Review Focus, Task 1: Vision module (prompts, validators, image calls), Task 2: Evaluation metrics, Task 3: Evaluation scripts and protocol files, Task 4: Plant diagnosis endpoint, rules, account cascade, Task 5: Zone check on camera snapshots (+2 more)
 
 ### Community 112 - "dailySummary.js"
-Cohesion: 0.22
-Nodes (13): loadOwnedZone(), bucket, db, pruneStatsDaily(), pruneZoneSnapshots(), runDailySummary(), db, DEAD_TOKEN_CODES (+5 more)
+Cohesion: 0.21
+Nodes (14): loadOwnedZone(), bucket, db, pruneStatsDaily(), pruneZoneSnapshots(), runDailySummary(), db, DEAD_TOKEN_CODES (+6 more)
 
 ### Community 113 - "Labelling guide"
 Cohesion: 0.40
@@ -553,12 +569,16 @@ Cohesion: 0.33
 Nodes (5): Server, bucket, db, fourHourBucketId(), saveZoneSnapshot()
 
 ### Community 116 - "fireActuator"
-Cohesion: 0.29
-Nodes (12): MQTT contract (firmware ↔ bridge), Non-goals, computeZoneStatus(), getOrCreateDevice(), handleActuatorState(), handleCameraImage(), handleSensors(), handleStatus() (+4 more)
+Cohesion: 0.31
+Nodes (11): Task 2: Server (bridge, AI prompt, seed, sandbox), getOrCreateDevice(), handleCameraImage(), handleSensors(), handleStatus(), init(), isCameraId(), keepsPreviousStatus() (+3 more)
 
 ### Community 117 - "app_bottom_nav.dart"
 Cohesion: 0.33
 Nodes (4): AppBottomNav, build, currentIndex, onTabSelected
+
+### Community 118 - "plants_tab.dart"
+Cohesion: 0.14
+Nodes (11): build, _buildPlantCard, createState, _InfoChip, initState, label, _plantsStream, PlantsTab (+3 more)
 
 ### Community 119 - "plant_diagnosis.dart"
 Cohesion: 0.33
@@ -568,29 +588,41 @@ Nodes (5): conditionLabel, conditionTone, diagnosisConditions, diagnosisError, _
 Cohesion: 0.50
 Nodes (3): db, rand(), seed()
 
+### Community 122 - "zone_member_service.dart"
+Cohesion: 0.25
+Nodes (4): addMember, _call, removeMember, ZoneMemberService
+
 ### Community 123 - "plant_screen.dart"
-Cohesion: 0.17
-Nodes (8): _buildFilterButton, createState, initState, PlantScreen, _PlantScreenState, routeName, _selectedFilter, _zonesStream
+Cohesion: 0.15
+Nodes (9): build, _buildFilterButton, createState, initState, PlantScreen, _PlantScreenState, routeName, _selectedFilter (+1 more)
+
+### Community 124 - "MembersCard.jsx"
+Cohesion: 0.54
+Nodes (6): addZoneMember(), call(), removeZoneMember(), MembersCard(), add(), remove()
+
+### Community 125 - "fireActuator"
+Cohesion: 0.67
+Nodes (3): expectConfirmation(), fireActuator(), revertUnconfirmed()
 
 ## Knowledge Gaps
-- **861 isolated node(s):** `plant`, `currentMoisture`, `zone`, `_nameCtrl`, `_speciesCtrl` (+856 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1274 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **20 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **861 isolated node(s):** `createState`, `_email`, `icon`, `initState`, `_loadingProfile` (+856 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1278 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **17 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Architecture` connect `Web Analytics Logic` to `AI Plan Validation`, `Actuators and automation (`mqttBridge.js`)`, `fireActuator`?**
-  _High betweenness centrality (0.043) - this node is a cross-community bridge._
-- **What connects `plant`, `currentMoisture`, `zone` to the rest of the system?**
+- **Why does `Architecture` connect `Web Analytics Logic` to `AI Plan Validation`, `Actuators and automation (`mqttBridge.js`)`, `Plant health image diagnosis: design`?**
+  _High betweenness centrality (0.044) - this node is a cross-community bridge._
+- **What connects `createState`, `_email`, `icon` to the rest of the system?**
   _861 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `package:flutter/material.dart` be split into smaller, more focused modules?**
-  _Cohesion score 0.09523809523809523 - nodes in this community are weakly interconnected._
-- **Why does `firebase` connect `Web Zone Detail & Plants Tab` to `Server Dependencies`, `Web Analytics Logic`, `ProfilePage.jsx`, `OverviewTab.jsx`, `MonitoringTab.jsx`, `Icon`, `App.jsx`?**
-  _High betweenness centrality (0.029) - this node is a cross-community bridge._
+  _Cohesion score 0.1 - nodes in this community are weakly interconnected._
+- **Why does `firebase` connect `PlantsTab.jsx` to `Server Dependencies`, `Web Analytics Logic`, `ProfilePage.jsx`, `MonitoringTab.jsx`, `DashboardPage.jsx`, `App.jsx`, `Web Zone Detail & Plants Tab`, `DeviceDetailPage.jsx`?**
+  _High betweenness centrality (0.033) - this node is a cross-community bridge._
 - **Should `mqttBridge.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.0873015873015873 - nodes in this community are weakly interconnected._
-- **Why does `mqtt` connect `contract.test.js` to `Server Dependencies`, `Device Simulator & Tests`, `mqttBridge.js`?**
-  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+  _Cohesion score 0.08045977011494253 - nodes in this community are weakly interconnected._
+- **Why does `MQTT contract (firmware ↔ bridge)` connect `Plant health image diagnosis: design` to `AI Plan Validation`, `Actuators and automation (`mqttBridge.js`)`, `Web Analytics Logic`, `ESP32 Firmware (Node + Cam)`?**
+  _High betweenness centrality (0.022) - this node is a cross-community bridge._
 - **Should `Web Analytics Logic` be split into smaller, more focused modules?**
-  _Cohesion score 0.05974124809741248 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06321334503950835 - nodes in this community are weakly interconnected._

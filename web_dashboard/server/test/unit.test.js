@@ -44,7 +44,7 @@ test('memberIdsOf: owner + members, or the owner alone for zones from before sha
 
 // mqttBridge.js calls getFirestore()/getStorage() at import time; nothing connects until used.
 initializeApp({ projectId: 'demo-unit', storageBucket: 'demo-unit.appspot.com' })
-const { dailyCron, lightCron, weeklyCron, computeZoneStatus } = await import('../src/services/mqttBridge.js')
+const { dailyCron, lightCron, weeklyCron, computeZoneStatus, keepsPreviousStatus, INCOMPLETE_KEEP_MS } = await import('../src/services/mqttBridge.js')
 const { deadTokens } = await import('../src/services/notifications.js')
 
 // ── deadTokens: which FCM tokens notify() prunes ─────────────────────────────
@@ -185,15 +185,25 @@ test('computeZoneStatus grades against the averaged plant ranges', () => {
   assert.equal(computeZoneStatus({ temperature: 35, moisture: 80 }, zonePlants).status, 'critical')
   // A metric with no reading isn't counted as a problem, but the summary says it's missing
   assert.deepEqual(computeZoneStatus({ temperature: null, moisture: 50 }, zonePlants),
-    { status: 'healthy', alertSummary: 'No temperature reading. The other conditions are within preferred range.' })
+    { status: 'healthy', alertSummary: 'No temperature reading. The other conditions are within preferred range.', incomplete: true })
 
   // ...and an incomplete reading can't improve on the previous status (a failed DHT11 read)
   assert.deepEqual(computeZoneStatus({ temperature: null, moisture: 50 }, zonePlants, 'attention'),
-    { status: 'attention', alertSummary: 'No temperature reading, so the last status is kept. The other conditions are within preferred range.' })
+    { status: 'attention', alertSummary: 'No temperature reading, so the last status is kept. The other conditions are within preferred range.', incomplete: true })
   assert.deepEqual(computeZoneStatus({ temperature: null, moisture: 30 }, zonePlants, 'healthy'),  // can still worsen
-    { status: 'attention', alertSummary: 'No temperature reading. Moisture too low (30%, ideal ≥ 45.0%).' })
+    { status: 'attention', alertSummary: 'No temperature reading. Moisture too low (30%, ideal ≥ 45.0%).', incomplete: true })
   assert.equal(computeZoneStatus({ temperature: 25, moisture: 50 }, zonePlants, 'critical').status, 'healthy')     // a full reading recovers
   assert.equal(computeZoneStatus({ humidity: null, temperature: 25, moisture: 50 }, zonePlants, 'attention').status, 'healthy')  // no humidity range set
+  assert.equal(computeZoneStatus({ humidity: null, temperature: 25, moisture: 50 }, zonePlants).incomplete, false)
+})
+
+test('a run of incomplete readings keeps the previous status for INCOMPLETE_KEEP_MS only', () => {
+  // A missing soil probe sends null moisture for good: past the limit the zone must be judged
+  // on what it has, not frozen at the status from before the probe went
+  const t0 = 1_000_000
+  assert.equal(keepsPreviousStatus(undefined, t0), true, 'the first incomplete reading')
+  assert.equal(keepsPreviousStatus(t0, t0 + INCOMPLETE_KEEP_MS - 1), true)
+  assert.equal(keepsPreviousStatus(t0, t0 + INCOMPLETE_KEEP_MS), false)
 })
 
 // ── aiVision: image diagnosis output is untrusted ────────────────────────────
@@ -218,13 +228,23 @@ test('validateDiagnosis normalises near-miss condition labels', () => {
   assert.equal(validateDiagnosis({ condition: 'fungal' }).condition, 'fungal_disease')
   assert.equal(validateDiagnosis({ condition: ' PEST_DAMAGE ' }).condition, 'pest_damage')
   assert.equal(validateDiagnosis({ condition: 'water-stress' }).condition, 'water_stress')
+  // the apps' own display labels, and plain phrasings
+  assert.equal(validateDiagnosis({ condition: 'Light / heat stress' }).condition, 'light_heat_stress')
+  assert.equal(validateDiagnosis({ condition: 'Not a plant' }).condition, 'not_plant')
+  assert.equal(validateDiagnosis({ condition: 'no plant' }).condition, 'not_plant')
+  assert.equal(validateZoneCheck({ status: 'not a plant' }).status, 'unclear')
 })
 
 test('validateDiagnosis clamps severity, confidence and list sizes', () => {
   assert.equal(validateDiagnosis({ condition: 'healthy', severity: 'severe' }).severity, 'none')
   assert.equal(validateDiagnosis({ condition: 'pest_damage', severity: 'severe' }).severity, 'severe')
   assert.equal(validateDiagnosis({ condition: 'pest_damage', severity: 'apocalyptic' }).severity, 'mild')
-  assert.equal(validateDiagnosis({ confidence: 7 }).confidence, 1)
+  // a 0-100 answer is a percentage, not certainty
+  assert.equal(validateDiagnosis({ confidence: 45 }).confidence, 0.45)
+  assert.equal(validateDiagnosis({ confidence: '85%' }).confidence, 0.85)
+  assert.equal(validateDiagnosis({ confidence: 150 }).confidence, 1)
+  assert.equal(validateDiagnosis({ confidence: -2 }).confidence, 0)
+  assert.equal(validateDiagnosis({ confidence: 1 }).confidence, 1)
   assert.equal(validateDiagnosis({ confidence: '0.4' }).confidence, 0.4)
   assert.equal(validateDiagnosis({ confidence: NaN }).confidence, 0)
   const many = Array.from({ length: 9 }, (_, i) => `item ${i}`)
@@ -335,9 +355,19 @@ test('a worsening camera status alerts only at or above the confidence threshold
   assert.match(sure.notification.title, /Herbs/)
   const unsure = applyZoneCheck({ zone, result: check('stressed', 0.5), meta, minConfidence: 0.6 })
   assert.equal(unsure.notification, null)
-  assert.equal(unsure.zoneUpdate.visualStatus, 'stressed')
-  const better = applyZoneCheck({ zone: { ...zone, visualStatus: 'stressed' }, result: check('healthy'), meta })
+  // ...and leaves the zone's status alone, or a confident "stressed" after it would find
+  // nothing worse and never alert
+  assert.equal(unsure.zoneUpdate, null)
+  const thenSure = applyZoneCheck({ zone, result: check('stressed', 0.9), meta, minConfidence: 0.6 })
+  assert.equal(thenSure.zoneUpdate.visualStatus, 'stressed')
+  assert.notEqual(thenSure.notification, null)
+  // getting better, or staying the same, updates the zone whatever the confidence
+  const better = applyZoneCheck({ zone: { ...zone, visualStatus: 'stressed' }, result: check('healthy', 0.3), meta, minConfidence: 0.6 })
   assert.equal(better.notification, null)
+  assert.equal(better.zoneUpdate.visualStatus, 'healthy')
+  const same = applyZoneCheck({ zone: { ...zone, visualStatus: 'stressed' }, result: check('stressed', 0.3), meta, minConfidence: 0.6 })
+  assert.equal(same.zoneUpdate.visualStatus, 'stressed')
+  assert.equal(same.notification, null)
 })
 
 test('every camera check records the visual and sensor status of that hour', () => {

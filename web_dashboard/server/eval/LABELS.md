@@ -10,8 +10,8 @@ the prompt uses (`CONDITION_DEFS` in `src/services/aiVision.js`); change both to
 |---|---|
 | `healthy` | No visible problem. Old lower leaves yellowing alone, or small mechanical tears, are still healthy. |
 | `nutrient_deficiency` | Patterned discolouration tied to leaf age or veins: older leaves uniformly yellow, yellow between green veins, purple or bronze tints, pale new growth. No distinct spots or mould. |
-| `fungal_disease` | Discrete spots or lesions (often ringed or with a yellow halo), powdery white or grey coating, rust pustules, fuzzy mould, dark sunken patches. Includes late blight and downy mildew (fungus-like organisms). |
-| `bacterial_disease` | Water-soaked, greasy or translucent lesions, often angular and stopped by veins; soft wet rot. |
+| `fungal_disease` | Discrete spots or lesions (often ringed or with a yellow halo), powdery white or grey coating, rust pustules, fuzzy mould, dark sunken patches. Also late blight and downy mildew (fungus-like organisms): large, fast-spreading dark or water-soaked patches that cross veins, or angular yellow patches, either with pale or grey-purple fuzzy growth underneath. |
+| `bacterial_disease` | Small water-soaked, greasy or translucent lesions, often angular and stopped by veins, sometimes with a yellow halo or ooze, never with fuzzy growth; soft wet rot. |
 | `viral_disease` | Mosaic or mottled light/dark patterning, curling, puckering, distorted or stunted new growth, with no spots or mould. |
 | `pest_damage` | Insects, mites, eggs or webbing in view; chewed holes, leaf-miner trails, fine pale stippling, sticky residue. |
 | `water_stress` | Whole-plant wilting or drooping; crispy brown edges and tips (under-watering); limp yellow leaves with soft dark stems and wet soil (over-watering). |

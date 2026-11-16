@@ -20,6 +20,24 @@ const STATUS_RANK        = { unknown: 0, healthy: 1, attention: 2, critical: 3 }
 const zoneStatusCache    = new Map()  // Map<zoneId, lastStatus>
 const lastAlertAt        = new Map()  // Map<zoneId, timestamp>
 const ALERT_COOLDOWN_MS  = 30 * 60 * 1000
+const incompleteSince    = new Map()  // Map<zoneId, ms>: first of the zone's current run of incomplete readings
+
+// An incomplete reading (a failed DHT11 read, a missing soil probe) keeps a worse previous status
+// (see computeZoneStatus), but only for this long: past it the zone is judged on the readings it
+// has, so a probe that stays missing doesn't freeze the zone's status.
+export const INCOMPLETE_KEEP_MS = 30 * 60 * 1000
+export const keepsPreviousStatus = (incompleteSinceMs, nowMs) =>
+  incompleteSinceMs == null || nowMs - incompleteSinceMs < INCOMPLETE_KEEP_MS
+
+// computeZoneStatus for a zone, with the time limit above applied and tracked.
+function zoneStatusFor(zoneId, sensorFields, prevStatus) {
+  const now = Date.now()
+  const since = incompleteSince.get(zoneId)
+  const r = computeZoneStatus(sensorFields, plantCache.get(zoneId), keepsPreviousStatus(since, now) ? prevStatus : undefined)
+  if (!r.incomplete) incompleteSince.delete(zoneId)
+  else if (since == null) incompleteSince.set(zoneId, now)
+  return r
+}
 
 async function maybeNotifyStatus(zoneId, newStatus, alertSummary) {
   const prev = zoneStatusCache.get(zoneId)
@@ -109,7 +127,7 @@ async function handleSensors(deviceId, payload) {
   // After a restart the cache is empty until this zone's first write: fall back to the stored status.
   const prevStatus = zoneStatusCache.get(assignedZoneId) ??
     (await db.collection('zones').doc(assignedZoneId).get()).data()?.status
-  const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(assignedZoneId), prevStatus)
+  const { status, alertSummary } = zoneStatusFor(assignedZoneId, sensorFields, prevStatus)
 
   // History: one doc per UTC day, each hour's entry holding that hour's latest values, so 7 days of
   // charts cost 8 reads, not 168 (clients flatten it: zoneStats.js / ZoneService.getStats). The
@@ -212,7 +230,9 @@ async function handleCameraImage(deviceId, buf) {
 
   const { bucketId } = await saveZoneSnapshot(assignedZoneId, buf, deviceId)
   console.log(`[MQTT bridge] camera snapshot (${Math.round(buf.length / 1024)} KB) → zone ${assignedZoneId} / ${bucketId}`)
-  checkZoneSnapshot(assignedZoneId, bucketId, buf)  // not awaited, never throws: the AI call must not hold up the bridge
+  // Not awaited, never throws: the AI call must not hold up the bridge. A zone with no plants
+  // has no cache entry, hence the [] once the cache has loaded.
+  checkZoneSnapshot(assignedZoneId, bucketId, buf, plantsInitialized ? (plantCache.get(assignedZoneId) ?? []) : undefined)
 }
 
 // ─── Actuator state handler ───────────────────────────────────────────────────
@@ -380,7 +400,7 @@ function watchPlants() {
           humidity:    zone.latestHumid   ?? null,
           moisture:    zone.latestMoisture ?? null,
         }
-        const { status, alertSummary } = computeZoneStatus(sensorFields, plantCache.get(zoneId), zoneStatusCache.get(zoneId) ?? zone.status)
+        const { status, alertSummary } = zoneStatusFor(zoneId, sensorFields, zoneStatusCache.get(zoneId) ?? zone.status)
         await db.collection('zones').doc(zoneId).update(
           alertSummary != null ? { status, alertSummary } : { status }
         )
@@ -393,9 +413,11 @@ function watchPlants() {
   }, err => console.error('[MQTT bridge] plants listener stopped:', err.message))
 }
 
-// prevStatus: the zone's last computed status, used when a reading is incomplete (see below).
+// prevStatus: the zone's last computed status, used when a reading is incomplete (see below;
+// zoneStatusFor passes none once a run of incomplete readings outlasts INCOMPLETE_KEEP_MS).
+// → { status, alertSummary, incomplete }
 export function computeZoneStatus(sensorFields, plants, prevStatus) {
-  if (!plants || plants.length === 0) return { status: 'unknown', alertSummary: null }
+  if (!plants || plants.length === 0) return { status: 'unknown', alertSummary: null, incomplete: false }
 
   const avg = field => {
     const vals = plants.map(p => p[field]).filter(v => v != null)
@@ -423,7 +445,7 @@ export function computeZoneStatus(sensorFields, plants, prevStatus) {
   else if (issues.length === 1) result = { status: 'attention', alertSummary: issues[0] }
   else                          result = { status: 'critical',  alertSummary: `${issues.length} conditions out of range: ${issues.join('; ')}` }
 
-  if (!missing.length) return result
+  if (!missing.length) return { ...result, incomplete: false }
   // An incomplete reading can't show the zone recovered: keep a worse previous status, so each
   // missed DHT11 read doesn't flip it and re-alert. The summary says what's missing.
   const kept = (STATUS_RANK[prevStatus] ?? 0) > STATUS_RANK[result.status]
@@ -431,6 +453,7 @@ export function computeZoneStatus(sensorFields, plants, prevStatus) {
     status: kept ? prevStatus : result.status,
     alertSummary: `No ${missing.join(' or ')} reading${kept ? ', so the last status is kept' : ''}. ` +
       (issues.length ? `${issues.join('; ')}.` : 'The other conditions are within preferred range.'),
+    incomplete: true,
   }
 }
 

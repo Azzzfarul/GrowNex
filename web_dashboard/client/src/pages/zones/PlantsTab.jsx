@@ -352,7 +352,6 @@ function ConditionCard({ plant, zone }) {
 
 /* ── Plant Detail Modal ──────────────────────────────────────────────── */
 function PlantDetailModal({ plant, zone, onClose }) {
-  const { user } = useAuth()
   const [name,    setName]    = useState(plant.plantName)
   const [species, setSpecies] = useState(plant.species)
   const [notes,   setNotes]   = useState(plant.notes ?? '')

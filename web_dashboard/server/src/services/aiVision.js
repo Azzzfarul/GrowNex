@@ -9,7 +9,7 @@ import { chatJsonRaw } from './aiClient.js'
 
 // Bump on ANY change to the prompts or class definitions: it is stored with every result and
 // printed in every evaluation report, so figures from different prompts are never mixed.
-export const VISION_PROMPT_V = '1'
+export const VISION_PROMPT_V = '2'
 
 const VISION_MODEL = process.env.OPENROUTER_VISION_MODEL || process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini'
 
@@ -21,8 +21,8 @@ export const ZONE_STATUSES = ['healthy', 'stressed', 'unhealthy', 'unclear']
 const CONDITION_DEFS = {
   healthy: 'no visible problem; foliage evenly coloured and turgid. Old lower leaves yellowing alone, or minor mechanical tears, still count as healthy.',
   nutrient_deficiency: 'patterned discolouration tied to leaf age or veins: uniform yellowing of older leaves, yellowing between green veins, purple or bronze tints, pale new growth. No distinct spots, no mould.',
-  fungal_disease: 'discrete spots or lesions, often round with concentric rings or a yellow halo; powdery white or grey coating; rust-coloured pustules; fuzzy mould; dark sunken patches.',
-  bacterial_disease: 'water-soaked, greasy or translucent lesions, often angular and limited by veins, sometimes with a yellow halo or ooze; soft wet rot.',
+  fungal_disease: 'discrete spots or lesions, often round with concentric rings or a yellow halo; powdery white or grey coating; rust-coloured pustules; fuzzy mould; dark sunken patches. Also late blight and downy mildew (fungus-like): large, fast-spreading dark or water-soaked patches that cross veins, or angular yellow patches, either with pale or grey-purple fuzzy growth on the underside.',
+  bacterial_disease: 'small water-soaked, greasy or translucent lesions, often angular and limited by veins, sometimes with a yellow halo or ooze, never with fuzzy growth; soft wet rot.',
   viral_disease: 'mosaic or mottled light/dark green patterning, leaf curling, puckering or distortion, stunted deformed new growth, without spots or mould.',
   pest_damage: 'visible insects, mites, eggs or webbing; chewed holes or ragged edges; winding leaf-miner trails; fine pale stippling; sticky residue.',
   water_stress: 'wilting or drooping of the whole plant; dry crispy brown edges and tips (too little water); or limp yellow leaves with soft dark stems and wet soil (too much).',
@@ -41,14 +41,21 @@ function str(v, max = 200) {
 function strList(v, maxItems) {
   return Array.isArray(v) ? v.map(x => str(x)).filter(Boolean).slice(0, maxItems) : []
 }
+// 0-1. A model answering on a 0-100 scale ("85", "85%") means a percentage, not certainty.
 function confidence(v) {
   const n = typeof v === 'string' ? parseFloat(v) : v
-  return typeof n === 'number' && isFinite(n) ? Math.min(1, Math.max(0, n)) : 0
+  if (typeof n !== 'number' || !isFinite(n)) return 0
+  const pct = n > 1 || (typeof v === 'string' && v.trim().endsWith('%'))
+  return Math.min(1, Math.max(0, pct ? n / 100 : n))
 }
-// "Fungal disease", "fungal", " PEST_DAMAGE " → the class; anything else → 'unclear'.
+// The apps' display labels and common phrasings that don't reduce to a class name below.
+const ALIASES = { not_a_plant: 'not_plant', no_plant: 'not_plant' }
+// "Fungal disease", "fungal", " PEST_DAMAGE ", "Light / heat stress", "not a plant" → the
+// class; anything else → 'unclear'.
 function pick(v, list) {
-  const s = str(v).toLowerCase().replace(/[\s-]+/g, '_')
-  if (!s) return 'unclear'
+  const n = str(v).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  if (!n) return 'unclear'
+  const s = ALIASES[n] ?? n
   if (list.includes(s)) return s
   const near = list.filter(c => c.startsWith(s) || s.startsWith(c))
   return near.length === 1 ? near[0] : 'unclear'
@@ -116,7 +123,7 @@ export function buildDiagnosisMessages(context) {
     'Classify its visible condition into exactly one of these classes:',
     ...CONDITIONS.map(c => `- ${c}: ${CONDITION_DEFS[c]}`),
     'Telling neighbours apart:',
-    '- fungal vs bacterial: fungal spots are dry, often ringed or powdery; bacterial lesions look wet, greasy or translucent and stop at veins.',
+    '- fungal vs bacterial: fungal spots are dry, often ringed or powdery, or carry fuzzy growth; bacterial lesions are small, look wet, greasy or translucent, stop at veins and never carry fuzz. Large dark water-soaked patches spreading across veins are late blight (fungal).',
     '- nutrient vs viral: deficiency follows leaf age and veins symmetrically; viral mottling is irregular and comes with distortion.',
     '- water vs light/heat: water stress affects the whole plant (droop, crisp edges all round); scorch is patchy and on the exposed side.',
     '- pest damage needs direct evidence: insects, holes, trails, stippling or webbing.',

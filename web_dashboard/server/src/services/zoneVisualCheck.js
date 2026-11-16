@@ -16,10 +16,13 @@ const MIN_CONFIDENCE = parseFloat(process.env.VISION_NOTIFY_MIN_CONFIDENCE || '0
 export function applyZoneCheck({ zone, result, meta, minConfidence = MIN_CONFIDENCE }) {
   const { status, confidence, observations, summary } = result
   const name = zone.zoneName ?? 'A zone'
-  // 'unclear' (night, blur) keeps the last real status, so dawn isn't compared against darkness.
-  const zoneUpdate = status === 'unclear' ? null : { visualStatus: status, visualSummary: summary }
   // worseZoneStatus is false when there is no previous status: a first check never alerts.
-  const alert = worseZoneStatus(status, zone.visualStatus) && confidence >= minConfidence
+  const worse = worseZoneStatus(status, zone.visualStatus)
+  const alert = worse && confidence >= minConfidence
+  // The zone keeps the last status a later check is compared against. 'unclear' (night, blur)
+  // doesn't replace it, so dawn isn't compared against darkness; nor does a worse status below
+  // the confidence threshold, or a confident one after it would find nothing worse to alert on.
+  const zoneUpdate = status === 'unclear' || (worse && !alert) ? null : { visualStatus: status, visualSummary: summary }
   return {
     snapshotVisual: { status, confidence, observations, summary, model: meta.model, promptV: meta.promptV },
     zoneUpdate,
@@ -34,14 +37,16 @@ export function applyZoneCheck({ zone, result, meta, minConfidence = MIN_CONFIDE
   }
 }
 
-// 3 writes per snapshot (snapshot, zone, statsDaily): 18 a day per camera zone.
-export async function checkZoneSnapshot(zoneId, bucketId, jpeg) {
+// 3 writes per snapshot (snapshot, zone, statsDaily): 18 a day per camera zone. One read (the
+// zone): `plants` is the zone's plant docs from the bridge's cache, queried here only when the
+// cache hasn't loaded yet.
+export async function checkZoneSnapshot(zoneId, bucketId, jpeg, plants) {
   if (!aiEnabled()) return
   try {
     const zoneRef = db.collection('zones').doc(zoneId)
-    const [zoneSnap, plantsSnap] = await Promise.all([
+    const [zoneSnap, zonePlants] = await Promise.all([
       zoneRef.get(),
-      db.collection('plants').where('zoneId', '==', zoneId).get(),
+      plants ?? db.collection('plants').where('zoneId', '==', zoneId).get().then(s => s.docs.map(d => d.data())),
     ])
     if (!zoneSnap.exists) return
     const zone = zoneSnap.data()
@@ -49,7 +54,7 @@ export async function checkZoneSnapshot(zoneId, bucketId, jpeg) {
     const { result, meta } = await checkZoneImage({
       jpeg,
       context: {
-        species: plantsSnap.docs.map(p => p.data().species || p.data().plantName).filter(Boolean),
+        species: zonePlants.map(p => p.species || p.plantName).filter(Boolean),
         latest: {
           moisturePct: zone.latestMoisture ?? null, humidityPct: zone.latestHumid ?? null,
           temperatureC: zone.latestTemp ?? null, lightPct: zone.latestLight ?? null,

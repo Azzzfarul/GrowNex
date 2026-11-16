@@ -637,6 +637,25 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.deepEqual(await (await diagnose(A.token, 'diagJpeg000001')).json(), { source: 'fallback', reason: 'disabled' })
     assert.equal((await bucket.file(path('diagJpeg000001')).exists())[0], false, 'unused image removed')
     assert.equal((await db.collection('plantDiagnoses').get()).size, 0, 'nothing written')
+
+    // A taken ID is refused before its photo is touched: the photo is the saved diagnosis's
+    await bucket.file(path('diagTaken00001')).save(jpeg)
+    await db.doc('plantDiagnoses/diagTaken00001').set({ userId: A.uid, zoneId: ids.zoneA, plantId: ids.basil, storagePath: path('diagTaken00001') })
+    assert.equal((await diagnose(A.token, 'diagTaken00001')).status, 409)
+    assert.equal((await bucket.file(path('diagTaken00001')).exists())[0], true, "the saved diagnosis's photo stays")
+    await db.doc('plantDiagnoses/diagTaken00001').delete()
+    await bucket.file(path('diagTaken00001')).delete()
+  })
+
+  test('the daily diagnosis count holds under parallel requests', async () => {
+    const { reserveDiagnosis } = await import('../src/services/diagnosisQuota.js')
+    const day = '2026-01-01'
+    const got = await Promise.all(Array.from({ length: 5 }, () => reserveDiagnosis(db, 'quotaUser', { max: 3, day })))
+    assert.equal(got.filter(Boolean).length, 3, `3 of 5 parallel reservations (got ${JSON.stringify(got)})`)
+    assert.deepEqual(await docData('diagnosisQuota/quotaUser'), { day, count: 3 })
+    assert.equal(await reserveDiagnosis(db, 'quotaUser', { max: 3, day }), false)
+    assert.equal(await reserveDiagnosis(db, 'quotaUser', { max: 3, day: '2026-01-02' }), true, 'a new day starts from 0')
+    await db.doc('diagnosisQuota/quotaUser').delete()
   })
 
   test('security rules keep each user to their own data and boards', async () => {
@@ -650,8 +669,8 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
       }).then(r => r.status)
     }
     const str = v => ({ stringValue: v }), bool = v => ({ booleanValue: v })
-    const upload = (who, path) => fetch(`http://${process.env.FIREBASE_STORAGE_EMULATOR_HOST}/v0/b/${BUCKET}/o?name=${encodeURIComponent(path)}`, {
-      method: 'POST', headers: { Authorization: `Firebase ${users[who].token}`, 'Content-Type': 'image/jpeg' }, body: Buffer.from('jpg'),
+    const upload = (who, path, { type = 'image/jpeg', body = Buffer.from('jpg') } = {}) => fetch(`http://${process.env.FIREBASE_STORAGE_EMULATOR_HOST}/v0/b/${BUCKET}/o?name=${encodeURIComponent(path)}`, {
+      method: 'POST', headers: { Authorization: `Firebase ${users[who].token}`, 'Content-Type': type }, body,
     }).then(r => r.status)
 
     // Alice uses her own zone and board as before
@@ -696,7 +715,14 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
       fields: { userId: str(users.alice.uid), condition: str('healthy') } }), 403, 'forge a diagnosis')
     assert.equal(await as('alice', 'plantDiagnoses/diagRulesA', { method: 'PATCH', fields: { condition: str('healthy') } }), 403, 'edit a diagnosis')
     assert.equal(await upload('alice', `plantDiagnoses/${users.alice.uid}/x.jpg`), 200)
+    assert.equal(await upload('alice', `plantDiagnoses/${users.alice.uid}/x.jpg`), 403, 'overwrite a diagnosis photo')
+    assert.equal(await upload('alice', `plantDiagnoses/${users.alice.uid}/p.png`, { type: 'image/png' }), 403, 'a non-JPEG')
+    assert.equal(await upload('alice', `plantDiagnoses/${users.alice.uid}/big.jpg`, { body: Buffer.alloc(1572865) }), 403, 'over 1.5 MB')
+    assert.equal(await upload('alice', `plantDiagnoses/${users.alice.uid}/max.jpg`, { body: Buffer.alloc(1572864) }), 200, 'exactly 1.5 MB')
     assert.equal(await upload('bob', `plantDiagnoses/${users.alice.uid}/y.jpg`), 403, "upload into alice's diagnoses")
+    // The daily diagnosis count is server-only (users/{uid}, which she may edit, would let her reset it)
+    assert.equal(await as('alice', `diagnosisQuota/${users.alice.uid}`), 403, 'read her diagnosis count')
+    assert.equal(await as('alice', `diagnosisQuota/${users.alice.uid}`, { method: 'PATCH', fields: { count: { integerValue: '0' } } }), 403, 'reset her diagnosis count')
     assert.equal(await as('alice', 'plantDiagnoses/diagRulesA', { method: 'DELETE' }), 200)
     // ...not even through his own zone or board (the bridge acts on zones.deviceId / devices.assignedZoneId)
     assert.equal(await as('bob', 'zones?documentId=bob-zone', { method: 'POST',
@@ -811,11 +837,12 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await bucket.file(`zonePhotos/${ids.zoneA}.jpg`).save(Buffer.from('z'))
     await bucket.file(`plantPhotos/${ids.basil}.jpg`).save(Buffer.from('p'))
 
-    for (const [who, id] of [['alice', 'diagDelA'], ['bob', 'diagDelB']]) {
+    for (const [who, id, zoneId] of [['alice', 'diagDelA'], ['bob', 'diagDelB'], ['bob', 'diagDelBinA', ids.zoneA]]) {
       const storagePath = `plantDiagnoses/${users[who].uid}/${id}.jpg`
       await bucket.file(storagePath).save(Buffer.from('d'))
-      await db.doc(`plantDiagnoses/${id}`).set({ userId: users[who].uid, plantId: 'p', storagePath })
+      await db.doc(`plantDiagnoses/${id}`).set({ userId: users[who].uid, plantId: 'p', storagePath, ...(zoneId && { zoneId }) })
     }
+    await db.doc(`diagnosisQuota/${A}`).set({ day: '2026-01-01', count: 1 })
 
     const res = await api('/api/auth/me', { token: users.alice.token, method: 'DELETE' })
     assert.equal(res.status, 200, await res.text())
@@ -836,6 +863,9 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
 
     assert.equal((await db.collection('plantDiagnoses').where('userId', '==', A).get()).size, 0, 'diagnoses deleted')
     assert.equal((await bucket.getFiles({ prefix: `plantDiagnoses/${A}/` }))[0].length, 0, 'diagnosis photos deleted')
+    assert.equal((await db.doc('plantDiagnoses/diagDelBinA').get()).exists, false, "bob's diagnosis in her zone went with it")
+    assert.equal((await bucket.file(`plantDiagnoses/${users.bob.uid}/diagDelBinA.jpg`).exists())[0], false, '...photo too')
+    assert.equal((await db.doc(`diagnosisQuota/${A}`).get()).exists, false, 'her diagnosis count deleted')
     assert.equal((await db.doc('plantDiagnoses/diagDelB').get()).exists, true, "bob's diagnosis untouched")
     assert.equal((await bucket.file(`plantDiagnoses/${users.bob.uid}/diagDelB.jpg`).exists())[0], true, "bob's diagnosis photo untouched")
     assert.equal((await db.doc(`zones/${ids.zoneB}`).get()).exists, true, "bob's zone untouched")
