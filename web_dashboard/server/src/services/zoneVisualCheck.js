@@ -59,10 +59,11 @@ export async function checkZoneSnapshot(zoneId, bucketId, jpeg) {
     const out = applyZoneCheck({ zone, result, meta })
     const now = new Date().toISOString()
 
+    // First and alone, as an update: if the zone or snapshot was deleted while the model was
+    // thinking this throws, and nothing below recreates data under a deleted zone.
+    await zoneRef.collection('snapshots').doc(bucketId)
+      .update({ visual: { ...out.snapshotVisual, checkedAt: FieldValue.serverTimestamp() } })
     await Promise.all([
-      // update, not set: if the snapshot or zone was deleted meanwhile, don't recreate it.
-      zoneRef.collection('snapshots').doc(bucketId)
-        .update({ visual: { ...out.snapshotVisual, checkedAt: FieldValue.serverTimestamp() } }),
       out.zoneUpdate && zoneRef.update({ ...out.zoneUpdate, visualCheckedAt: FieldValue.serverTimestamp() }),
       zoneRef.collection('statsDaily').doc(now.slice(0, 10))
         .set({ hours: { [now.slice(11, 13)]: out.statsHour } }, { merge: true }),

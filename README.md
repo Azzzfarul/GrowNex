@@ -71,6 +71,7 @@ MQTT_PASS=your_mqtt_password
 # Optional — leave OPENROUTER_API_KEY blank to disable AI (rule-based fallback is used)
 OPENROUTER_API_KEY=
 OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_VISION_MODEL=            # optional: image diagnosis model (must accept images); defaults to OPENROUTER_MODEL
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 AI_CACHE_TTL_MS=1800000
 
