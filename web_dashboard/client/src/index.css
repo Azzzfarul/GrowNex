@@ -193,6 +193,8 @@
     transform: translateX(-50%);
   }
   .icon-btn[data-tip]:is(:hover, :focus-visible)::after { @apply opacity-100 delay-500; }
+  /* Above the button, for buttons at the bottom of the window: a hidden tooltip below them still makes the page scroll */
+  .icon-btn[data-tip].tip-up::after { @apply top-auto bottom-full mt-0 mb-1; }
 
   /* ── FAB (extended on the drawer, icon-only in the rail) ── */
   .fab {

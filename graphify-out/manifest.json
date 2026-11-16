@@ -594,10 +594,10 @@
     "semantic_hash": "4134dcedf6f9d33a25a4b98f8d08015b"
   },
   "web_dashboard/client/src/components/layout/Sidebar.jsx": {
-    "mtime": 1793805906.6902044,
-    "seen": 1794734439.646123,
-    "ast_hash": "733b516b67193ce80e5e8359d08b62b7",
-    "semantic_hash": "733b516b67193ce80e5e8359d08b62b7"
+    "mtime": 1794820410.5592957,
+    "seen": 1794822044.9290931,
+    "ast_hash": "f057504fb559df166fc4d1f50dab3d75",
+    "semantic_hash": ""
   },
   "web_dashboard/client/src/components/ui/Dialog.jsx": {
     "mtime": 1793805906.690317,
