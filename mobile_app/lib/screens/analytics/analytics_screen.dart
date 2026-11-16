@@ -26,23 +26,6 @@ List<FlSpot> _toSpots(List<({String label, double? value})> entries) {
 List<String> _labels(List<({String label, double? value})> entries) =>
     entries.map((e) => e.label).toList();
 
-// ── Moisture chart lines ──────────────────────────────────────────────────────
-
-List<({int slot, String label, Color color})> _getMoistureLines(
-  List<Plant> plants,
-  List<SensorReading> readings,
-  bool isAllZones,
-  List<Color> colors,  // AppColors.series
-) {
-  if (isAllZones) return [(slot: 0, label: 'Avg Moisture', color: colors[0])];
-  final lines = <({int slot, String label, Color color})>[];
-  for (int s = 1; s <= 4; s++) {
-    if (!readings.any((r) => r.moistureForSlot(s) != null)) continue;
-    final match = plants.where((p) => p.slotNumber == s);
-    lines.add((slot: s, label: match.isEmpty ? 'Slot $s' : match.first.plantName, color: colors[s - 1]));
-  }
-  return lines.isEmpty ? [(slot: 0, label: 'Moisture', color: colors[0])] : lines;
-}
 
 // ── Score utils ───────────────────────────────────────────────────────────────
 
@@ -191,7 +174,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         'moisture': zone.latestMoisture,
       },
       'plants': _plants
-          .map((p) => {'name': p.plantName, 'species': p.species, 'slotNumber': p.slotNumber})
+          .map((p) => {'name': p.plantName, 'species': p.species})
           .toList(),
       'ruleResults': {
         'overview': oRes.text,
@@ -270,7 +253,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         : <({bool? ok, String text})>[];
 
     final series = AppColors.of(context).series;
-    final moistureLines = _getMoistureLines(_plants, _readings, isAllZones, series);
 
     // Per-graph + overview summaries (AI value preferred, rule-based fallback otherwise)
     final tempRes = describeTrend(
@@ -434,7 +416,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 text: _aiSummaries['moisture'] ?? graphRes['moisture']!.text,
                 isAi: _aiSummaries['moisture'] != null,
               ),
-              child: _buildMoistureChart(moistureLines),
+              child: _buildSingleChart(groupByTime(_readings, _timeRange, (r) => r.moisture), series[0]),
             ),
             const SizedBox(height: 20),
 
@@ -559,59 +541,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         borderData: FlBorderData(show: false),
         lineTouchData: const LineTouchData(enabled: false),
       )),
-    );
-  }
-
-  Widget _buildMoistureChart(List<({int slot, String label, Color color})> lines) {
-    final tt = Theme.of(context).textTheme;
-    final barData = lines.map((line) {
-      final entries = line.slot == 0
-          ? groupByTime(_readings, _timeRange, (r) => r.moisture)
-          : groupByTime(_readings, _timeRange, (r) => r.moistureForSlot(line.slot));
-      return LineChartBarData(
-        spots: _toSpots(entries),
-        isCurved: true,
-        color: line.color,
-        barWidth: 2,
-        dotData: const FlDotData(show: false),
-        belowBarData: BarAreaData(show: false),
-      );
-    }).toList();
-
-    if (barData.every((b) => b.spots.isEmpty)) return _emptyChart();
-
-    final baseEntries = groupByTime(_readings, _timeRange, (r) => r.moisture);
-    final labels = _labels(baseEntries);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (lines.length > 1) ...[
-          Wrap(
-            spacing: 12,
-            runSpacing: 6,
-            children: lines.map((l) => Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(width: 10, height: 10, decoration: BoxDecoration(color: l.color, shape: BoxShape.circle)),
-                const SizedBox(width: 4),
-                Text(l.label, style: tt.labelSmall),
-              ],
-            )).toList(),
-          ),
-          const SizedBox(height: 8),
-        ],
-        SizedBox(
-          height: 160,
-          child: LineChart(LineChartData(
-            lineBarsData: barData,
-            titlesData: _titlesData(labels),
-            gridData: _grid(),
-            borderData: FlBorderData(show: false),
-            lineTouchData: const LineTouchData(enabled: false),
-          )),
-        ),
-      ],
     );
   }
 

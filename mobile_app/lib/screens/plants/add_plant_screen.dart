@@ -15,14 +15,12 @@ import '../../theme.dart';
 
 class AddPlantScreen extends StatefulWidget {
   final String zoneId;
-  final Set<int> takenSlots;
   final String zoneType;
   final String userId;
 
   const AddPlantScreen({
     super.key,
     required this.zoneId,
-    required this.takenSlots,
     this.zoneType = 'indoor',
     this.userId = '',
   });
@@ -32,8 +30,6 @@ class AddPlantScreen extends StatefulWidget {
 }
 
 class _AddPlantScreenState extends State<AddPlantScreen> {
-  static const int _maxSlots = 4;
-
   final _formKey = GlobalKey<FormState>();
   final _speciesCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
@@ -44,9 +40,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   final _tempMinCtrl = TextEditingController();
   final _tempMaxCtrl = TextEditingController();
   String? _lightCondition;
-  int? _selectedSlot;
   bool _loading = false;
-  late final List<int> _availableSlots;
 
   bool _aiLoading = false;
   String _aiSource = '';           // '' | 'ai' | 'cache' | 'fallback' | 'error'
@@ -60,9 +54,6 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   @override
   void initState() {
     super.initState();
-    _availableSlots = List.generate(_maxSlots, (i) => i + 1)
-        .where((s) => !widget.takenSlots.contains(s))
-        .toList();
     _loadSiblingZones();
   }
 
@@ -144,10 +135,6 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedSlot == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a slot.')));
-      return;
-    }
 
     setState(() => _loading = true);
     try {
@@ -158,7 +145,6 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         plantName: _nameCtrl.text.trim().isEmpty ? _speciesCtrl.text.trim() : _nameCtrl.text.trim(),
         species: _speciesCtrl.text.trim(),
         status: 'healthy',
-        slotNumber: _selectedSlot!,
         preferredMoistureMin: double.tryParse(_moistureMinCtrl.text.trim()),
         preferredMoistureMax: double.tryParse(_moistureMaxCtrl.text.trim()),
         preferredHumidityMin: double.tryParse(_humidityMinCtrl.text.trim()),
@@ -199,31 +185,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
       appBar: AppBar(
         title: const Text('Add Plant'),
       ),
-      body: _availableSlots.isEmpty ? _buildFullMessage() : _buildForm(),
-    );
-  }
-
-  Widget _buildFullMessage() {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.grass, size: 64, color: cs.onSurfaceVariant),
-            const SizedBox(height: 16),
-            Text('Zone is full', style: tt.titleLarge),
-            const SizedBox(height: 8),
-            Text(
-              'All $_maxSlots plant slots are occupied. Remove a plant to free up a slot.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: cs.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
+      body: _buildForm(),
     );
   }
 
@@ -267,8 +229,6 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
               controller: _nameCtrl,
               decoration: const InputDecoration(labelText: 'Plant nickname (optional)'),
             ),
-            const SizedBox(height: 20),
-            _buildSlotPicker(),
             const SizedBox(height: 20),
             _buildPreferredConditions(),
             const SizedBox(height: 20),
@@ -411,70 +371,6 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSlotPicker() {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Plant slot', style: tt.titleSmall),
-        const SizedBox(height: 4),
-        Text('Select an available slot for this plant.', style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-        const SizedBox(height: 12),
-        Row(
-          children: List.generate(_maxSlots, (i) {
-            final slot = i + 1;
-            final isTaken = widget.takenSlots.contains(slot);
-            final isSelected = _selectedSlot == slot;
-
-            return Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: GestureDetector(
-                onTap: isTaken ? null : () => setState(() => _selectedSlot = isSelected ? null : slot),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: isSelected ? cs.secondaryContainer : null,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isTaken
-                          ? cs.onSurface.withValues(alpha: 0.12)
-                          : isSelected
-                              ? cs.secondaryContainer
-                              : cs.outline,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        isTaken ? Icons.block : isSelected ? Icons.check_circle : Icons.local_florist_outlined,
-                        size: 22,
-                        color: isTaken ? cs.onSurface.withValues(alpha: 0.38) : isSelected ? cs.onSecondaryContainer : cs.onSurfaceVariant,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Slot $slot',
-                        style: tt.labelSmall?.copyWith(color: isTaken ? cs.onSurface.withValues(alpha: 0.38) : isSelected ? cs.onSecondaryContainer : cs.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
-        ),
-        if (_selectedSlot == null)
-          Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: Text('No slot selected', style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-          ),
-      ],
     );
   }
 

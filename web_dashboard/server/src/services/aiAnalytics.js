@@ -126,7 +126,6 @@ export function buildPlanMessages({ plants, device, latest, current }) {
     plants: plants.map(p => ({
       name: p.plantName ?? p.name ?? null,
       species: p.species ?? null,
-      slot: p.slotNumber ?? null,
       preferredMoisture: [p.preferredMoistureMin ?? null, p.preferredMoistureMax ?? null],
       preferredHumidity: [p.preferredHumidityMin ?? null, p.preferredHumidityMax ?? null],
       preferredTemperature: [p.preferredTemperatureMin ?? null, p.preferredTemperatureMax ?? null],

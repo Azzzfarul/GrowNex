@@ -40,7 +40,7 @@ export function buildChartData(readings, timeRange) {
     if (!buckets[key]) {
       buckets[key] = {
         label: timeRange === 'today' ? `${pad(ts.getHours())}:00` : DAY_LABELS[ts.getDay()],
-        temp: [], humidity: [], light: [], moisture: [], sm1: [], sm2: [], sm3: [], sm4: [],
+        temp: [], humidity: [], light: [], moisture: [],
       }
     }
     const b = buckets[key]
@@ -48,24 +48,16 @@ export function buildChartData(readings, timeRange) {
     if (r.humidity      != null) b.humidity.push(r.humidity)
     if (r.lightLevel    != null) b.light.push(r.lightLevel)
     if (r.moisture      != null) b.moisture.push(r.moisture)
-    if (r.soilMoisture1 != null) b.sm1.push(r.soilMoisture1)
-    if (r.soilMoisture2 != null) b.sm2.push(r.soilMoisture2)
-    if (r.soilMoisture3 != null) b.sm3.push(r.soilMoisture3)
-    if (r.soilMoisture4 != null) b.sm4.push(r.soilMoisture4)
   }
   // Sorted by key: "All zones" concatenates several zones' readings, so insertion order isn't time order.
   return Object.keys(buckets).sort().map((key) => {
     const v = buckets[key]
     return {
-      label:         v.label,
-      temp:          avg(v.temp),
-      humidity:      avg(v.humidity),
-      light:         avg(v.light),
-      moisture:      avg(v.moisture),
-      soilMoisture1: avg(v.sm1),
-      soilMoisture2: avg(v.sm2),
-      soilMoisture3: avg(v.sm3),
-      soilMoisture4: avg(v.sm4),
+      label:    v.label,
+      temp:     avg(v.temp),
+      humidity: avg(v.humidity),
+      light:    avg(v.light),
+      moisture: avg(v.moisture),
     }
   })
 }
@@ -164,13 +156,9 @@ export function describeTrend({ series, pref, timeRange, label, kind }) {
     : { level: 'bad', text: t.badLow(Math.round(pref.min), dur) }
 }
 
-// Combined moisture series: per bucket, mean of moisture + soilMoisture1..4
+// Soil moisture series: the zone's one probe. Old history's soilMoisture1..4 were already averaged into it.
 export function moistureBucketSeries(chartData) {
-  return chartData.map(d => {
-    const v = [d.moisture, d.soilMoisture1, d.soilMoisture2, d.soilMoisture3, d.soilMoisture4]
-      .filter(x => x != null)
-    return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 10) / 10 : null
-  })
+  return chartData.map(d => d.moisture)
 }
 
 export function buildOverviewSummary({ selectedZone, plants, results }) {
@@ -197,22 +185,9 @@ export function buildOverviewSummary({ selectedZone, plants, results }) {
   return { level: ranked[0].level, text: ranked[0].text }
 }
 
-export function getMoistureLines(plants, readings, isAllZones) {
-  if (isAllZones) return [{ key: 'moisture', name: 'Avg Moisture', color: 'var(--chart-1)' }]
-  const colors = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)']  // index.css
-  const lines = []
-  for (let slot = 1; slot <= 4; slot++) {
-    const key = `soilMoisture${slot}`
-    if (!readings.some(r => r[key] != null)) continue
-    const plant = plants.find(p => p.slotNumber === slot)
-    lines.push({ key, name: plant ? plant.plantName : `Slot ${slot}`, color: colors[slot - 1] })
-  }
-  return lines.length ? lines : [{ key: 'moisture', name: 'Moisture', color: 'var(--chart-1)' }]
-}
-
 export function healthScoreForPlant(zone, plant) {
   const scores = []
-  const moisture = zone[`latestMoisture${plant.slotNumber}`] ?? zone.latestMoisture
+  const moisture = zone.latestMoisture
   if (plant.preferredMoistureMin != null && plant.preferredMoistureMax != null && moisture != null)
     scores.push(moisture >= plant.preferredMoistureMin && moisture <= plant.preferredMoistureMax ? 1 : 0)
   if (plant.preferredTemperatureMin != null && plant.preferredTemperatureMax != null && zone.latestTemp != null)

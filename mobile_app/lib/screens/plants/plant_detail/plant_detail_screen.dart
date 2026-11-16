@@ -81,7 +81,6 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
         plantName: _nameCtrl.text.trim().isEmpty ? _speciesCtrl.text.trim() : _nameCtrl.text.trim(),
         species: _speciesCtrl.text.trim(),
         status: widget.plant.status,
-        slotNumber: widget.plant.slotNumber,
         preferredMoistureMin: double.tryParse(_moistureMinCtrl.text.trim()),
         preferredMoistureMax: double.tryParse(_moistureMaxCtrl.text.trim()),
         preferredHumidityMin: double.tryParse(_humidityMinCtrl.text.trim()),
@@ -366,7 +365,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Slot ${widget.plant.slotNumber} reading',
+                Text('Zone soil sensor',
                     style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
                 Text(
                   hasData ? '${moisture.toStringAsFixed(1)}%' : '--',

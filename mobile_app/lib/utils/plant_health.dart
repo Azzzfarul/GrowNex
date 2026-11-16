@@ -34,22 +34,13 @@ int? _metricNowScore(num? value, num? min, num? max) {
   return s < 0 ? 0 : s;
 }
 
-num? _zoneSlotMoisture(Zone z, int slot) => switch (slot) {
-      1 => z.latestMoisture1,
-      2 => z.latestMoisture2,
-      3 => z.latestMoisture3,
-      4 => z.latestMoisture4,
-      _ => null,
-    };
-
 PlantHealthResult plantHealth(Plant plant, Zone zone, List<SensorReading> readings) {
-  final slot = plant.slotNumber;
   final defs = <({
     String key, num? Function(SensorReading) sel, num? latest,
     num? min, num? max, double weight, String label, String unit,
   })>[
-    (key: 'moisture', sel: (r) => r.moistureForSlot(slot) ?? r.moisture,
-     latest: _zoneSlotMoisture(zone, slot) ?? zone.latestMoisture,
+    (key: 'moisture', sel: (r) => r.moisture,
+     latest: zone.latestMoisture,
      min: plant.preferredMoistureMin, max: plant.preferredMoistureMax,
      weight: 2, label: 'Soil moisture', unit: '%'),
     (key: 'temperature', sel: (r) => r.temperature, latest: zone.latestTemp,

@@ -54,7 +54,7 @@ before(async () => {
   watcher = await mqtt.connectAsync(`mqtt://127.0.0.1:${port}`)
   await watcher.subscribeAsync('grownex/#')
   watcher.on('message', (topic, payload, p) => msgs.push({ topic, payload, retain: p.retain, at: Date.now() }))
-  sim = runSim(['--interval', '1', '--slots', '2', '--id', SENSOR, '--camera-id', CAM])
+  sim = runSim(['--interval', '1', '--id', SENSOR, '--camera-id', CAM])
 })
 
 after(async () => {
@@ -73,9 +73,9 @@ test('boards announce themselves online, retained', async () => {
 test('readings have the firmware payload shape', async () => {
   const m = await waitFor(() => find(0, `grownex/${SENSOR}/sensors`), 'a reading')
   const r = json(m)
-  assert.deepEqual(Object.keys(r).sort(), ['deviceId', 'humidity', 'lightLevel', 'soilMoisture1', 'soilMoisture2', 'temperature'])
+  assert.deepEqual(Object.keys(r).sort(), ['deviceId', 'humidity', 'lightLevel', 'soilMoisture', 'temperature'])
   assert.equal(r.deviceId, SENSOR)
-  for (const k of ['temperature', 'humidity', 'lightLevel', 'soilMoisture1', 'soilMoisture2']) assert.equal(typeof r[k], 'number', k)
+  for (const k of ['temperature', 'humidity', 'lightLevel', 'soilMoisture']) assert.equal(typeof r[k], 'number', k)
   assert.equal(m.retain, false)
   const state = await waitFor(() => find(0, `grownex/${SENSOR}/actuators/state`), 'actuator state')
   assert.deepEqual(json(state), { deviceId: SENSOR, lightState: false, fertilizerState: false, irrigationState: false })

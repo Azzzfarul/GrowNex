@@ -36,14 +36,14 @@ const unsigned long REBOOT_AFTER_MS     = 10UL * 60000;   // offline this long �
 #define DHT_PIN      4    // DHT11 data pin
 #define DHT_TYPE     DHT11
 #define LIGHT_PIN    35   // Light sensor (LDR) module AO pin
-// Capacitive soil moisture sensor v1.2 AOUT pins for plant slots 1–4 (soilMoisture1..4).
-const int MOISTURE_PINS[4] = {34, 32, 33, 36};
+// Capacitive soil moisture sensor v1.2 AOUT pin: the zone's one soil probe, shared by all its plants.
+#define MOISTURE_PIN 34
 
 // Calibrate these to your modules: read the raw values in the Serial Monitor
-// (soil: each probe in dry air vs. in a glass of water, since every probe reads a bit differently;
+// (soil: the probe in dry air vs. in a glass of water;
 //  light: covered vs. under the grow light).
-const int MOISTURE_DRY[4] = {2800, 2800, 2800, 2800};
-const int MOISTURE_WET[4] = {1200, 1200, 1200, 1200};
+#define MOISTURE_DRY 2800
+#define MOISTURE_WET 1200
 #define LIGHT_DARK   4095  // LDR modules read high in the dark
 #define LIGHT_BRIGHT 0
 
@@ -205,17 +205,14 @@ void publishSensors() {
   if (isnan(humidity))    doc["humidity"]    = nullptr; else doc["humidity"]    = humidity;
   doc["lightLevel"] = lightLevel;
 
-  Serial.printf("[MQTT] sensors → temp=%.1f°C  humid=%.1f%%  light=%d%% (raw %d)  soil:",
-                temperature, humidity, lightLevel, rawLight);
-  for (int i = 0; i < 4; i++) {
-    int raw      = readAdc(MOISTURE_PINS[i]);
-    int moisture = toPercent(raw, MOISTURE_DRY[i], MOISTURE_WET[i]);
-    doc["soilMoisture" + String(i + 1)] = moisture;
-    Serial.printf("  %d=%d%% (raw %d)", i + 1, moisture, raw);
-  }
-  Serial.println();
+  int rawSoil = readAdc(MOISTURE_PIN);
+  int moisture = toPercent(rawSoil, MOISTURE_DRY, MOISTURE_WET);
+  doc["soilMoisture"] = moisture;
 
-  char buf[256];  // max payload ≈ 180 bytes, inside PubSubClient's default 256-byte packet
+  Serial.printf("[MQTT] sensors → temp=%.1f°C  humid=%.1f%%  light=%d%% (raw %d)  soil=%d%% (raw %d)\n",
+                temperature, humidity, lightLevel, rawLight, moisture, rawSoil);
+
+  char buf[256];  // max payload ≈ 130 bytes, inside PubSubClient's default 256-byte packet
   serializeJson(doc, buf);
   mqtt.publish(TOPIC_SENSORS.c_str(), buf);
 }

@@ -70,7 +70,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   Future<({Zone? zone, List<Plant> plants})> _loadZoneInfo(String? zoneId) async {
     if (zoneId == null || zoneId.isEmpty) return (zone: null, plants: <Plant>[]);
     final zone = await ZoneService().getZone(zoneId);
-    // Cameras don't use plant slots.
+    // Cameras don't show plants.
     final plants = zone != null && !widget.device.isCamera
         ? await PlantService().getPlantsByZone(zone.id)
         : <Plant>[];
@@ -220,20 +220,16 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
             builder: (context, snapshot) {
               final zone = snapshot.data?.zone;
               final plants = snapshot.data?.plants ?? [];
-              final slotsLeft = device.totalSlots - plants.length;
-
               return _buildSection(
                 title: 'Zone assignment',
                 child: Column(
                   children: [
                     _buildInfoRow('Assigned zone', zone?.zoneName ?? 'Not assigned'),
-                    if (!isCamera) ...[
+                    if (!isCamera && device.assignedZoneId != null) ...[
                       const SizedBox(height: 10),
                       _buildInfoRow(
-                        'Plant slots',
-                        snapshot.connectionState == ConnectionState.waiting
-                            ? '...'
-                            : '${plants.length} used · ${slotsLeft.clamp(0, device.totalSlots)} left (of ${device.totalSlots})',
+                        'Plants',
+                        snapshot.connectionState == ConnectionState.waiting ? '...' : '${plants.length}',
                       ),
                     ],
                   ],
