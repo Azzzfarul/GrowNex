@@ -42,7 +42,7 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['userId', 'memberIds', 'members'])
         && (resource.data.userId == uid()
           ? zoneDevicesOk(false)
-          : !request.resource.data.diff(resource.data).affectedKeys().hasAny(['deviceId', 'cameraDeviceId', 'hasLight', 'hasFertilizer', 'totalPlantSlots']));
+          : !request.resource.data.diff(resource.data).affectedKeys().hasAny(['deviceId', 'cameraDeviceId', 'hasLight', 'hasFertilizer']));
       allow delete: if signedIn() && resource.data.userId == uid();
 
       // statsDaily, aiCache, snapshots, plus legacy sensorReadings, stats, automationHistory

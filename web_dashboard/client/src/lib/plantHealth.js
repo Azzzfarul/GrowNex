@@ -2,8 +2,8 @@
 // the plant detail "Condition" block. No AI.
 //
 // Score per metric = 0.7·(compliance % over the window) + 0.3·(closeness of the
-// latest value to the range). Weighted mean: soil moisture ×2 (per-slot, the one
-// you can actually tune per plant), temperature/humidity ×1.
+// latest value to the range). Weighted mean: soil moisture ×2 (the zone's one probe, which
+// watering acts on), temperature/humidity ×1.
 
 export function compliancePercent(readings, field, min, max) {
   if (min == null || max == null) return null
@@ -21,15 +21,12 @@ function metricNowScore(value, min, max) {
   return Math.max(0, Math.round(100 * (1 - dist / width)))
 }
 
-// readings: raw docs from zones/{id}/stats (fields temperature, humidity, soilMoisture1..4).
+// readings: hourly readings from zoneStats.js (fields temperature, humidity, moisture).
 // → { score: 0-100|null, metrics: { moisture|temperature|humidity: {...} }, worst }
 export function plantHealth(plant, zone, readings) {
-  const slot = plant.slotNumber
   const defs = [
-    // Falls back to the zone average when the slot has no reading (firmware sends slot 1 only),
-    // same as `latest` below and the mobile port (mobile_app/lib/utils/plant_health.dart).
-    { key: 'moisture', field: `soilMoisture${slot}`, fallback: 'moisture', weight: 2, label: 'Soil moisture', unit: '%',
-      latest: zone[`latestMoisture${slot}`] ?? zone.latestMoisture ?? null,
+    { key: 'moisture', field: 'moisture', weight: 2, label: 'Soil moisture', unit: '%',
+      latest: zone.latestMoisture ?? null,
       min: plant.preferredMoistureMin, max: plant.preferredMoistureMax },
     { key: 'temperature', field: 'temperature', weight: 1, label: 'Temperature', unit: '°C',
       latest: zone.latestTemp ?? null,
@@ -43,8 +40,7 @@ export function plantHealth(plant, zone, readings) {
   let wsum = 0, wtot = 0
   for (const d of defs) {
     if (d.min == null || d.max == null) { metrics[d.key] = { state: 'no-range', label: d.label }; continue }
-    const rs = d.fallback ? readings.map(r => ({ [d.field]: r[d.field] ?? r[d.fallback] })) : readings
-    const compliance = compliancePercent(rs, d.field, d.min, d.max)
+    const compliance = compliancePercent(readings, d.field, d.min, d.max)
     const now = metricNowScore(d.latest, d.min, d.max)
     if (compliance == null && now == null) {
       metrics[d.key] = { state: 'no-data', label: d.label, min: d.min, max: d.max, unit: d.unit }

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../models/plant_model.dart';
 import '../../../models/zone_model.dart';
 import '../../../services/firestore/plant_service.dart';
-import '../../../theme.dart';
 
 class ZoneSummaryCard extends StatefulWidget {
   final Zone zone;
@@ -16,7 +15,6 @@ class ZoneSummaryCard extends StatefulWidget {
 }
 
 class _ZoneSummaryCardState extends State<ZoneSummaryCard> {
-  static const int _maxPlants = 4;
   late final Stream<List<Plant>> _plantsStream;
 
   @override
@@ -33,9 +31,7 @@ class _ZoneSummaryCardState extends State<ZoneSummaryCard> {
       stream: _plantsStream,
       builder: (context, snapshot) {
         final tt = Theme.of(context).textTheme;
-        final app = AppColors.of(context);
         final plantCount = snapshot.data?.length ?? 0;
-        final isFull = plantCount >= _maxPlants;
         final hasDevice = widget.zone.deviceId != null;
         final deviceOffline = widget.zone.deviceOnline == false;
 
@@ -53,10 +49,6 @@ class _ZoneSummaryCardState extends State<ZoneSummaryCard> {
                       Expanded(
                         child: Text(widget.zone.zoneName, style: tt.titleMedium),
                       ),
-                      if (isFull) ...[
-                        _badge(cs, 'Full', app.onWarningContainer, app.warningContainer),
-                        const SizedBox(width: 8),
-                      ],
                       _badge(
                         cs,
                         hasDevice ? 'Connected' : 'No device',
@@ -67,8 +59,8 @@ class _ZoneSummaryCardState extends State<ZoneSummaryCard> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Plants: $plantCount/$_maxPlants',
-                    style: TextStyle(color: isFull ? app.warning : cs.onSurfaceVariant),
+                    'Plants: $plantCount',
+                    style: TextStyle(color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(height: 12),
                   Row(

@@ -44,7 +44,6 @@ class _AddZoneScreenState extends State<AddZoneScreen> {
         zoneName: _nameCtrl.text.trim(),
         zoneType: _zoneType,
         status: 'healthy',
-        totalPlantSlots: 0,
         createdAt: DateTime.now(),
       );
 

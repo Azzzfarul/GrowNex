@@ -47,7 +47,6 @@ export default function AddZoneDialog({ onClose }) {
           zoneName: zoneName.trim(),
           zoneType,
           status: 'healthy',
-          totalPlantSlots: 0,
           zonePhotoUrl: null,
           createdAt: serverTimestamp(),
         })

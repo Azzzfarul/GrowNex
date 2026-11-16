@@ -9,7 +9,6 @@ import Loading from '../components/ui/Loading'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/layout/PageHeader'
 
-const MAX_PLANTS = 4
 const FILTERS = ['All', 'Indoor', 'Outdoor']
 
 function Reading({ icon, value }) {
@@ -22,7 +21,6 @@ function Reading({ icon, value }) {
 
 function ZoneTile({ z, plantCount }) {
   const navigate = useNavigate()
-  const isFull = plantCount >= MAX_PLANTS
   const offline = z.deviceOnline === false
   const v = (val, unit) => (!offline && val != null ? `${val}${unit}` : null)
 
@@ -41,8 +39,8 @@ function ZoneTile({ z, plantCount }) {
             <span className="tag bg-surface-container-high text-on-surface-variant capitalize">
               <Icon name={z.zoneType === 'outdoor' ? 'park' : 'home'} />{z.zoneType}
             </span>
-            <span className={`tag ${isFull ? 'bg-warning-container text-on-warning-container' : 'bg-surface-container-high text-on-surface-variant'}`}>
-              <Icon name="potted_plant" />{plantCount}/{MAX_PLANTS} plants
+            <span className="tag bg-surface-container-high text-on-surface-variant">
+              <Icon name="potted_plant" />{plantCount} plant{plantCount !== 1 ? 's' : ''}
             </span>
             <span className={`tag ${z.deviceId
               ? offline ? 'bg-error-container text-on-error-container' : 'bg-primary-container text-on-primary-container'
@@ -151,7 +149,7 @@ export default function PlantsPage() {
               <EmptyState
                 icon="potted_plant"
                 title="No zones yet"
-                body="A zone is a group of up to four plants watched by one sensor node."
+                body="A zone is a group of plants that share one sensor node and its soil sensor."
                 action={<button onClick={openAddZone} className="btn-filled"><Icon name="add" />Add zone</button>}
               />
             ) : (

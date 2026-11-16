@@ -6,7 +6,6 @@ class Plant {
   final String plantName;
   final String species;
   final String status;
-  final int slotNumber;
   final num? preferredMoistureMin;
   final num? preferredMoistureMax;
   final num? preferredHumidityMin;
@@ -24,7 +23,6 @@ class Plant {
     required this.plantName,
     required this.species,
     required this.status,
-    required this.slotNumber,
     this.preferredMoistureMin,
     this.preferredMoistureMax,
     this.preferredHumidityMin,
@@ -65,7 +63,6 @@ class Plant {
       plantName: map['plantName'] as String? ?? 'Unknown',
       species: map['species'] as String? ?? '',
       status: map['status'] as String? ?? 'unknown',
-      slotNumber: _n(map['slotNumber'])?.toInt() ?? 0,
       preferredMoistureMin: _n(map['preferredMoistureMin']),
       preferredMoistureMax: _n(map['preferredMoistureMax']),
       preferredHumidityMin: _n(map['preferredHumidityMin']),
@@ -85,7 +82,6 @@ class Plant {
       'plantName': plantName,
       'species': species,
       'status': status,
-      'slotNumber': slotNumber,
       'preferredMoistureMin': preferredMoistureMin,
       'preferredMoistureMax': preferredMoistureMax,
       'preferredHumidityMin': preferredHumidityMin,

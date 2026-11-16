@@ -81,7 +81,7 @@ class DeviceService {
     await _firestore.collection('devices').doc(deviceId).update({'assignedZoneId': null});
   }
 
-  // Writes only the fields the user edits. status, lastSync and totalSlots come from the bridge,
+  // Writes only the fields the user edits. status and lastSync come from the bridge,
   // and the *Active fields are actuator intents, so they must not be overwritten here.
   // Also refreshes the zone's copy of the module flags (copied there on assign), so a module
   // added after assignment shows up in the zone.

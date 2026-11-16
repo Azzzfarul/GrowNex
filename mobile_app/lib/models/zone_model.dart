@@ -6,7 +6,6 @@ class Zone {
   final String zoneName;
   final String zoneType;
   final String status;
-  final int totalPlantSlots;
   final String? zonePhotoUrl;
   final String? deviceId;
   final String? cameraDeviceId;
@@ -14,10 +13,6 @@ class Zone {
   final num? latestHumid;
   final num? latestLight;
   final num? latestMoisture;
-  final num? latestMoisture1;
-  final num? latestMoisture2;
-  final num? latestMoisture3;
-  final num? latestMoisture4;
   final DateTime? latestTimestamp;
   final String? alertSummary;
   final DateTime? createdAt;
@@ -37,7 +32,6 @@ class Zone {
     required this.zoneName,
     required this.zoneType,
     required this.status,
-    required this.totalPlantSlots,
     this.zonePhotoUrl,
     this.deviceId,
     this.cameraDeviceId,
@@ -45,10 +39,6 @@ class Zone {
     this.latestHumid,
     this.latestLight,
     this.latestMoisture,
-    this.latestMoisture1,
-    this.latestMoisture2,
-    this.latestMoisture3,
-    this.latestMoisture4,
     this.latestTimestamp,
     this.alertSummary,
     this.createdAt,
@@ -98,7 +88,6 @@ class Zone {
       zoneName: map['zoneName'] as String? ?? 'Unnamed Zone',
       zoneType: map['zoneType'] as String? ?? 'unknown',
       status: map['status'] as String? ?? 'unknown',
-      totalPlantSlots: (map['totalPlantSlots'] as num?)?.toInt() ?? 0,
       zonePhotoUrl: map['zonePhotoUrl'] as String?,
       deviceId: map['deviceId'] as String?,
       // Empty counts as "no camera", as on the web.
@@ -109,10 +98,6 @@ class Zone {
       latestHumid: _n(map['latestHumid']),
       latestLight: _n(map['latestLight']),
       latestMoisture:  _n(map['latestMoisture']),
-      latestMoisture1: _n(map['latestMoisture1']),
-      latestMoisture2: _n(map['latestMoisture2']),
-      latestMoisture3: _n(map['latestMoisture3']),
-      latestMoisture4: _n(map['latestMoisture4']),
       latestTimestamp: latestTimestamp,
       alertSummary: map['alertSummary'] as String?,
       createdAt: createdAt,
@@ -133,17 +118,12 @@ class Zone {
       'zoneName': zoneName,
       'zoneType': zoneType,
       'status': status,
-      'totalPlantSlots': totalPlantSlots,
       'zonePhotoUrl': zonePhotoUrl,
       'deviceId': deviceId,
       'latestTemp': latestTemp,
       'latestHumid': latestHumid,
       'latestLight': latestLight,
       'latestMoisture':  latestMoisture,
-      'latestMoisture1': latestMoisture1,
-      'latestMoisture2': latestMoisture2,
-      'latestMoisture3': latestMoisture3,
-      'latestMoisture4': latestMoisture4,
       'latestTimestamp': latestTimestamp != null ? Timestamp.fromDate(latestTimestamp!) : null,
       'alertSummary': alertSummary,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,

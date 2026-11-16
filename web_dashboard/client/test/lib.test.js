@@ -47,8 +47,8 @@ test('chart buckets average within a bucket and sort across zones', () => {
   assert.deepEqual(buildChartData([...zoneA, ...zoneB], 'today').map(p => p.temp), [18, 20, 23])
 })
 
-test('moisture series averages the zone value with every slot', () => {
-  assert.deepEqual(moistureBucketSeries([{ moisture: 40, soilMoisture1: 50 }, { moisture: null }]), [45, null])
+test('moisture series is the zone reading; old per-slot fields are not counted again', () => {
+  assert.deepEqual(moistureBucketSeries([{ moisture: 40, soilMoisture1: 50 }, { moisture: null }]), [40, null])
 })
 
 // ── describeTrend / buildOverviewSummary (rule-based fallback text) ───────────
@@ -82,10 +82,12 @@ test('overview without enough readings blames the readings, not a missing device
 })
 
 test('plant status follows the live health score', () => {
-  const p = { slotNumber: 1, preferredMoistureMin: 40, preferredMoistureMax: 60, preferredTemperatureMin: 20, preferredTemperatureMax: 30 }
-  assert.equal(plantStatus({ latestMoisture1: 50, latestTemp: 25 }, p), 'healthy')
-  assert.equal(plantStatus({ latestMoisture1: 90, latestTemp: 25 }, p), 'needs attention')
-  assert.equal(plantStatus({ latestMoisture1: 90, latestTemp: 40 }, p), 'critical')
+  const p = { preferredMoistureMin: 40, preferredMoistureMax: 60, preferredTemperatureMin: 20, preferredTemperatureMax: 30 }
+  assert.equal(plantStatus({ latestMoisture: 50, latestTemp: 25 }, p), 'healthy')
+  assert.equal(plantStatus({ latestMoisture: 90, latestTemp: 25 }, p), 'needs attention')
+  assert.equal(plantStatus({ latestMoisture: 90, latestTemp: 40 }, p), 'critical')
+  // A zone doc from before the change still carries a stale slot value: ignored.
+  assert.equal(plantStatus({ latestMoisture: 50, latestMoisture1: 90, latestTemp: 25 }, { ...p, slotNumber: 1 }), 'healthy')
   assert.equal(plantStatus({}, p), null)
 })
 
@@ -99,19 +101,18 @@ test('overview summary leads with the worst metric', () => {
 })
 
 test('a range missing its max is skipped, not scored or crashed on', () => {
-  const p = { slotNumber: 1, preferredMoistureMin: 40, preferredMoistureMax: 60, preferredTemperatureMin: 20 }
-  const z = { latestMoisture1: 50, latestMoisture: 50, latestTemp: 25 }
+  const p = { preferredMoistureMin: 40, preferredMoistureMax: 60, preferredTemperatureMin: 20 }
+  const z = { latestMoisture: 50, latestTemp: 25 }
   assert.equal(healthScoreForPlant(z, p), 100)
   assert.deepEqual(generateInsights(z, [p], []).map(i => i.ok), [true])
   // Only half ranges: nothing was checked, so it must not claim everything is fine.
-  const half = { slotNumber: 1, preferredMoistureMin: 40, preferredTemperatureMin: 20 }
+  const half = { preferredMoistureMin: 40, preferredTemperatureMin: 20 }
   assert.deepEqual(generateInsights(z, [half], [{ temperature: 25, moisture: 50 }]).map(i => i.ok), [null])
 })
 
 // ── plantHealth ──────────────────────────────────────────────────────────────
 
 const basil = {
-  slotNumber: 1,
   preferredMoistureMin: 40, preferredMoistureMax: 60,
   preferredTemperatureMin: 20, preferredTemperatureMax: 30,
   preferredHumidityMin: null, preferredHumidityMax: null,
@@ -124,24 +125,26 @@ test('compliancePercent counts readings inside the range', () => {
   assert.equal(compliancePercent([], 't', 20, 30), null)
 })
 
-test('plantHealth uses the plant’s own slot and weights moisture double', () => {
-  const zone = { latestMoisture1: 50, latestMoisture: 10, latestTemp: 25 }
-  const perfect = plantHealth(basil, zone, [{ soilMoisture1: 50, temperature: 25 }])
+test('plantHealth judges the plant against the zone reading and weights moisture double', () => {
+  const zone = { latestMoisture: 50, latestTemp: 25 }
+  const perfect = plantHealth(basil, zone, [{ moisture: 50, temperature: 25 }])
   assert.equal(perfect.score, 100)
   assert.equal(perfect.metrics.humidity.state, 'no-range')
   assert.equal(plantHealthSummary(perfect), 'All conditions in range.')
 
-  const dry = plantHealth(basil, { ...zone, latestMoisture1: 20 }, [{ soilMoisture1: 20, temperature: 25 }])
+  const dry = plantHealth(basil, { ...zone, latestMoisture: 20 }, [{ moisture: 20, temperature: 25 }])
   assert.equal(dry.worst, 'moisture')
   assert.equal(dry.metrics.moisture.state, 'low')
   assert.equal(dry.score, 33)  // moisture 0 (×2) + temperature 100 (×1)
   assert.match(plantHealthSummary(dry), /^Soil moisture below range — 20% vs 40–60%/)
 })
 
-test('a slot without its own probe falls back to the zone average', () => {
-  const slot2 = { ...basil, slotNumber: 2 }
-  const h = plantHealth(slot2, { latestMoisture: 50 }, [{ moisture: 50 }, { moisture: 10 }])
+test('old slot fields on plants, zones and history are ignored', () => {
+  const old = { ...basil, slotNumber: 2 }
+  const h = plantHealth(old, { latestMoisture: 50, latestMoisture2: 90 },
+    [{ moisture: 50, soilMoisture2: 90 }, { moisture: 10, soilMoisture2: 90 }])
   assert.equal(h.metrics.moisture.compliance, 50)
+  assert.equal(h.metrics.moisture.latest, 50)
 })
 
 test('plantHealth with no readings says it is waiting', () => {

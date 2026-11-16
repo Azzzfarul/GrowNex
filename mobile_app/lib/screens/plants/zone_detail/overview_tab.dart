@@ -105,7 +105,6 @@ class _OverviewTabState extends State<OverviewTab> {
         device.id,
         hasFertilizer: device.hasFertilizerModule,
         hasLight: device.hasLightingModule,
-        totalPlantSlots: device.totalSlots,
       );
       await DeviceService().assignDeviceToZone(device.id, widget.zone.id, userId);
     } catch (e) {
@@ -376,7 +375,7 @@ class _OverviewTabState extends State<OverviewTab> {
               final tt = Theme.of(context).textTheme;
               final count = snapshot.data?.length ?? 0;
               return Text(
-                'Plants: $count of ${widget.zone.totalPlantSlots}',
+                'Plants: $count',
                 style: tt.bodyLarge,
               );
             },

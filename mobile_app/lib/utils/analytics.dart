@@ -77,15 +77,7 @@ String? plantStatus(Zone zone, Plant plant) {
 
 int? healthScoreForPlant(Zone zone, Plant plant) {
   final scores = <double>[];
-  final moisture =
-      switch (plant.slotNumber) {
-        1 => zone.latestMoisture1,
-        2 => zone.latestMoisture2,
-        3 => zone.latestMoisture3,
-        4 => zone.latestMoisture4,
-        _ => null,
-      } ??
-      zone.latestMoisture;
+  final moisture = zone.latestMoisture;
   if (plant.preferredMoistureMin != null && plant.preferredMoistureMax != null && moisture != null) {
     scores.add(
       moisture >= plant.preferredMoistureMin! &&
@@ -429,23 +421,12 @@ String _trendBad(String kind, bool high, int bound, String dur) =>
   );
 }
 
-/// Combined moisture series: per bucket, mean of moisture + soilMoisture1..4.
+/// Soil moisture series: the zone's one probe. Old history's soilMoisture1..4 were already averaged into it.
 List<double?> moistureBucketSeries(
   List<SensorReading> readings,
   String timeRange,
-) {
-  final base = groupByTime(readings, timeRange, (r) {
-    final vals = [
-      r.moisture,
-      r.soilMoisture1,
-      r.soilMoisture2,
-      r.soilMoisture3,
-      r.soilMoisture4,
-    ].whereType<num>().map((v) => v.toDouble()).toList();
-    return vals.isEmpty ? null : vals.reduce((a, b) => a + b) / vals.length;
-  });
-  return base.map((e) => e.value).toList();
-}
+) =>
+    groupByTime(readings, timeRange, (r) => r.moisture).map((e) => e.value).toList();
 
 ({String level, String text}) buildOverviewSummary({
   required Zone? selectedZone,

@@ -151,7 +151,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(sensor.status, 'online')
     const cam = await waitFor(() => docData('devices/ESP32CAM-T1'), 'camera created')
     assert.equal(cam.deviceType, 'camera')
-    assert.equal(cam.totalSlots, 0)
+    assert.equal(cam.totalSlots, undefined)
     await waitFor(() => docData('devices/ESP32-LONER'), 'loner created')
   })
 
@@ -160,8 +160,8 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await Promise.all([
       publish(`grownex/${id}/status`, 'online', { retain: true }),
       publish(`grownex/${id}/actuators/state`, { deviceId: id, irrigationState: false, fertilizerState: false, lightState: false }),
-      sensors(id, { temperature: 20, humidity: 50, lightLevel: 0, soilMoisture1: 50 }),
-      sensors(id, { temperature: 20, humidity: 50, lightLevel: 0, soilMoisture1: 50 }),
+      sensors(id, { temperature: 20, humidity: 50, lightLevel: 0, soilMoisture: 50 }),
+      sensors(id, { temperature: 20, humidity: 50, lightLevel: 0, soilMoisture: 50 }),
     ])
     await waitFor(() => docData(`devices/${id}`), 'burst device created')
     await db.doc(`devices/${id}`).update({ userId: users.bob.uid })  // claimed right away
@@ -176,25 +176,25 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     const zoneRef = db.collection('zones').doc()
     ids.zoneA = zoneRef.id
     await zoneRef.set({ userId: uid, zoneName: 'Herbs', zoneType: 'indoor', deviceId: 'ESP32-T1',
-      cameraDeviceId: 'ESP32CAM-T1', totalPlantSlots: 4, createdAt: FieldValue.serverTimestamp() })
+      cameraDeviceId: 'ESP32CAM-T1', createdAt: FieldValue.serverTimestamp() })
     await db.doc('devices/ESP32-T1').update({ userId: uid, assignedZoneId: ids.zoneA })
     await db.doc('devices/ESP32CAM-T1').update({ userId: uid, assignedZoneId: ids.zoneA })
-    const basil = await db.collection('plants').add({ zoneId: ids.zoneA, plantName: 'Basil', slotNumber: 1,
+    const basil = await db.collection('plants').add({ zoneId: ids.zoneA, plantName: 'Basil',
       preferredMoistureMin: 45, preferredMoistureMax: 70, preferredTemperatureMin: 20, preferredTemperatureMax: 30,
       preferredHumidityMin: 40, preferredHumidityMax: 80 })
     ids.basil = basil.id
-    await db.collection('plants').add({ zoneId: ids.zoneA, plantName: 'Mint', slotNumber: 2,
+    await db.collection('plants').add({ zoneId: ids.zoneA, plantName: 'Mint',
       preferredMoistureMin: 55, preferredMoistureMax: 75, preferredTemperatureMin: 18, preferredTemperatureMax: 28,
       preferredHumidityMin: 50, preferredHumidityMax: 80 })
     await waitForLog(new RegExp(`recomputed alertSummary for zone ${ids.zoneA}`))
 
-    await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 60, soilMoisture2: 64 })
+    await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture: 62 })
     const zone = await waitFor(async () => {
       const z = await docData(`zones/${ids.zoneA}`)
       return z.latestTimestamp && z
     }, 'zone latest values')
     assert.equal(zone.latestMoisture, 62)
-    assert.equal(zone.latestMoisture1, 60)
+    assert.equal(zone.latestMoisture1, undefined)
     assert.equal(zone.latestTemp, 25)
     assert.equal(zone.status, 'healthy')
 
@@ -205,7 +205,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
   test('a worsening zone alerts once, then the 30-minute cooldown holds', async () => {
     // FCM isn't emulated, so this push fails or hangs; the in-app notification must land regardless.
     await db.doc(`users/${users.alice.uid}`).set({ fcmTokens: ['fake-token'] }, { merge: true })
-    await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 40, soilMoisture2: 40 })
+    await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture: 40 })
     const z = await waitFor(async () => {
       const d = await docData(`zones/${ids.zoneA}`)
       return d.status === 'attention' && d
@@ -213,7 +213,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.match(z.alertSummary, /^Moisture too low \(40%/)
     await waitFor(async () => (await notifs(users.alice.uid, 'threshold')).length === 1, 'threshold notification')
 
-    await sensors('ESP32-T1', { temperature: 35, humidity: 60, lightLevel: 0, soilMoisture1: 40, soilMoisture2: 40 })
+    await sensors('ESP32-T1', { temperature: 35, humidity: 60, lightLevel: 0, soilMoisture: 40 })
     await waitFor(async () => (await docData(`zones/${ids.zoneA}`)).status === 'critical', 'status critical')
     await sleep(500)
     assert.equal((await notifs(users.alice.uid, 'threshold')).length, 1)
@@ -222,7 +222,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
   test('a failed DHT11 read keeps the worse status and the hour’s last temperature', async () => {
     const before = await docData(`zones/${ids.zoneA}`)  // critical: temperature 35 + low moisture
     const syncedAt = (await docData('devices/ESP32-T1')).lastSync.toMillis()
-    await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture1: 60, soilMoisture2: 64 })
+    await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture: 62 })
     await waitFor(async () => (await docData(`zones/${ids.zoneA}`)).latestMoisture === 62, 'zone updated')
     const stats = await waitFor(async () => {
       const s = await statsNow(ids.zoneA)
@@ -238,14 +238,15 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await sleep(500)
     assert.equal((await notifs(users.alice.uid, 'threshold')).length, 1)
 
-    // A soil probe that stops reporting is cleared, not kept like temperature/humidity
-    await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture1: 60 })
+    // A board still on the old 4-probe firmware keeps its old zone reading: the probes' average
+    await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture1: 60, soilMoisture2: 10 })
     const after = await waitFor(async () => {
       const s = await statsNow(ids.zoneA)
-      return s.moisture === 60 && s
+      return s.moisture === 35 && s
     }, 'stats updated again')
-    assert.equal(after.soilMoisture2, null)
+    assert.equal(after.soilMoisture1, undefined)
     assert.equal(after.temperature, 35)
+    assert.equal((await docData(`zones/${ids.zoneA}`)).latestMoisture, 35)
   })
 
   test('manual toggles publish one debounced command and ignore the device echo', async () => {
@@ -278,21 +279,21 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await db.doc(`automationConfig/${ids.zoneA}`).set({ autoWateringEnabled: true, wateringThreshold: 50, wateringDuration: 1 })
     await sleep(300)
     const t0 = Date.now()
-    await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 40, soilMoisture2: 40 })
+    await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture: 40 })
     const on = await waitFor(() => commandsFor('ESP32-T1', t0).find(c => c.state.irrigationState), 'irrigation on')
     await waitFor(() => commandsFor('ESP32-T1', on.at + 1).some(c => !c.state.irrigationState), 'irrigation auto-off', 5000)
     await waitFor(async () => (await docData('devices/ESP32-T1')).irrigationActive === false, 'intent back to off')
     await waitFor(async () => (await notifs(users.alice.uid, 'actuator')).length === 1, 'actuator notification')
 
     const t1 = Date.now()
-    await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 40, soilMoisture2: 40 })
+    await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture: 40 })
     await sleep(1500)
     assert.equal(commandsFor('ESP32-T1', t1).filter(c => c.state.irrigationState).length, 0, 'cooldown blocks re-trigger')
 
     await stopServer()
     await startServer()
     const t2 = Date.now()
-    await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 40, soilMoisture2: 40 })
+    await sensors('ESP32-T1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture: 40 })
     await waitForLog(/sensor write → zone/)
     await sleep(1500)
     assert.equal(commandsFor('ESP32-T1', t2).filter(c => c.state.irrigationState).length, 0, 'the cooldown survives a restart')
@@ -300,7 +301,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
   })
 
   test('an unassigned device updates only itself', async () => {
-    await sensors('ESP32-LONER', { temperature: 20, humidity: 50, lightLevel: 0, soilMoisture1: 50 })
+    await sensors('ESP32-LONER', { temperature: 20, humidity: 50, lightLevel: 0, soilMoisture: 50 })
     await waitForLog(/ESP32-LONER has no assigned zone/)
   })
 
@@ -487,7 +488,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     const dev = db.doc('devices/ESP32-T2')
     await db.doc(`automationConfig/${ids.zoneS}`).set({ autoWateringEnabled: true, wateringThreshold: 50, wateringDuration: 2 })
     const t0 = Date.now()
-    await sensors('ESP32-T2', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 10 })
+    await sensors('ESP32-T2', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture: 10 })
     await waitFor(() => commandsFor('ESP32-T2', t0).some(c => c.state.irrigationState), 'threshold watering on')
     const t1 = Date.now()
     await dev.update({ irrigationActive: false })  // the user stops it, so the auto-off then writes no change
@@ -528,7 +529,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     await db.doc('devices/ESP32-Q1').update({ userId: users.alice.uid, assignedZoneId: zoneRef.id })
     await db.doc(`automationConfig/${zoneRef.id}`).set({ autoWateringEnabled: true, wateringThreshold: 50, wateringDuration: 1 })
     const t0 = Date.now()
-    await sensors('ESP32-Q1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture1: 10 })
+    await sensors('ESP32-Q1', { temperature: 25, humidity: 60, lightLevel: 0, soilMoisture: 10 })
     await waitForLog(/not switching irrigation on: ESP32-Q2 isn't assigned/)
     await sleep(500)
     assert.equal(commandsFor('ESP32-Q2', t0).filter(c => c.state.irrigationState).length, 0)
@@ -575,11 +576,11 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(commands.length, before, `startup publishes nothing (got ${JSON.stringify(commands.slice(before))})`)
 
     // A failed DHT11 read right after the restart keeps the stored status, not just the in-memory one
-    await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture1: 60, soilMoisture2: 64 })
+    await sensors('ESP32-T1', { temperature: null, humidity: null, lightLevel: 0, soilMoisture: 62 })
     await waitForLog(/sensor write → zone/)
     assert.equal((await docData(`zones/${ids.zoneA}`)).status, 'critical')
 
-    await sensors('ESP32-T1', { temperature: 35, humidity: 60, lightLevel: 0, soilMoisture1: 40, soilMoisture2: 40 })
+    await sensors('ESP32-T1', { temperature: 35, humidity: 60, lightLevel: 0, soilMoisture: 40 })
     await waitFor(async () => (await docData(`zones/${ids.zoneA}`)).latestTemp === 35, 'second reading')
     await sleep(500)
     assert.equal((await notifs(users.alice.uid, 'threshold')).length, alerts)
@@ -779,6 +780,14 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     const demo = zones.docs[0].ref
     const days = (await demo.collection('statsDaily').get()).docs
     assert.equal(days.reduce((n, d) => n + Object.keys(d.data().hours).length, 0), 168, '7 days of hourly entries')
+    // One soil probe for the whole zone: the demo plants must share a moisture range that holds
+    // its reading, or the "healthy" demo zone shows plants that are too wet or too dry.
+    const seeded = (await db.collection('plants').where('zoneId', '==', demo.id).get()).docs.map(d => d.data())
+    assert.ok(seeded.length > 4, 'more plants than the old 4-slot cap')
+    const lo = Math.max(...seeded.map(p => p.preferredMoistureMin))
+    const hi = Math.min(...seeded.map(p => p.preferredMoistureMax))
+    const { latestMoisture } = (await demo.get()).data()
+    assert.ok(lo < hi && latestMoisture >= lo && latestMoisture <= hi, `zone moisture ${latestMoisture} outside the plants' shared range ${lo}–${hi}`)
 
     // Leftovers from an older version that wrote one doc per reading
     const w = db.bulkWriter()

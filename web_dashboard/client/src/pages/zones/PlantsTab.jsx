@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  collection, query, where, onSnapshot, getDocs,
+  collection, query, where, orderBy, onSnapshot, getDocs,
   setDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../../firebase'
@@ -17,7 +17,6 @@ import { scoreBadge, plantStatus } from '../../lib/analytics'
 import { fetchZoneStats } from '../../lib/zoneStats'
 import { uploadPlantPhoto, removePlantPhoto, removePlantPhotoFile } from '../../lib/photoUpload'
 
-const MAX_PLANTS = 4
 const LIGHT_OPTIONS = ['', 'low', 'medium', 'high']
 
 const ZONE_HINT_REASON = {
@@ -67,43 +66,6 @@ function MoistureBar({ moisture, min, max }) {
   )
 }
 
-/* ── Slot Picker ─────────────────────────────────────────────────────── */
-function SlotPicker({ takenSlots, selected, onChange, error }) {
-  return (
-    <div>
-      <p className="text-label-lg text-on-surface-variant mb-2">Plant slot</p>
-      <div role="group" aria-label="Plant slot" className="grid grid-cols-4 gap-2">
-        {[1, 2, 3, 4].map((slot) => {
-          const isTaken    = takenSlots.has(slot)
-          const isSelected = selected === slot
-          return (
-            <button
-              key={slot}
-              type="button"
-              disabled={isTaken}
-              onClick={() => onChange(isSelected ? null : slot)}
-              aria-pressed={isSelected}
-              className={`state-layer h-16 rounded-xl border flex flex-col items-center justify-center gap-1 ${
-                isTaken
-                  ? 'border-on-surface/[.12] text-on-surface/[.38] cursor-not-allowed'
-                  : isSelected
-                    ? 'bg-secondary-container border-secondary-container text-on-secondary-container'
-                    : 'border-outline-variant text-on-surface-variant'
-              }`}
-            >
-              <Icon name={isTaken ? 'block' : isSelected ? 'check_circle' : 'potted_plant'} filled={isSelected} size={20} />
-              <span className="text-label-md">{isTaken ? 'Taken' : `Slot ${slot}`}</span>
-            </button>
-          )
-        })}
-      </div>
-      <p className={`text-body-sm mt-1.5 ${error ? 'text-error' : 'text-on-surface-variant'}`}>
-        {error || 'Matches the soil sensor the plant sits on.'}
-      </p>
-    </div>
-  )
-}
-
 /* ── Preferred Conditions Fields ─────────────────────────────────────── */
 function ConditionFields({ prefs, onChange }) {
   const num = (key, label) => (
@@ -137,11 +99,10 @@ function ConditionFields({ prefs, onChange }) {
 }
 
 /* ── Add Plant Modal ─────────────────────────────────────────────────── */
-function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
+function AddPlantModal({ zone, onClose }) {
   const { user } = useAuth()
   const [species,      setSpecies]     = useState('')
   const [name,         setName]        = useState('')
-  const [selectedSlot, setSelectedSlot]= useState(initialSlot)
   const [showPrefs,    setShowPrefs]   = useState(false)
   const [prefs,        setPrefs]       = useState({})
   const [errors,       setErrors]      = useState({})
@@ -245,8 +206,6 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
   function validate() {
     const e = {}
     if (!species.trim()) e.species = 'Enter the plant species'
-    if (selectedSlot == null) e.slot = 'Please select a slot'
-    if (takenSlots.has(selectedSlot)) e.slot = 'That slot is already taken'
     return e
   }
 
@@ -262,7 +221,6 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
         plantName:  name.trim() || species.trim(),
         species:    species.trim(),
         status:     'healthy',
-        slotNumber: selectedSlot,
         preferredMoistureMin:     prefs.preferredMoistureMin    ?? null,
         preferredMoistureMax:     prefs.preferredMoistureMax    ?? null,
         preferredHumidityMin:     prefs.preferredHumidityMin    ?? null,
@@ -347,8 +305,6 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
         </div>
 
         <TextField label="Nickname (optional)" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My basil" />
-
-        <SlotPicker takenSlots={takenSlots} selected={selectedSlot} onChange={setSelectedSlot} error={errors.slot} />
 
         <div className="rounded-xl border border-outline-variant overflow-hidden">
           <button
@@ -547,7 +503,6 @@ function PlantDetailModal({ plant, zone, onClose }) {
 
       <div className="flex gap-2 mt-4 mb-6 flex-wrap">
         {status && <StatusLabel status={status} />}
-        {plant.slotNumber > 0 && <span className="tag border border-outline-variant text-on-surface-variant">Slot {plant.slotNumber}</span>}
       </div>
 
       <div className="space-y-4">
@@ -567,7 +522,6 @@ function PlantDetailModal({ plant, zone, onClose }) {
 
 /* ── Plants Tab ──────────────────────────────────────────────────────── */
 function PlantCard({ plant, zone, onOpen }) {
-  const slotMoisture = plant.slotNumber > 0 ? zone[`latestMoisture${plant.slotNumber}`] ?? null : null
   const status = plantStatus(zone, plant)
   return (
     <button onClick={onOpen} className="card card-link overflow-hidden flex flex-col">
@@ -575,9 +529,6 @@ function PlantCard({ plant, zone, onOpen }) {
         {plant.photoUrl
           ? <img src={plant.photoUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
           : <Icon name="local_florist" size={40} className="text-on-surface-variant/60" />}
-        {plant.slotNumber > 0 && (
-          <span className="tag absolute top-3 left-3 bg-inverse-surface/80 text-inverse-on-surface">Slot {plant.slotNumber}</span>
-        )}
       </div>
       <div className="p-4 flex flex-col gap-3 w-full flex-1">
         <div className="flex items-start gap-2">
@@ -593,7 +544,7 @@ function PlantCard({ plant, zone, onOpen }) {
           </span>
         )}
         <div className="mt-auto">
-          <MoistureBar moisture={slotMoisture} min={plant.preferredMoistureMin ?? null} max={plant.preferredMoistureMax ?? null} />
+          <MoistureBar moisture={zone.latestMoisture ?? null} min={plant.preferredMoistureMin ?? null} max={plant.preferredMoistureMax ?? null} />
         </div>
       </div>
     </button>
@@ -603,12 +554,13 @@ function PlantCard({ plant, zone, onOpen }) {
 export default function PlantsTab({ zone }) {
   const [plants,   setPlants]   = useState([])
   const [loading,  setLoading]  = useState(true)
-  const [adding,   setAdding]   = useState(null)  // null = closed, else { slot }
+  const [adding,   setAdding]   = useState(false)
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
     const unsub = onSnapshot(
-      query(collection(db, 'plants'), where('zoneId', '==', zone.id)),
+      // Newest first, like mobile's watchPlantsByZone (same query, so the same composite index).
+      query(collection(db, 'plants'), where('zoneId', '==', zone.id), orderBy('createdAt', 'desc')),
       (snap) => {
         setPlants(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
         setLoading(false)
@@ -617,44 +569,32 @@ export default function PlantsTab({ zone }) {
     return unsub
   }, [zone.id])
 
-  const isFull     = plants.length >= MAX_PLANTS
-  const takenSlots = new Set(plants.map((p) => p.slotNumber).filter(Boolean))
-  const bySlot     = Object.fromEntries(plants.filter((p) => p.slotNumber > 0).map((p) => [p.slotNumber, p]))
-  const unslotted  = plants.filter((p) => !(p.slotNumber > 0))
-
   if (loading) return <Loading />
 
   return (
     <>
-      {adding && <AddPlantModal zone={zone} takenSlots={takenSlots} initialSlot={adding.slot} onClose={() => setAdding(null)} />}
+      {adding && <AddPlantModal zone={zone} onClose={() => setAdding(false)} />}
       {selected && <PlantDetailModal plant={selected} zone={zone} onClose={() => setSelected(null)} />}
 
       <div className="flex items-center gap-3 mb-4">
         <div className="flex-1">
           <h3 className="text-title-lg text-on-surface">Plants</h3>
-          <p className="text-body-md text-on-surface-variant">{plants.length} of {MAX_PLANTS} slots used</p>
+          <p className="text-body-md text-on-surface-variant">{plants.length} plant{plants.length !== 1 ? 's' : ''}</p>
         </div>
-        <button onClick={() => setAdding({ slot: null })} disabled={isFull} className="btn-filled">
-          <Icon name={isFull ? 'block' : 'add'} />{isFull ? 'Zone full' : 'Add plant'}
+        <button onClick={() => setAdding(true)} className="btn-filled">
+          <Icon name="add" />Add plant
         </button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[1, 2, 3, 4].map((slot) => bySlot[slot] ? (
-          <PlantCard key={bySlot[slot].id} plant={bySlot[slot]} zone={zone} onOpen={() => setSelected(bySlot[slot])} />
-        ) : (
-          <button
-            key={`empty-${slot}`}
-            onClick={() => !isFull && setAdding({ slot })}
-            disabled={isFull}
-            className="state-layer min-h-[260px] rounded-xl border-2 border-dashed border-outline-variant flex flex-col items-center justify-center gap-2 text-on-surface-variant disabled:opacity-50"
-          >
-            <Icon name="add_circle" size={32} />
-            <span className="text-title-sm">Slot {slot} is empty</span>
-            {!isFull && <span className="text-body-sm">Add a plant here</span>}
-          </button>
-        ))}
-        {unslotted.map((p) => <PlantCard key={p.id} plant={p} zone={zone} onOpen={() => setSelected(p)} />)}
+        {plants.map((p) => <PlantCard key={p.id} plant={p} zone={zone} onOpen={() => setSelected(p)} />)}
+        <button
+          onClick={() => setAdding(true)}
+          className="state-layer min-h-[260px] rounded-xl border-2 border-dashed border-outline-variant flex flex-col items-center justify-center gap-2 text-on-surface-variant"
+        >
+          <Icon name="add_circle" size={32} />
+          <span className="text-title-sm">Add a plant</span>
+        </button>
       </div>
     </>
   )

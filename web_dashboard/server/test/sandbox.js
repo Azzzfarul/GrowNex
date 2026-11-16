@@ -25,7 +25,7 @@ dev.on('message', (_t, buf) => {
 let i = 0
 setInterval(() => {
   dev.publish(`grownex/${ID}/sensors`, JSON.stringify({
-    deviceId: ID, temperature: 26.5, humidity: 55, lightLevel: 0, soilMoisture1: 48 + (i++ % 2),
+    deviceId: ID, temperature: 26.5, humidity: 55, lightLevel: 0, soilMoisture: 48 + (i++ % 2),
   }))
 }, 3000)
 console.log(`fake device ${ID} online`)
