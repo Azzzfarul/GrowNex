@@ -29,46 +29,6 @@ const ZONE_HINT_REASON = {
 }
 
 
-function MoistureBar({ moisture, min, max }) {
-  if (moisture == null) return null
-  const hasRange = min != null && max != null
-  const inRange  = hasRange && moisture >= min && moisture <= max
-  const tooLow   = hasRange && moisture < min
-
-  const color = !hasRange ? 'text-tertiary'
-    : inRange ? 'text-primary'
-    : tooLow  ? 'text-warning'
-    : 'text-error'
-
-  const barColor = !hasRange ? 'bg-tertiary'
-    : inRange ? 'bg-primary'
-    : tooLow  ? 'bg-warning'
-    : 'bg-error'
-
-  const label = !hasRange ? null
-    : inRange ? 'Within preferred range'
-    : tooLow  ? 'Too dry'
-    : 'Too wet'
-
-  return (
-    <div>
-      <div className="flex justify-between text-body-sm mb-1.5">
-        <span className="text-on-surface-variant">Soil moisture</span>
-        <span className={`font-medium ${color}`}>{Number(moisture).toFixed(1)}%{label && ` · ${label}`}</span>
-      </div>
-      <div className="relative w-full bg-surface-container-highest rounded-full h-1.5">
-        {hasRange && (
-          <div className="absolute inset-y-0 bg-primary/20 rounded-full"
-            style={{ left: `${Math.max(min, 0)}%`, width: `${Math.max(Math.min(max, 100) - Math.max(min, 0), 0)}%` }} />
-        )}
-        <div className={`relative h-1.5 rounded-full transition-all ${barColor}`} style={{ width: `${Math.min(Math.max(moisture, 0), 100)}%` }} />
-      </div>
-      {hasRange && <p className="text-body-sm text-on-surface-variant mt-1">Ideal {Number(min).toFixed(0)}–{Number(max).toFixed(0)}%</p>}
-    </div>
-  )
-}
-
-/* ── Preferred Conditions Fields ─────────────────────────────────────── */
 function ConditionFields({ prefs, onChange }) {
   const num = (key, label) => (
     <TextField
@@ -560,9 +520,6 @@ function PlantCard({ plant, zone, onOpen }) {
             <Icon name="light_mode" />{plant.preferredLightCondition} light
           </span>
         )}
-        <div className="mt-auto">
-          <MoistureBar moisture={zone.latestMoisture ?? null} min={plant.preferredMoistureMin ?? null} max={plant.preferredMoistureMax ?? null} />
-        </div>
       </div>
     </button>
   )

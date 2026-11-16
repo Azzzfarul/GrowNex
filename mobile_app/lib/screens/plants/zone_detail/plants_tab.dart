@@ -7,7 +7,6 @@ import '../../../utils/analytics.dart' show plantStatus;
 import '../add_plant_screen.dart';
 import '../../../widgets/status_label.dart';
 import '../plant_detail/plant_detail_screen.dart';
-import '../../../theme.dart';
 
 class PlantsTab extends StatefulWidget {
   final Zone zone;
@@ -118,76 +117,10 @@ class _PlantsTabState extends State<PlantsTab> {
                 const SizedBox(height: 12),
                 _InfoChip(label: 'Light', value: plant.preferredLightCondition!),
               ],
-              if (moisture != null) ...[
-                const SizedBox(height: 14),
-                _MoistureBar(
-                  cs: cs,
-                  moisture: moisture,
-                  min: plant.preferredMoistureMin,
-                  max: plant.preferredMoistureMax,
-                ),
-              ],
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-class _MoistureBar extends StatelessWidget {
-  final ColorScheme cs;
-  final num moisture;
-  final num? min;
-  final num? max;
-
-  const _MoistureBar({required this.cs, required this.moisture, this.min, this.max});
-
-  @override
-  Widget build(BuildContext context) {
-    final app = AppColors.of(context);
-    final tt = Theme.of(context).textTheme;
-    final hasRange = min != null && max != null;
-    final inRange  = hasRange && moisture >= min! && moisture <= max!;
-    final tooLow   = hasRange && moisture < min!;
-
-    final color = !hasRange
-        ? cs.tertiary
-        : inRange  ? cs.primary
-        : tooLow   ? app.warning
-        : cs.error;
-
-    final label = !hasRange ? null
-        : inRange  ? 'Within preferred range'
-        : tooLow   ? 'Too dry'
-        : 'Too wet';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Soil moisture', style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-            Text('${moisture.toStringAsFixed(1)}%',
-                style: tt.labelMedium?.copyWith(color: color)),
-          ],
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: (moisture / 100).clamp(0.0, 1.0),
-            backgroundColor: cs.surfaceContainerHigh,
-            valueColor: AlwaysStoppedAnimation<Color>(color),
-            minHeight: 7,
-          ),
-        ),
-        if (label != null) ...[
-          const SizedBox(height: 4),
-          Text(label, style: tt.labelSmall?.copyWith(color: color)),
-        ],
-      ],
     );
   }
 }
