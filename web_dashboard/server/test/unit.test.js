@@ -158,3 +158,113 @@ test('computeZoneStatus grades against the averaged plant ranges', () => {
   assert.equal(computeZoneStatus({ temperature: 25, moisture: 50 }, zonePlants, 'critical').status, 'healthy')     // a full reading recovers
   assert.equal(computeZoneStatus({ humidity: null, temperature: 25, moisture: 50 }, zonePlants, 'attention').status, 'healthy')  // no humidity range set
 })
+
+// ── aiVision: image diagnosis output is untrusted ────────────────────────────
+
+const {
+  validateDiagnosis, validateZoneCheck, worseZoneStatus, isJpeg,
+} = await import('../src/services/aiVision.js')
+
+test('validateDiagnosis turns junk into a safe "unclear" result', () => {
+  for (const junk of [{}, null, 'text', { condition: 'on fire' }]) {
+    const d = validateDiagnosis(junk)
+    assert.equal(d.condition, 'unclear')
+    assert.equal(d.severity, 'none')
+    assert.equal(d.confidence, 0)
+    assert.deepEqual(d.observations, [])
+    assert.deepEqual(d.advice, [])
+  }
+})
+
+test('validateDiagnosis normalises near-miss condition labels', () => {
+  assert.equal(validateDiagnosis({ condition: 'Fungal disease' }).condition, 'fungal_disease')
+  assert.equal(validateDiagnosis({ condition: 'fungal' }).condition, 'fungal_disease')
+  assert.equal(validateDiagnosis({ condition: ' PEST_DAMAGE ' }).condition, 'pest_damage')
+  assert.equal(validateDiagnosis({ condition: 'water-stress' }).condition, 'water_stress')
+})
+
+test('validateDiagnosis clamps severity, confidence and list sizes', () => {
+  assert.equal(validateDiagnosis({ condition: 'healthy', severity: 'severe' }).severity, 'none')
+  assert.equal(validateDiagnosis({ condition: 'pest_damage', severity: 'severe' }).severity, 'severe')
+  assert.equal(validateDiagnosis({ condition: 'pest_damage', severity: 'apocalyptic' }).severity, 'mild')
+  assert.equal(validateDiagnosis({ confidence: 7 }).confidence, 1)
+  assert.equal(validateDiagnosis({ confidence: '0.4' }).confidence, 0.4)
+  assert.equal(validateDiagnosis({ confidence: NaN }).confidence, 0)
+  const many = Array.from({ length: 9 }, (_, i) => `item ${i}`)
+  const d = validateDiagnosis({ observations: [...many, 5, null], advice: many, summary: 'x'.repeat(500) })
+  assert.equal(d.observations.length, 5)
+  assert.equal(d.advice.length, 4)
+  assert.equal(d.summary.length, 200)
+  assert.deepEqual(validateDiagnosis({ observations: [5, null, ' spots '] }).observations, ['spots'])
+})
+
+test('validateZoneCheck clamps to the zone status list', () => {
+  assert.equal(validateZoneCheck({ status: 'thriving' }).status, 'unclear')
+  assert.equal(validateZoneCheck({ status: 'Stressed' }).status, 'stressed')
+  assert.equal(validateZoneCheck({ observations: ['a', 'b', 'c', 'd', 'e', 'f'] }).observations.length, 4)
+})
+
+test('worseZoneStatus is true only for a real step down', () => {
+  assert.equal(worseZoneStatus('unhealthy', 'stressed'), true)
+  assert.equal(worseZoneStatus('stressed', 'healthy'), true)
+  assert.equal(worseZoneStatus('stressed', 'stressed'), false)
+  assert.equal(worseZoneStatus('healthy', 'unhealthy'), false)
+  assert.equal(worseZoneStatus('stressed', undefined), false)
+  assert.equal(worseZoneStatus('unclear', 'healthy'), false)
+})
+
+test('isJpeg checks the magic bytes', () => {
+  assert.equal(isJpeg(Buffer.from([0xFF, 0xD8, 0xFF, 0xE0])), true)
+  assert.equal(isJpeg(Buffer.from([0x89, 0x50, 0x4E, 0x47])), false)
+  assert.equal(isJpeg(Buffer.alloc(0)), false)
+})
+
+// ── eval/metrics: the numbers that go in the report ──────────────────────────
+
+const { scoreRows, calibration, cohenKappa } = await import('../eval/metrics.js')
+const row = (label, predicted, confidence = 0.9) => ({ label, predicted, confidence })
+
+test('scoreRows counts "unclear" on a labelled image as wrong', () => {
+  const rows = [row('healthy', 'healthy'), row('healthy', 'healthy'), row('fungal_disease', 'fungal_disease'), row('fungal_disease', 'unclear')]
+  const s = scoreRows(rows, ['healthy', 'fungal_disease'], { minSupport: 2 })
+  assert.equal(s.n, 4)
+  assert.equal(s.accuracy, 0.75)
+  assert.equal(s.coverage, 0.75)
+  assert.equal(s.answeredAccuracy, 1)
+  assert.equal(s.confusion.fungal_disease.unclear, 1)
+  const fungal = s.perClass.find(c => c.label === 'fungal_disease')
+  assert.equal(fungal.recall, 0.5)
+  assert.equal(fungal.precision, 1)
+})
+
+test('scoreRows does not report classes below the minimum support', () => {
+  const rows = [row('healthy', 'healthy'), row('healthy', 'healthy'), row('healthy', 'healthy'), row('pest_damage', 'healthy')]
+  const s = scoreRows(rows, ['healthy', 'pest_damage', 'viral_disease'], { minSupport: 3 })
+  assert.equal(s.perClass.find(c => c.label === 'healthy').reported, true)
+  assert.equal(s.perClass.find(c => c.label === 'pest_damage').reported, false)
+  assert.equal(s.perClass.find(c => c.label === 'viral_disease').support, 0)
+  // macro-F1 averages reported classes only: healthy P=3/4 R=1 → F1 = 6/7
+  assert.ok(Math.abs(s.macroF1 - 6 / 7) < 1e-9)
+})
+
+test('scoreRows gives a Wilson interval for accuracy', () => {
+  const rows = [...Array(8).fill(row('healthy', 'healthy')), ...Array(2).fill(row('healthy', 'pest_damage'))]
+  const [lo, hi] = scoreRows(rows, ['healthy', 'pest_damage']).wilson
+  assert.ok(Math.abs(lo - 0.490) < 0.005, `lo ${lo}`)
+  assert.ok(Math.abs(hi - 0.943) < 0.005, `hi ${hi}`)
+})
+
+test('calibration bins by confidence, with 1.0 in the top bin', () => {
+  const bins = calibration([row('a', 'a', 0.95), row('a', 'b', 1.0), row('a', 'a', 0.31)])
+  assert.equal(bins.length, 2)
+  assert.deepEqual({ ...bins[1], lo: +bins[1].lo.toFixed(1) }, { lo: 0.9, hi: 1, n: 2, accuracy: 0.5 })
+  assert.equal(bins[0].n, 1)
+})
+
+test('cohenKappa is 1 for identical ratings and 0 for chance agreement', () => {
+  assert.equal(cohenKappa([['a', 'a'], ['b', 'b']]).kappa, 1)
+  const k = cohenKappa([['a', 'a'], ['a', 'b'], ['b', 'a'], ['b', 'b']])
+  assert.equal(k.kappa, 0)
+  assert.equal(k.agreement, 0.5)
+  assert.equal(k.matrix.a.b, 1)
+})
