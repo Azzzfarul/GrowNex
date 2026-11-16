@@ -23,15 +23,15 @@ class DiagnosisService {
 
   CollectionReference<Map<String, dynamic>> get _col => _firestore.collection('plantDiagnoses');
 
-  // Two equality filters, sorted here: no composite index needed. The userId filter is what
-  // the security rules allow.
-  Query<Map<String, dynamic>> _forPlant(String uid, String plantId) =>
-      _col.where('userId', isEqualTo: uid).where('plantId', isEqualTo: plantId);
+  // A plant's diagnoses, made by any member of its zone. Two equality filters, sorted here: no
+  // composite index needed. The zoneId filter is what the security rules allow.
+  Query<Map<String, dynamic>> _forPlant(String zoneId, String plantId) =>
+      _col.where('zoneId', isEqualTo: zoneId).where('plantId', isEqualTo: plantId);
 
   /// Newest first.
-  Stream<List<PlantDiagnosis>> watch(String uid, String plantId) {
+  Stream<List<PlantDiagnosis>> watch(String zoneId, String plantId) {
     final newest = DateTime(9999);  // a doc whose server timestamp hasn't arrived yet sorts first
-    return _forPlant(uid, plantId).snapshots().map((snap) => snap.docs.map(PlantDiagnosis.fromDocument).toList()
+    return _forPlant(zoneId, plantId).snapshots().map((snap) => snap.docs.map(PlantDiagnosis.fromDocument).toList()
       ..sort((a, b) => (b.createdAt ?? newest).compareTo(a.createdAt ?? newest)));
   }
 
@@ -79,8 +79,8 @@ class DiagnosisService {
   Future<void> delete(PlantDiagnosis d) => _delete(d.id, d.storagePath);
 
   /// Part of the plant and zone delete cascades.
-  Future<void> deleteForPlant(String uid, String plantId) async {
-    for (final d in (await _forPlant(uid, plantId).get()).docs) {
+  Future<void> deleteForPlant(String zoneId, String plantId) async {
+    for (final d in (await _forPlant(zoneId, plantId).get()).docs) {
       await _delete(d.id, d.data()['storagePath'] as String?);
     }
   }

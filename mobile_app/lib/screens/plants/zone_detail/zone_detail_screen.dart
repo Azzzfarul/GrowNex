@@ -85,7 +85,7 @@ class _ZoneDetailScreenState extends State<ZoneDetailScreen> with SingleTickerPr
       final plants = await PlantService().getPlantsByZone(zone.id);
       for (final plant in plants) {
         await photos.deletePlantPhotoFile(plant.id);
-        await DiagnosisService().deleteForPlant(zone.userId, plant.id);
+        await DiagnosisService().deleteForPlant(zone.id, plant.id);
         await PlantService().deletePlant(plant.id);
       }
       await photos.deleteFile('zonePhotos/${zone.id}.jpg');

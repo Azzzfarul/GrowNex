@@ -246,9 +246,9 @@
     "semantic_hash": ""
   },
   "mobile_app/lib/screens/plants/plant_detail/plant_detail_screen.dart": {
-    "mtime": 1794806780.6538124,
-    "seen": 1794806816.502806,
-    "ast_hash": "14e7bc7a24a93f6c490adb94c60e8f0e",
+    "mtime": 1794822649.2414324,
+    "seen": 1794822812.8646882,
+    "ast_hash": "9b72bb009ce278664fdc7b21741d6663",
     "semantic_hash": ""
   },
   "mobile_app/lib/screens/plants/plant_screen.dart": {
@@ -288,9 +288,9 @@
     "semantic_hash": ""
   },
   "mobile_app/lib/screens/plants/zone_detail/zone_detail_screen.dart": {
-    "mtime": 1794808384.1474056,
-    "seen": 1794808582.114805,
-    "ast_hash": "e792ddd4b7da382f2cf677eaa8e9b996",
+    "mtime": 1794822635.7148936,
+    "seen": 1794822812.864693,
+    "ast_hash": "6b6e13976df18815039ea8aa47bdd935",
     "semantic_hash": ""
   },
   "mobile_app/lib/screens/profile/edit_profile_screen.dart": {
@@ -312,9 +312,9 @@
     "semantic_hash": ""
   },
   "mobile_app/lib/services/auth_service.dart": {
-    "mtime": 1794806780.6554663,
-    "seen": 1794806816.5028129,
-    "ast_hash": "60648dab2332b57e72b8d5ba8ad6a671",
+    "mtime": 1794822635.715253,
+    "seen": 1794822812.864695,
+    "ast_hash": "f2531359d6ddbfea3c521775aa0e4232",
     "semantic_hash": ""
   },
   "mobile_app/lib/services/firestore/automation_config_service.dart": {
@@ -762,9 +762,9 @@
     "semantic_hash": "3fd0437324ae8641d56601161c90ba26"
   },
   "web_dashboard/client/src/pages/ZoneDetailPage.jsx": {
-    "mtime": 1794808384.1512136,
-    "seen": 1794808582.114859,
-    "ast_hash": "eaaf77a4c7f4a1a124867eaf1aa5e678",
+    "mtime": 1794822635.7126837,
+    "seen": 1794822812.864751,
+    "ast_hash": "27e7888770bd5c3139aa7aa0cf1d06cf",
     "semantic_hash": ""
   },
   "web_dashboard/client/src/pages/zones/AutomationTab.jsx": {
@@ -786,9 +786,9 @@
     "semantic_hash": ""
   },
   "web_dashboard/client/src/pages/zones/PlantsTab.jsx": {
-    "mtime": 1794818569.9072952,
-    "seen": 1794818579.3656151,
-    "ast_hash": "54c1f0532fd1dcfbcea04bc71d44b201",
+    "mtime": 1794822635.712983,
+    "seen": 1794822812.864754,
+    "ast_hash": "4b52d13acdf4785e5a8ac54120ddeeeb",
     "semantic_hash": ""
   },
   "web_dashboard/client/tailwind.config.js": {
@@ -924,9 +924,9 @@
     "semantic_hash": ""
   },
   "web_dashboard/server/test/integration.test.js": {
-    "mtime": 1794808384.1566336,
-    "seen": 1794808582.114882,
-    "ast_hash": "9120bc067384b730e722d3525a38b5cb",
+    "mtime": 1794822678.0767174,
+    "seen": 1794822812.864774,
+    "ast_hash": "f6dc688ffcf6a95a5008f5e8c633ab9d",
     "semantic_hash": ""
   },
   "web_dashboard/server/test/sandbox.js": {
@@ -942,9 +942,9 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1794819180.695972,
-    "seen": 1794819193.860694,
-    "ast_hash": "09398d185a102fb6c2bf994e7c26b475",
+    "mtime": 1794822811.2888575,
+    "seen": 1794822812.864776,
+    "ast_hash": "342bb6df494d785c71cee5c53452f874",
     "semantic_hash": ""
   },
   "README.md": {
@@ -1128,15 +1128,15 @@
     "semantic_hash": ""
   },
   "web_dashboard/client/src/components/PlantDiagnosisCard.jsx": {
-    "mtime": 1794806192.5533593,
-    "seen": 1794806680.3929112,
-    "ast_hash": "845ade6afbfbab3398c527f65e976f0f",
+    "mtime": 1794822635.7125928,
+    "seen": 1794822812.864728,
+    "ast_hash": "0c2af0aab83e547e594bfedbb25ab758",
     "semantic_hash": ""
   },
   "web_dashboard/client/src/lib/diagnosisApi.js": {
-    "mtime": 1794806192.551459,
-    "seen": 1794806680.3929238,
-    "ast_hash": "5e68d1289efcd686df8f0d784bbf2a3b",
+    "mtime": 1794822635.712032,
+    "seen": 1794822812.8647401,
+    "ast_hash": "1e453410c3bb8aaa25b3e556a75b7e46",
     "semantic_hash": ""
   },
   "web_dashboard/client/src/lib/plantDiagnosis.js": {
@@ -1152,9 +1152,9 @@
     "semantic_hash": ""
   },
   "mobile_app/lib/services/firestore/diagnosis_service.dart": {
-    "mtime": 1794806780.6234229,
-    "seen": 1794806816.502815,
-    "ast_hash": "b8ad307fbcec56e3bc60778488ec5bc4",
+    "mtime": 1794822635.7134585,
+    "seen": 1794822812.8646982,
+    "ast_hash": "eca53bdb2a2f427df19859e817f8893c",
     "semantic_hash": ""
   },
   "mobile_app/lib/utils/plant_diagnosis.dart": {
@@ -1164,9 +1164,9 @@
     "semantic_hash": ""
   },
   "mobile_app/lib/widgets/plant_diagnosis_card.dart": {
-    "mtime": 1794806780.6249156,
-    "seen": 1794806816.5028238,
-    "ast_hash": "167d55c33aaea642d3fc2984ad80f421",
+    "mtime": 1794822649.2417924,
+    "seen": 1794822812.8647082,
+    "ast_hash": "7f88e5b6c0ae4f358f93d2671fa75ce7",
     "semantic_hash": ""
   },
   "mobile_app/lib/services/zone_member_service.dart": {

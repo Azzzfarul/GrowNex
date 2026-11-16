@@ -23,9 +23,12 @@ service firebase.storage {
       allow read, write: if ownsZone(zoneId);
     }
 
-    // Close-ups for a plant diagnosis; the server reads them (and bypasses these rules).
+    // Close-ups for a plant diagnosis, under their author's uid; the server reads them (and
+    // bypasses these rules). Members of the diagnosis's zone may delete one too (history and the
+    // plant delete cascade): both apps delete the photo before its plantDiagnoses doc.
     match /plantDiagnoses/{userId}/{fileName} {
       allow read, write: if signedIn() && request.auth.uid == userId;
+      allow delete: if ownsZone(fsDoc(/plantDiagnoses/$(idOf(fileName))).data.zoneId);
     }
 
     // The plant doc must exist: both apps create it before uploading, and delete the photo first.

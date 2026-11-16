@@ -414,7 +414,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
     setDeleting(true)
     try {
       if (photoUrl) await removePlantPhotoFile(plant.id)
-      await deletePlantDiagnoses(user.uid, plant.id)
+      await deletePlantDiagnoses(plant.zoneId, plant.id)
       await deleteDoc(doc(db, 'plants', plant.id))
       onClose()
     } catch (e) {

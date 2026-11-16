@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -38,8 +37,7 @@ class _PlantDiagnosisCardState extends State<PlantDiagnosisCard> {
   @override
   void initState() {
     super.initState();
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null) _stream = _service.watch(uid, widget.plant.id);
+    _stream = _service.watch(widget.plant.zoneId, widget.plant.id);
   }
 
   Future<void> _pickAndDiagnose() async {

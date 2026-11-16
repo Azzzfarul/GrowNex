@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -157,8 +156,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
     try {
       // Photo first: the Storage rules check the plant doc to see whose photo it is.
       if (_photoUrl != null) await PhotoService().deletePlantPhotoFile(widget.plant.id);
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null) await DiagnosisService().deleteForPlant(uid, widget.plant.id);
+      await DiagnosisService().deleteForPlant(widget.plant.zoneId, widget.plant.id);
       await PlantService().deletePlant(widget.plant.id);
       if (mounted) Navigator.pop(context);
     } catch (e) {

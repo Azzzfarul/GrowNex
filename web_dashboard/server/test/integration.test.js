@@ -677,12 +677,20 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(await list('bob', 'devices', users.alice.uid), 403, "list alice's boards")
     assert.equal(await list('bob', 'devices', users.bob.uid), 200, 'list his own boards')
     assert.equal(await list('bob', 'devices', ''), 200, 'list unclaimed boards')
-    // Plant diagnoses: written by the server only; each user reads and deletes their own
-    await db.doc('plantDiagnoses/diagRulesA').set({ userId: users.alice.uid, plantId: ids.basil })
+    const diagnosesOf = (who, zoneId, plantId) => fetch(`${FS}:runQuery`, {
+      method: 'POST', headers: { Authorization: `Bearer ${users[who].token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'plantDiagnoses' }], where: { compositeFilter: { op: 'AND', filters: [
+        { fieldFilter: { field: { fieldPath: 'zoneId' }, op: 'EQUAL', value: str(zoneId) } },
+        { fieldFilter: { field: { fieldPath: 'plantId' }, op: 'EQUAL', value: str(plantId) } }] } } } }),
+    }).then(r => r.status)
+    // Plant diagnoses: written by the server only; the zone's members read and delete them
+    // (members are tested with zone sharing below)
+    await db.doc('plantDiagnoses/diagRulesA').set({ userId: users.alice.uid, zoneId: ids.zoneA, plantId: ids.basil })
     assert.equal(await as('alice', 'plantDiagnoses/diagRulesA'), 200)
     assert.equal(await list('alice', 'plantDiagnoses', users.alice.uid), 200)
     assert.equal(await as('bob', 'plantDiagnoses/diagRulesA'), 403, "read alice's diagnosis")
     assert.equal(await list('bob', 'plantDiagnoses', users.alice.uid), 403, "list alice's diagnoses")
+    assert.equal(await diagnosesOf('bob', ids.zoneA, ids.basil), 403, "list the diagnoses of alice's plant")
     assert.equal(await as('bob', 'plantDiagnoses/diagRulesA', { method: 'DELETE' }), 403, "delete alice's diagnosis")
     assert.equal(await as('alice', 'plantDiagnoses?documentId=forged', { method: 'POST',
       fields: { userId: str(users.alice.uid), condition: str('healthy') } }), 403, 'forge a diagnosis')
@@ -743,6 +751,26 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     assert.equal(await as('bob', `automationConfig/${Z}`, { method: 'PATCH', fields: { wateringSchedule: str('07:00') } }), 200)
     assert.equal(await as('bob', 'devices/ESP32-T1'), 200, "the zone's board")
     assert.equal(await as('bob', 'devices/ESP32-T1', { method: 'PATCH', fields: { lightActive: bool(false) } }), 200, 'its controls')
+    // ...and every member's diagnoses of its plants: he sees alice's and may delete them (photo, then doc)
+    const diagPath = `plantDiagnoses/${A}/diagShared1.jpg`
+    await bucket.file(diagPath).save(Buffer.from('d'))
+    await db.doc('plantDiagnoses/diagShared1').set({ userId: A, zoneId: Z, plantId: ids.basil, storagePath: diagPath })
+    const diagnosesOf = (who) => fetch(`${FS}:runQuery`, {
+      method: 'POST', headers: { Authorization: `Bearer ${users[who].token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'plantDiagnoses' }], where: { compositeFilter: { op: 'AND', filters: [
+        { fieldFilter: { field: { fieldPath: 'zoneId' }, op: 'EQUAL', value: str(Z) } },
+        { fieldFilter: { field: { fieldPath: 'plantId' }, op: 'EQUAL', value: str(ids.basil) } }] } } } }),
+    }).then(async r => r.status === 200 ? (await r.json()).filter(x => x.document).map(x => x.document.name.split('/').pop()) : r.status)
+    const deletePhoto = (who, path) => fetch(`http://${process.env.FIREBASE_STORAGE_EMULATOR_HOST}/v0/b/${BUCKET}/o/${encodeURIComponent(path)}`, {
+      method: 'DELETE', headers: { Authorization: `Firebase ${users[who].token}` },
+    }).then(r => r.status)
+    assert.deepEqual(await diagnosesOf('bob'), ['diagShared1'], "alice's diagnosis in his list")
+    assert.equal(await as('bob', 'plantDiagnoses/diagShared1'), 200)
+    assert.equal(await diagnosesOf('carol'), 403, 'carol lists them')
+    assert.equal(await as('carol', 'plantDiagnoses/diagShared1', { method: 'DELETE' }), 403, 'carol deletes one')
+    assert.equal(await deletePhoto('carol', diagPath), 403, 'carol deletes its photo')
+    assert.equal(await deletePhoto('bob', diagPath), 204, 'bob deletes its photo')
+    assert.equal(await as('bob', 'plantDiagnoses/diagShared1', { method: 'DELETE' }), 200, 'bob deletes it')
     // ...but not its owner, members, boards or existence
     assert.equal(await as('bob', 'devices/ESP32-T1', { method: 'PATCH', fields: { deviceName: str('Mine') } }), 403, 'rename the board')
     assert.equal(await as('bob', `zones/${Z}`, { method: 'PATCH', fields: { deviceId: str('ESP32-BURST') } }), 403, 'swap the board')

@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
-import { db } from '../firebase'
+import { onSnapshot } from 'firebase/firestore'
 import { useAuth } from '../context/AuthContext'
 import Icon from './ui/Icon'
 import StatusLabel from './ui/StatusLabel'
 import { formatRelative } from '../hooks/useNotifications'
 import { conditionLabel, conditionTone } from '../lib/plantDiagnosis'
-import { runPlantDiagnosis, deleteDiagnosis } from '../lib/diagnosisApi'
+import { runPlantDiagnosis, deleteDiagnosis, plantDiagnosesQuery } from '../lib/diagnosisApi'
 
-// AI diagnosis of one plant from a close-up photo, with its history.
+// AI diagnosis of one plant from a close-up photo, with its history (every zone member's).
 // Mobile: widgets/plant_diagnosis_card.dart.
 export default function PlantDiagnosisCard({ plant }) {
   const { user } = useAuth()
@@ -19,14 +18,12 @@ export default function PlantDiagnosisCard({ plant }) {
 
   useEffect(() => {
     if (!user) return
-    // Two equality filters, sorted here: no composite index needed.
-    const q = query(collection(db, 'plantDiagnoses'), where('userId', '==', user.uid), where('plantId', '==', plant.id))
-    return onSnapshot(q, (snap) => {
+    return onSnapshot(plantDiagnosesQuery(plant.zoneId, plant.id), (snap) => {
       setItems(snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
         .sort((a, b) => (b.createdAt?.toMillis?.() ?? Infinity) - (a.createdAt?.toMillis?.() ?? Infinity)))
     }, () => setItems([]))
-  }, [user, plant.id])
+  }, [user, plant.zoneId, plant.id])
 
   async function handleFile(e) {
     const file = e.target.files?.[0]

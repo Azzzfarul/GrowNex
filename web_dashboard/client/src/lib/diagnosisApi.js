@@ -42,8 +42,13 @@ export async function deleteDiagnosis(diagnosis) {
   await deleteDoc(doc(db, 'plantDiagnoses', diagnosis.id))
 }
 
-// Part of the plant and zone delete cascades. The userId filter is what the rules allow.
-export async function deletePlantDiagnoses(uid, plantId) {
-  const snap = await getDocs(query(collection(db, 'plantDiagnoses'), where('userId', '==', uid), where('plantId', '==', plantId)))
+// A plant's diagnoses, made by any member of its zone. The zoneId filter is what the rules allow;
+// two equality filters, so no composite index.
+export const plantDiagnosesQuery = (zoneId, plantId) =>
+  query(collection(db, 'plantDiagnoses'), where('zoneId', '==', zoneId), where('plantId', '==', plantId))
+
+// Part of the plant and zone delete cascades.
+export async function deletePlantDiagnoses(zoneId, plantId) {
+  const snap = await getDocs(plantDiagnosesQuery(zoneId, plantId))
   for (const d of snap.docs) await deleteDiagnosis({ id: d.id, ...d.data() })
 }

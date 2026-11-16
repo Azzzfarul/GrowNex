@@ -97,10 +97,12 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
     }
 
-    // Image diagnoses of a plant, written only by the server (POST /api/ai/plant-diagnosis);
-    // users read their own and delete them (history, plant/zone delete cascades).
+    // Image diagnoses of a plant, written only by the server (POST /api/ai/plant-diagnosis).
+    // Every member of the plant's zone reads and deletes them (history, plant/zone delete
+    // cascades). The author also reaches their own by userId, in any zone (the mobile
+    // account-deletion fallback).
     match /plantDiagnoses/{diagnosisId} {
-      allow read, delete: if signedIn() && resource.data.userId == uid();
+      allow read, delete: if signedIn() && (resource.data.userId == uid() || memberOf(resource.data.zoneId));
     }
 
     // Everything else (aiPlantProfiles, ...) is server-only.
