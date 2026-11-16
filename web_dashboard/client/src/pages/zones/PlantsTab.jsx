@@ -157,17 +157,36 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
 
   function handlePhotoPick(e) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file) return null
     setPhotoFile(file)
     setPhotoPreview(URL.createObjectURL(file))
     setIdResult(null)
+    return file
   }
 
-  async function identify() {
-    if (!photoFile || !user) return
+  async function identify(file = photoFile) {
+    if (!file || !user) return
     setIdLoading(true)
-    setIdResult(await identifyPlant(await user.getIdToken(), photoFile))
+    setIdResult(await identifyPlant(await user.getIdToken(), file))
     setIdLoading(false)
+  }
+
+  // The one line under the species tools: the latest result, or how to use them
+  function speciesHelper() {
+    if (aiMeta?.source === 'fallback' || aiMeta?.source === 'error') return 'Couldn’t fetch suggestions. Enter the conditions manually.'
+    if (aiMeta) return <>
+      {aiMeta.commonName && <>Interpreted as <span className="font-medium text-on-surface">{aiMeta.commonName}</span>. </>}
+      {aiMeta.confidence === 'low' && <span className="text-warning">Low-confidence guess, so double-check these. </span>}
+      {aiMeta.careNotes && 'Care tips added to Notes.'}
+    </>
+    if (idResult?.error) return <span className="text-error">{idResult.error}</span>
+    if (idResult?.results?.length === 0) return 'No match. Try a closer, well-lit photo of a leaf or flower.'
+    if (idResult?.results?.length) {
+      return idResult.results[0].score < 0.3
+        ? <span className="text-warning">Low confidence: pick only if one looks right.</span>
+        : 'Pick the match that looks right.'
+    }
+    return 'Type a name and tap Suggest, or let a photo name it.'
   }
 
   // A Pl@ntNet match fills in the species (and the nickname, if empty), then its conditions
@@ -290,66 +309,44 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
               : <Icon name="add_photo_alternate" className="text-on-surface-variant" />}
             <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
           </label>
-          <div className="flex-1 space-y-4">
-            <div className="flex items-start gap-2">
-              <TextField
-                label="Species *"
-                value={species}
-                onChange={(e) => { setSpecies(e.target.value); setAiMeta(null) }}
-                placeholder="e.g. Phalaenopsis"
-                error={errors.species}
-                className="flex-1"
-                autoFocus
-              />
-              <button type="button" onClick={() => suggestConditions()} disabled={aiLoading || species.trim().length < 3} className="btn-tonal h-12">
+          <div className="flex-1 min-w-0 space-y-2">
+            <TextField
+              label="Species *"
+              value={species}
+              onChange={(e) => { setSpecies(e.target.value); setAiMeta(null) }}
+              placeholder="e.g. basil"
+              error={errors.species}
+              autoFocus
+            />
+            {/* The two ways to fill it in: a photo (Pl@ntNet) or a typed name (Suggest) */}
+            <div className="flex flex-wrap gap-2">
+              <label className={`btn-tonal btn-sm cursor-pointer ${idLoading ? 'pointer-events-none opacity-60' : ''}`}
+                onClick={(e) => { if (photoFile) { e.preventDefault(); identify() } }}>
+                <Icon name="image_search" />{idLoading ? 'Identifying…' : 'Identify from photo'}
+                {/* No photo yet: pick one, then identify it right away */}
+                <input type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={(e) => { const f = handlePhotoPick(e); if (f) identify(f) }} />
+              </label>
+              <button type="button" onClick={() => suggestConditions()} disabled={aiLoading || species.trim().length < 3} className="btn-tonal btn-sm">
                 <Icon name="auto_awesome" />{aiLoading ? 'Thinking…' : 'Suggest'}
               </button>
             </div>
-            <TextField label="Nickname (optional)" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My Orchid" />
+            {idResult?.results?.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {idResult.results.map((m) => (
+                  <button type="button" key={m.species} onClick={() => pickMatch(m)} aria-pressed={species === m.species}
+                    className={`chip ${species === m.species ? 'bg-secondary-container text-on-secondary-container' : ''}`}>
+                    {m.commonName && <span>{m.commonName} ·</span>}<i>{m.species}</i>
+                    <span className="text-on-surface-variant">{Math.round(m.score * 100)}%</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-body-sm text-on-surface-variant">{speciesHelper()}</p>
           </div>
         </div>
 
-        {/* Species from the photo (Pl@ntNet) */}
-        {!photoFile && (
-          <p className="flex items-center gap-2 text-body-sm text-on-surface-variant -mt-1">
-            <Icon name="image_search" size={18} />Not sure of the species? Add a photo and tap Identify to fill it in.
-          </p>
-        )}
-        {photoFile && (
-          <div className="space-y-2 -mt-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={identify} disabled={idLoading} className="btn-tonal btn-sm">
-                <Icon name="image_search" />{idLoading ? 'Identifying…' : 'Identify from photo'}
-              </button>
-              {idResult?.results?.map((m) => (
-                <button type="button" key={m.species} onClick={() => pickMatch(m)} aria-pressed={species === m.species}
-                  className={`chip ${species === m.species ? 'bg-secondary-container text-on-secondary-container' : ''}`}>
-                  {m.commonName && <span>{m.commonName} ·</span>}<i>{m.species}</i>
-                  <span className="text-on-surface-variant">{Math.round(m.score * 100)}%</span>
-                </button>
-              ))}
-            </div>
-            {idResult?.error && <p className="banner banner-error"><Icon name="error" />{idResult.error}</p>}
-            {idResult?.results?.length === 0 && (
-              <p className="text-body-sm text-on-surface-variant">No match. Try a closer, well-lit photo of a leaf or flower.</p>
-            )}
-            {idResult?.results?.length > 0 && idResult.results[0].score < 0.3 && (
-              <p className="text-body-sm text-warning">Low confidence: check the species before saving.</p>
-            )}
-          </div>
-        )}
-
-        <p className="text-body-sm text-on-surface-variant -mt-2">
-          {aiMeta?.source === 'fallback' || aiMeta?.source === 'error'
-            ? 'Couldn’t fetch suggestions — enter the conditions manually.'
-            : aiMeta ? (
-              <>
-                {aiMeta.commonName && <>Interpreted as <span className="font-medium text-on-surface">{aiMeta.commonName}</span>. </>}
-                {aiMeta.confidence === 'low' && <span className="text-warning">Low-confidence guess — double-check these. </span>}
-                {aiMeta.careNotes && <span>Care tips added to Notes. </span>}
-              </>
-            ) : 'Type a name, even a general one like “sage”, and Suggest works out the specific plant, fills in its preferred conditions and adds care tips to Notes.'}
-        </p>
+        <TextField label="Nickname (optional)" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My basil" />
 
         <SlotPicker takenSlots={takenSlots} selected={selectedSlot} onChange={setSelectedSlot} error={errors.slot} />
 

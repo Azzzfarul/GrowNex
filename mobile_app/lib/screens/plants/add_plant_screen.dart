@@ -100,6 +100,12 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     );
   }
 
+  // No photo yet: pick one (it also becomes the plant photo), then identify it right away
+  Future<void> _identifyOrPick() async {
+    if (_photoFile == null) await _pickPhoto();
+    if (_photoFile != null && mounted) await _identify();
+  }
+
   Future<void> _identify() async {
     final photo = _photoFile;
     if (photo == null) return;
@@ -257,51 +263,53 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         child: ListView(
           children: [
             _buildPhotoPicker(),
-            if (_photoFile != null)
-              _buildIdentify()
-            else
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Row(
-                  children: [
-                    Icon(Icons.image_search, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text('Not sure of the species? Add a photo and tap Identify to fill it in.',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                    ),
-                  ],
-                ),
-              ),
             const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            TextFormField(
+              controller: _speciesCtrl,
+              decoration: const InputDecoration(labelText: 'Species', hintText: 'e.g. basil'),
+              onChanged: (_) => setState(() { _aiSource = ''; _aiCommonName = null; }),
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter the plant species' : null,
+            ),
+            const SizedBox(height: 10),
+            // The two ways to fill it in: a photo (Pl@ntNet) or a typed name (Suggest)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _speciesCtrl,
-                    decoration: const InputDecoration(labelText: 'Species (e.g. Phalaenopsis)'),
-                    onChanged: (_) => setState(() { _aiSource = ''; _aiCommonName = null; }),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter the plant species' : null,
-                  ),
+                FilledButton.tonalIcon(
+                  onPressed: _idLoading ? null : _identifyOrPick,
+                  icon: _idLoading
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.image_search),
+                  label: Text(_idLoading ? 'Identifying…' : 'Identify from photo'),
                 ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 56,
-                  child: FilledButton.tonalIcon(
-                    onPressed: _aiLoading || _speciesCtrl.text.trim().length < 3 ? null : _suggestConditions,
-                    icon: _aiLoading
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.auto_awesome),
-                    label: const Text('Suggest'),
-                  ),
+                FilledButton.tonalIcon(
+                  onPressed: _aiLoading || _speciesCtrl.text.trim().length < 3 ? null : _suggestConditions,
+                  icon: _aiLoading
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.auto_awesome),
+                  label: const Text('Suggest'),
                 ),
               ],
             ),
+            if (_idMatches?.isNotEmpty == true) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final m in _idMatches!)
+                    ChoiceChip(
+                      selected: _speciesCtrl.text.trim() == m.species,
+                      onSelected: (_) => _pickMatch(m),
+                      label: Text('${m.commonName != null ? '${m.commonName} · ' : ''}${m.species} ${(m.score * 100).round()}%'),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
             _buildSpeciesCaption(),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _nameCtrl,
               decoration: const InputDecoration(labelText: 'Plant nickname (optional)'),
@@ -384,86 +392,37 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     if (file != null && mounted) setState(() { _photoFile = file; _idMatches = null; _idError = null; });
   }
 
-  // Species from the photo (Pl@ntNet). Web: the same block in AddPlantModal, pages/zones/PlantsTab.jsx.
-  Widget _buildIdentify() {
-    final tt = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-    final matches = _idMatches;
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          FilledButton.tonalIcon(
-            onPressed: _idLoading ? null : _identify,
-            icon: _idLoading
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.image_search),
-            label: Text(_idLoading ? 'Identifying…' : 'Identify from photo'),
-          ),
-          if (_idError != null) ...[
-            const SizedBox(height: 8),
-            Text(_idError!, style: tt.bodySmall?.copyWith(color: cs.error)),
-          ],
-          if (matches != null && matches.isEmpty) ...[
-            const SizedBox(height: 8),
-            Text('No match. Try a closer, well-lit photo of a leaf or flower.',
-                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-          ],
-          if (matches != null && matches.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                for (final m in matches)
-                  ChoiceChip(
-                    selected: _speciesCtrl.text.trim() == m.species,
-                    onSelected: (_) => _pickMatch(m),
-                    label: Text('${m.commonName != null ? '${m.commonName} · ' : ''}${m.species} ${(m.score * 100).round()}%'),
-                  ),
-              ],
-            ),
-            if (matches.first.score < 0.3) ...[
-              const SizedBox(height: 4),
-              Text('Low confidence: check the species before saving.',
-                  style: tt.bodySmall?.copyWith(color: AppColors.of(context).warning)),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
   bool get _aiApplied => _aiSource == 'ai' || _aiSource == 'cache';
 
+  // The one line under the species tools: the latest result, or how to use them.
+  // Web: speciesHelper in AddPlantModal, pages/zones/PlantsTab.jsx.
   Widget _buildSpeciesCaption() {
     final cs = Theme.of(context).colorScheme;
     final app = AppColors.of(context);
     final tt = Theme.of(context).textTheme;
+    Text line(String text, [Color? color]) => Text(text, style: tt.bodySmall?.copyWith(color: color ?? cs.onSurfaceVariant));
     if (_aiSource == 'fallback' || _aiSource == 'error') {
-      return Text('Couldn’t fetch suggestions — enter the conditions manually.',
-          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant));
+      return line('Couldn’t fetch suggestions. Enter the conditions manually.');
     }
     if (_aiApplied) {
       return Wrap(
         children: [
           if (_aiCommonName != null && _aiCommonName!.trim().isNotEmpty)
-            Text('Interpreted as $_aiCommonName. ',
-                style: tt.labelMedium?.copyWith(color: cs.onSurface)),
-          if (_aiConfidence == 'low')
-            Text('Low-confidence guess — double-check these. ',
-                style: tt.bodySmall?.copyWith(color: app.warning)),
-          if (_aiCareNotes != null && _aiCareNotes!.trim().isNotEmpty)
-            Text('Care tips added to Notes below.',
-                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+            Text('Interpreted as $_aiCommonName. ', style: tt.labelMedium?.copyWith(color: cs.onSurface)),
+          if (_aiConfidence == 'low') line('Low-confidence guess, so double-check these. ', app.warning),
+          if (_aiCareNotes != null && _aiCareNotes!.trim().isNotEmpty) line('Care tips added to Notes below.'),
         ],
       );
     }
-    return Text(
-      'Type a name, even a general one like “sage”, and Suggest works out the specific plant, fills in its preferred conditions below and adds care tips to Notes.',
-      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-    );
+    final matches = _idMatches;
+    if (_idError != null) return line(_idError!, cs.error);
+    if (matches != null && matches.isEmpty) return line('No match. Try a closer, well-lit photo of a leaf or flower.');
+    if (matches != null) {
+      return matches.first.score < 0.3
+          ? line('Low confidence: pick only if one looks right.', app.warning)
+          : line('Pick the match that looks right.');
+    }
+    return line('Type a name and tap Suggest, or let a photo name it.');
   }
 
   static const _hintReason = {
