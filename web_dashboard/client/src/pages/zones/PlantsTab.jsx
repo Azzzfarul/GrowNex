@@ -348,7 +348,7 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
                 {aiMeta.confidence === 'low' && <span className="text-warning">Low-confidence guess — double-check these. </span>}
                 {aiMeta.careNotes && <span>Care tips added to Notes. </span>}
               </>
-            ) : 'Suggest fills in the preferred conditions and adds care tips for this species to Notes.'}
+            ) : 'Type a name, even a general one like “sage”, and Suggest works out the specific plant, fills in its preferred conditions and adds care tips to Notes.'}
         </p>
 
         <SlotPicker takenSlots={takenSlots} selected={selectedSlot} onChange={setSelectedSlot} error={errors.slot} />

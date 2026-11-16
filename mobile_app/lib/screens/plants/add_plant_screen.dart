@@ -461,7 +461,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
       );
     }
     return Text(
-      'Suggest fills in the preferred conditions below and adds care tips for this species to Notes.',
+      'Type a name, even a general one like “sage”, and Suggest works out the specific plant, fills in its preferred conditions below and adds care tips to Notes.',
       style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
     );
   }
