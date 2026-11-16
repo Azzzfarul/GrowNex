@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   collection, query, where, orderBy, onSnapshot, getDocs,
   setDoc, updateDoc, deleteDoc, doc, serverTimestamp,
@@ -115,6 +115,7 @@ function AddPlantModal({ zone, onClose }) {
   const [photoPreview, setPhotoPreview] = useState(null)
   const [idLoading,    setIdLoading]   = useState(false)
   const [idResult,     setIdResult]    = useState(null)   // { results } | { error } from identifyPlant
+  const suggestSeq = useRef(0)  // only the latest Suggest's answer is applied
 
   function handlePhotoPick(e) {
     const file = e.target.files?.[0]
@@ -175,6 +176,7 @@ function AddPlantModal({ zone, onClose }) {
 
   async function suggestConditions(sp = species) {
     if (sp.trim().length < 3 || !user) return
+    const seq = ++suggestSeq.current
     setAiLoading(true)
     setAiMeta(null)
     try {
@@ -182,6 +184,9 @@ function AddPlantModal({ zone, onClose }) {
         species: sp.trim(),
         zoneType: zone.zoneType ?? 'indoor',
       })
+      // A newer pick, Suggest or edit of the species replaced this one: its answer would
+      // save another plant's conditions under this species
+      if (seq !== suggestSeq.current) return
       if (profile) {
         setPrefs((p) => ({ ...p, ...profile }))
         setShowPrefs(true)
@@ -195,7 +200,7 @@ function AddPlantModal({ zone, onClose }) {
         setAiMeta({ source: 'fallback' })
       }
     } finally {
-      setAiLoading(false)
+      if (seq === suggestSeq.current) setAiLoading(false)
     }
   }
 
@@ -271,7 +276,7 @@ function AddPlantModal({ zone, onClose }) {
             <TextField
               label="Species *"
               value={species}
-              onChange={(e) => { setSpecies(e.target.value); setAiMeta(null) }}
+              onChange={(e) => { setSpecies(e.target.value); setAiMeta(null); suggestSeq.current++; setAiLoading(false) }}
               placeholder="e.g. basil"
               error={errors.species}
               autoFocus

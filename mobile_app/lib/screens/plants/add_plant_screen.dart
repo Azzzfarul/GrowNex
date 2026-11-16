@@ -52,6 +52,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   bool _idLoading = false;
   List<PlantMatch>? _idMatches;  // Pl@ntNet guesses for _photoFile; null = not asked yet
   String? _idError;
+  int _suggestSeq = 0;  // only the latest Suggest's answer is applied
 
   @override
   void initState() {
@@ -118,6 +119,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   Future<void> _suggestConditions() async {
     final species = _speciesCtrl.text.trim();
     if (species.length < 3) return;
+    final seq = ++_suggestSeq;
     setState(() => _aiLoading = true);
     try {
       final res = await const AiSummaryService().fetchPlantProfile({
@@ -125,7 +127,9 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         'zoneType': widget.zoneType,
       });
       final p = res.profile;
-      if (!mounted) return;
+      // A newer pick, Suggest or edit of the species replaced this one: its answer would
+      // save another plant's conditions under this species. Web: suggestSeq in PlantsTab.jsx.
+      if (!mounted || seq != _suggestSeq) return;
       setState(() {
         _aiSource = res.source;
         if (p != null) {
@@ -144,7 +148,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         }
       });
     } finally {
-      if (mounted) setState(() => _aiLoading = false);
+      if (mounted && seq == _suggestSeq) setState(() => _aiLoading = false);
     }
   }
 
@@ -229,7 +233,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
             TextFormField(
               controller: _speciesCtrl,
               decoration: const InputDecoration(labelText: 'Species', hintText: 'e.g. basil'),
-              onChanged: (_) => setState(() { _aiSource = ''; _aiCommonName = null; }),
+              onChanged: (_) => setState(() { _aiSource = ''; _aiCommonName = null; _suggestSeq++; _aiLoading = false; }),
               validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter the plant species' : null,
             ),
             const SizedBox(height: 10),
