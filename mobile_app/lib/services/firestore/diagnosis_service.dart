@@ -59,13 +59,17 @@ class DiagnosisService {
       return body['source'] == 'ai' ? null : diagnosisError(body['reason'] as String?);
     } catch (e) {
       debugPrint('Diagnosis failed: $e');
-      // The server may never have seen the photo. Remove it, unless the diagnosis was saved
-      // after all and only the reply got lost (reading a missing doc is refused, hence the catch).
-      final saved = await _col.doc(id).get().then((d) => d.exists, onError: (_) => false);
-      if (saved) return null;
-      try {
-        await PhotoService().deleteFile(path);
-      } catch (_) {}
+      // The server may never have seen the photo. Remove it only once the diagnosis is known to be
+      // missing (reading a missing doc is refused): after any other failure the save is unknown,
+      // and the photo may belong to a diagnosis whose reply got lost.
+      final saved = await _col.doc(id).get().then<bool?>((d) => d.exists,
+          onError: (Object e) => e is FirebaseException && e.code == 'permission-denied' ? false : null);
+      if (saved == true) return null;
+      if (saved == false) {
+        try {
+          await PhotoService().deleteFile(path);
+        } catch (_) {}
+      }
       return diagnosisError('error');
     }
   }

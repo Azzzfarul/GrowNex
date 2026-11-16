@@ -108,7 +108,7 @@ export default function AddZoneDialog({ onClose }) {
           <label className="btn-outlined btn-sm cursor-pointer">
             <Icon name="upload" />
             {photoFile ? 'Change photo' : 'Add photo'}
-            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
+            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="sr-only" />
           </label>
           <span className="text-body-sm text-on-surface-variant">Optional</span>
         </div>

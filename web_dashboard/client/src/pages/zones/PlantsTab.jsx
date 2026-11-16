@@ -232,7 +232,7 @@ function AddPlantModal({ zone, onClose }) {
             {photoPreview
               ? <img src={photoPreview} alt="Plant preview" className="w-full h-full object-cover" />
               : <Icon name="add_photo_alternate" className="text-on-surface-variant" />}
-            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="hidden" />
+            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoPick} className="sr-only" />
           </label>
           <div className="flex-1 min-w-0 space-y-2">
             <TextField
@@ -249,7 +249,7 @@ function AddPlantModal({ zone, onClose }) {
                 onClick={(e) => { if (photoFile) { e.preventDefault(); identify() } }}>
                 <Icon name="image_search" />{idLoading ? 'Identifying…' : 'Identify from photo'}
                 {/* No photo yet: pick one, then identify it right away */}
-                <input type="file" accept="image/*" capture="environment" className="hidden"
+                <input type="file" accept="image/*" capture="environment" className="sr-only" disabled={idLoading}
                   onChange={(e) => { const f = handlePhotoPick(e); if (f) identify(f) }} />
               </label>
               <button type="button" onClick={() => suggestConditions()} disabled={aiLoading || species.trim().length < 3} className="btn-tonal btn-sm">
@@ -464,7 +464,7 @@ function PlantDetailModal({ plant, zone, onClose }) {
           <label className="btn-tonal btn-sm cursor-pointer shadow-elevation-1">
             <Icon name="add_photo_alternate" />
             {photoBusy ? 'Working…' : photoUrl ? 'Change' : 'Add photo'}
-            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoFile} disabled={photoBusy} className="hidden" />
+            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoFile} disabled={photoBusy} className="sr-only" />
           </label>
           {photoUrl && (
             <button type="button" onClick={handleRemovePhoto} disabled={photoBusy}

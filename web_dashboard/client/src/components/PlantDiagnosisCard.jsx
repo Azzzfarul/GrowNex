@@ -55,7 +55,7 @@ export default function PlantDiagnosisCard({ plant }) {
         <label className={`btn-tonal btn-sm ${busy ? 'opacity-60' : 'cursor-pointer'}`}>
           <Icon name="add_a_photo" />
           {busy ? 'Diagnosing…' : 'Upload photo'}
-          <input type="file" accept="image/*" onChange={handleFile} disabled={busy} className="hidden" />
+          <input type="file" accept="image/*" onChange={handleFile} disabled={busy} className="sr-only" />
         </label>
       </div>
       <p className="text-body-sm text-on-surface-variant">

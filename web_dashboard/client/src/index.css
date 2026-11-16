@@ -150,7 +150,8 @@
   :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated, .icon-btn,
       .chip, .tab, .segmented > button, .menu-item):disabled::before { opacity: 0; }
   :is(.state-layer, .btn-filled, .btn-tonal, .btn-outlined, .btn-text, .btn-error, .btn-elevated, .icon-btn, .fab,
-      .chip, .tab, .nav-item, .segmented > button, .card-link, .menu-item, .switch, .checkbox):focus-visible {
+      .chip, .tab, .nav-item, .segmented > button, .card-link, .menu-item, .switch, .checkbox):is(
+      :focus-visible, :has(> input[type='file']:focus-visible)) {  /* a <label> button around an sr-only file input */
     @apply outline outline-2 outline-offset-2 outline-primary;
   }
 

@@ -215,7 +215,7 @@ export default function OverviewTab({ zone }) {
             <label className="btn-tonal btn-sm cursor-pointer shadow-elevation-1">
               <Icon name="add_photo_alternate" />
               {photoBusy ? 'Working…' : zone.zonePhotoUrl ? 'Change photo' : 'Add photo'}
-              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoFile} disabled={photoBusy} className="hidden" />
+              <input type="file" accept="image/*" capture="environment" onChange={handlePhotoFile} disabled={photoBusy} className="sr-only" />
             </label>
             {zone.zonePhotoUrl && (
               <button type="button" onClick={handleRemovePhoto} disabled={photoBusy}

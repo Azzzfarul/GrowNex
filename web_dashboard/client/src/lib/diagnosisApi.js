@@ -28,11 +28,13 @@ export async function runPlantDiagnosis(user, plantId, file) {
     throw new Error(`plant-diagnosis → ${res.status}`)
   } catch (err) {
     console.error('Diagnosis failed:', err)
-    // The server may never have seen the photo. Remove it, unless the diagnosis was saved after
-    // all and only the reply got lost (reading a missing doc is refused, hence the catch).
-    const saved = await getDoc(doc(db, 'plantDiagnoses', id)).then(s => s.exists(), () => false)
-    if (!saved) await deleteFile(path).catch(() => {})
-    return { error: diagnosisError('error') }
+    // The server may never have seen the photo. Remove it only once the diagnosis is known to be
+    // missing (reading a missing doc is refused): after any other failure the save is unknown,
+    // and the photo may belong to a diagnosis whose reply got lost.
+    const saved = await getDoc(doc(db, 'plantDiagnoses', id))
+      .then(s => s.exists(), e => (e.code === 'permission-denied' ? false : null))
+    if (saved === false) await deleteFile(path).catch(() => {})
+    return saved ? {} : { error: diagnosisError('error') }
   }
 }
 

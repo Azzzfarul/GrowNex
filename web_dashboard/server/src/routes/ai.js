@@ -262,6 +262,9 @@ router.post('/plant-diagnosis', verifyToken, async (req, res) => {
 
       // The plant may have been deleted while the model was thinking; don't leave an orphan.
       if (!(await plantRef.get()).exists) throw new Error('plant was deleted')
+      // Nor a diagnosis whose photo is gone: a client that stopped waiting (mobile times out at
+      // 45 s; a rate-limited model can take longer) deletes it.
+      if (!(await file.exists())[0]) throw new Error('photo was removed')
 
       // Same token-URL trick as cameraSnapshots.js, so both apps can show the image directly.
       if (!token) {
