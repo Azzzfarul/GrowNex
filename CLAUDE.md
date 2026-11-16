@@ -111,6 +111,8 @@ Nothing enforces cross-document integrity server-side; client code maintains it:
 
 OpenRouter via the `openai` SDK (`services/aiClient.js`, JSON mode, model from `OPENROUTER_MODEL`). AI is optional: with `OPENROUTER_API_KEY` empty, or on any model/validation error, endpoints return `source: 'fallback'`, and clients keep their local rule-based output. Model output is untrusted — `validateSummary` / `validatePlan` / `validatePlantProfile` clamp and sanitize it, and `fallbackPlan` builds a plan with no model. `automation-plan` never writes Firestore; the client saves the plan (with `aiRecommended: true`) after the user confirms. Bump `PROFILE_V` when changing the plant-profile prompt or shape, so the `aiPlantProfiles` cache is invalidated.
 
+**Plant identification** (`POST /api/ai/identify-plant`, `services/plantId.js`): the add-plant form's "Identify from photo" sends the picked photo itself as the body (`image/jpeg` or `image/png`, ≤ 4 MB; web downscales it with `downscaleToJpeg`, mobile's picker already does) and the server asks Pl@ntNet (`PLANTNET_API_KEY`, free tier 500 identifications/day, shared by all users, no per-user limit). It returns up to 3 `{species, commonName, score}` (matches under 5 % dropped; `[]` = no match), or `source: 'unavailable'` without a key. Picking a match fills in the species (and an empty nickname) and runs the plant-profile Suggest for it. The integration test sets the key empty so it never spends the real quota. Clients: `identifyPlant` in web `lib/aiSummary.js` / mobile `AiSummaryService`.
+
 ### Web ↔ mobile parity
 
 The two clients implement the same features separately, and some logic is hand-ported between them — change both sides together:

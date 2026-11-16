@@ -3,6 +3,8 @@
 // so callers keep showing the local rule-based text (describeTrend /
 // buildOverviewSummary in AnalyticsPage.jsx).
 
+import { downscaleToJpeg } from './photoUpload.js'
+
 export const AI_SUMMARY_KINDS = ['overview', 'temperature', 'humidity', 'light', 'moisture']
 
 const API = import.meta.env.VITE_API_URL || ''
@@ -64,5 +66,23 @@ export async function fetchPlantProfile(idToken, payload) {
     return { source: data.source ?? 'fallback', profile: data.profile ?? null }
   } catch {
     return { source: 'error', profile: null }
+  }
+}
+
+// Pl@ntNet species guesses for a plant photo (server: POST /api/ai/identify-plant, which holds the
+// key). Resolves { results: [{ species, commonName, score }] } (best first; [] = no match) or { error }.
+export async function identifyPlant(idToken, file) {
+  try {
+    const res = await fetch(`${API}/api/ai/identify-plant`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'image/jpeg', Authorization: `Bearer ${idToken}` },
+      body: await downscaleToJpeg(file),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return { error: data.error ?? `Identification failed (${res.status})` }
+    if (data.source === 'unavailable') return { error: "Plant identification isn't set up on the server." }
+    return { results: Array.isArray(data.results) ? data.results : [] }
+  } catch {
+    return { error: "Couldn't identify the photo. Check that the server is running." }
   }
 }

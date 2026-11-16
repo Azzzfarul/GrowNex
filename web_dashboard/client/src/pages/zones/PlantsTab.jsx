@@ -10,7 +10,7 @@ import TextField from '../../components/ui/TextField'
 import Dialog, { Sheet } from '../../components/ui/Dialog'
 import Loading from '../../components/ui/Loading'
 import { useAuth } from '../../context/AuthContext'
-import { fetchPlantProfile } from '../../lib/aiSummary'
+import { fetchPlantProfile, identifyPlant } from '../../lib/aiSummary'
 import { zoneFitHint } from '../../lib/zoneFit'
 import { plantHealth, plantHealthSummary } from '../../lib/plantHealth'
 import { scoreBadge, plantStatus } from '../../lib/analytics'
@@ -152,12 +152,29 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
   const [hintDismissed, setHintDismissed] = useState(false)
   const [photoFile,    setPhotoFile]   = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
+  const [idLoading,    setIdLoading]   = useState(false)
+  const [idResult,     setIdResult]    = useState(null)   // { results } | { error } from identifyPlant
 
   function handlePhotoPick(e) {
     const file = e.target.files?.[0]
     if (!file) return
     setPhotoFile(file)
     setPhotoPreview(URL.createObjectURL(file))
+    setIdResult(null)
+  }
+
+  async function identify() {
+    if (!photoFile || !user) return
+    setIdLoading(true)
+    setIdResult(await identifyPlant(await user.getIdToken(), photoFile))
+    setIdLoading(false)
+  }
+
+  // A Pl@ntNet match fills in the species (and the nickname, if empty), then its conditions
+  function pickMatch(m) {
+    setSpecies(m.species)
+    if (!name.trim() && m.commonName) setName(m.commonName)
+    suggestConditions(m.species)
   }
 
   // Load the user's other zones (own and shared) + their plants once — for the wrong-zone hint
@@ -176,12 +193,13 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
     return () => { cancelled = true }
   }, [user])
 
-  async function suggestConditions() {
-    if (species.trim().length < 3 || !user) return
+  async function suggestConditions(sp = species) {
+    if (sp.trim().length < 3 || !user) return
     setAiLoading(true)
+    setAiMeta(null)
     try {
       const { source, profile } = await fetchPlantProfile(await user.getIdToken(), {
-        species: species.trim(),
+        species: sp.trim(),
         zoneType: zone.zoneType ?? 'indoor',
       })
       if (profile) {
@@ -283,13 +301,38 @@ function AddPlantModal({ zone, takenSlots, initialSlot = null, onClose }) {
                 className="flex-1"
                 autoFocus
               />
-              <button type="button" onClick={suggestConditions} disabled={aiLoading || species.trim().length < 3} className="btn-tonal h-12">
+              <button type="button" onClick={() => suggestConditions()} disabled={aiLoading || species.trim().length < 3} className="btn-tonal h-12">
                 <Icon name="auto_awesome" />{aiLoading ? 'Thinking…' : 'Suggest'}
               </button>
             </div>
             <TextField label="Nickname (optional)" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My Orchid" />
           </div>
         </div>
+
+        {/* Species from the photo (Pl@ntNet) */}
+        {photoFile && (
+          <div className="space-y-2 -mt-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={identify} disabled={idLoading} className="btn-tonal btn-sm">
+                <Icon name="image_search" />{idLoading ? 'Identifying…' : 'Identify from photo'}
+              </button>
+              {idResult?.results?.map((m) => (
+                <button type="button" key={m.species} onClick={() => pickMatch(m)} aria-pressed={species === m.species}
+                  className={`chip ${species === m.species ? 'bg-secondary-container text-on-secondary-container' : ''}`}>
+                  {m.commonName && <span>{m.commonName} ·</span>}<i>{m.species}</i>
+                  <span className="text-on-surface-variant">{Math.round(m.score * 100)}%</span>
+                </button>
+              ))}
+            </div>
+            {idResult?.error && <p className="banner banner-error"><Icon name="error" />{idResult.error}</p>}
+            {idResult?.results?.length === 0 && (
+              <p className="text-body-sm text-on-surface-variant">No match. Try a closer, well-lit photo of a leaf or flower.</p>
+            )}
+            {idResult?.results?.length > 0 && idResult.results[0].score < 0.3 && (
+              <p className="text-body-sm text-warning">Low confidence: check the species before saving.</p>
+            )}
+          </div>
+        )}
 
         <p className="text-body-sm text-on-surface-variant -mt-2">
           {aiMeta?.source === 'fallback' || aiMeta?.source === 'error'

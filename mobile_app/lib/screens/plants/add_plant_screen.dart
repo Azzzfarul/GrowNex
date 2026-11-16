@@ -55,6 +55,9 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
   Map<String, ({Zone zone, List<Plant> plants})> _zonesById = {};
   bool _hintDismissed = false;
   XFile? _photoFile;
+  bool _idLoading = false;
+  List<PlantMatch>? _idMatches;  // Pl@ntNet guesses for _photoFile; null = not asked yet
+  String? _idError;
 
   @override
   void initState() {
@@ -95,6 +98,24 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
       currentZoneId: widget.zoneId,
       zonesById: _zonesById,
     );
+  }
+
+  Future<void> _identify() async {
+    final photo = _photoFile;
+    if (photo == null) return;
+    setState(() { _idLoading = true; _idError = null; });
+    final res = await const AiSummaryService().identifyPlant(await photo.readAsBytes());
+    if (!mounted) return;
+    setState(() { _idLoading = false; _idMatches = res.error == null ? res.matches : null; _idError = res.error; });
+  }
+
+  // A Pl@ntNet match fills in the species (and the nickname, if empty), then its conditions
+  void _pickMatch(PlantMatch m) {
+    setState(() {
+      _speciesCtrl.text = m.species;
+      if (_nameCtrl.text.trim().isEmpty && m.commonName != null) _nameCtrl.text = m.commonName!;
+    });
+    _suggestConditions();
   }
 
   Future<void> _suggestConditions() async {
@@ -236,6 +257,7 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
         child: ListView(
           children: [
             _buildPhotoPicker(),
+            if (_photoFile != null) _buildIdentify(),
             const SizedBox(height: 16),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -343,7 +365,58 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
     );
     if (source == null) return;
     final file = await ImagePicker().pickImage(source: source, maxWidth: 1280, imageQuality: 80);
-    if (file != null && mounted) setState(() => _photoFile = file);
+    if (file != null && mounted) setState(() { _photoFile = file; _idMatches = null; _idError = null; });
+  }
+
+  // Species from the photo (Pl@ntNet). Web: the same block in AddPlantModal, pages/zones/PlantsTab.jsx.
+  Widget _buildIdentify() {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final matches = _idMatches;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FilledButton.tonalIcon(
+            onPressed: _idLoading ? null : _identify,
+            icon: _idLoading
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.image_search),
+            label: Text(_idLoading ? 'Identifying…' : 'Identify from photo'),
+          ),
+          if (_idError != null) ...[
+            const SizedBox(height: 8),
+            Text(_idError!, style: tt.bodySmall?.copyWith(color: cs.error)),
+          ],
+          if (matches != null && matches.isEmpty) ...[
+            const SizedBox(height: 8),
+            Text('No match. Try a closer, well-lit photo of a leaf or flower.',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+          ],
+          if (matches != null && matches.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final m in matches)
+                  ChoiceChip(
+                    selected: _speciesCtrl.text.trim() == m.species,
+                    onSelected: (_) => _pickMatch(m),
+                    label: Text('${m.commonName != null ? '${m.commonName} · ' : ''}${m.species} ${(m.score * 100).round()}%'),
+                  ),
+              ],
+            ),
+            if (matches.first.score < 0.3) ...[
+              const SizedBox(height: 4),
+              Text('Low confidence: check the species before saving.',
+                  style: tt.bodySmall?.copyWith(color: AppColors.of(context).warning)),
+            ],
+          ],
+        ],
+      ),
+    );
   }
 
   bool get _aiApplied => _aiSource == 'ai' || _aiSource == 'cache';

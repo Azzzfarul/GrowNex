@@ -50,6 +50,7 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
         FIREBASE_CLIENT_EMAIL: '', FIREBASE_PRIVATE_KEY: '',
         MQTT_BROKER_HOST: '127.0.0.1', MQTT_BROKER_PORT: String(BROKER_PORT), MQTT_USER: '', MQTT_PASS: '',
         OPENROUTER_API_KEY: '',             // AI routes must use their fallbacks
+        PLANTNET_API_KEY: '',               // never spend the real Pl@ntNet quota
         DAILY_SUMMARY_CRON: '0 0 1 1 *',     // the test runs the nightly job itself
       },
     })
@@ -420,6 +421,16 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
 
     assert.deepEqual(await (await api('/api/ai/plant-profile', { token: A, method: 'POST', body: { species: 'basil' } })).json(), { source: 'fallback', profile: null })
     assert.equal((await api('/api/ai/plant-profile', { token: A, method: 'POST', body: { species: 'a' } })).status, 400)
+
+    // Plant identification: the photo is the body; without a key it says so instead of failing
+    const identify = (token, body, type = 'image/jpeg') => fetch(`http://127.0.0.1:${API_PORT}/api/ai/identify-plant`, {
+      method: 'POST', headers: { 'Content-Type': type, ...(token && { Authorization: `Bearer ${token}` }) }, body,
+    })
+    const jpeg = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10, 0x4A, 0x46, 0x49, 0x46])
+    assert.equal((await identify(null, jpeg)).status, 401)
+    assert.deepEqual(await (await identify(A, jpeg)).json(), { source: 'unavailable', results: [] })
+    assert.equal((await identify(A, Buffer.from('not an image'))).status, 400)
+    assert.equal((await identify(A, jpeg, 'image/gif')).status, 400)
 
     assert.deepEqual((await (await api('/api/zones', { token: A })).json()).map(z => z.id), [ids.zoneA])
     assert.deepEqual(await (await api('/api/zones', { token: B })).json(), [])

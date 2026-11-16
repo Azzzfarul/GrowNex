@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import express, { Router } from 'express'
 import { createHash } from 'crypto'
 import { getFirestore } from 'firebase-admin/firestore'
 import verifyToken from '../middleware/verifyToken.js'
@@ -9,6 +9,7 @@ import {
 } from '../services/aiAnalytics.js'
 import { buildPlantProfileMessages, validatePlantProfile } from '../services/aiPlant.js'
 import { isMember } from '../services/zoneMembers.js'
+import { identifyPlant, isPlantPhoto } from '../services/plantId.js'
 
 const router = Router()
 const TTL_MS = parseInt(process.env.AI_CACHE_TTL_MS || '1800000')
@@ -169,6 +170,23 @@ router.post('/plant-profile', verifyToken, async (req, res) => {
     }
   } catch (err) {
     res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/ai/identify-plant ────────────────────────────────────────────
+// Body: the photo itself (Content-Type image/jpeg or image/png, ≤ 4 MB).
+// → { source: 'plantnet', results: [{ species, commonName, score }] } (best first, [] = no match),
+//   or { source: 'unavailable', results: [] } without PLANTNET_API_KEY.
+// shortcut: no per-user limit, so one user can spend the shared 500/day; add one if that happens.
+router.post('/identify-plant', verifyToken, express.raw({ type: ['image/jpeg', 'image/png'], limit: '4mb' }), async (req, res) => {
+  if (!isPlantPhoto(req.body)) return res.status(400).json({ error: 'Send a JPEG or PNG photo.' })
+  const key = process.env.PLANTNET_API_KEY
+  if (!key) return res.json({ source: 'unavailable', results: [] })
+  try {
+    res.json({ source: 'plantnet', results: await identifyPlant(key, req.body, req.headers['content-type']) })
+  } catch (err) {
+    console.warn('[ai] identify-plant failed:', err.message)
+    res.status(502).json({ error: 'Plant identification failed. Try again later.' })
   }
 })
 
