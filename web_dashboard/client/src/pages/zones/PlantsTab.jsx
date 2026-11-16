@@ -301,6 +301,13 @@ function AddPlantModal({ zone, onClose }) {
               </div>
             )}
             <p className="text-body-sm text-on-surface-variant">{speciesHelper()}</p>
+            {/* Credit suggested by the Pl@ntNet API terms for free use */}
+            {idResult?.results && (
+              <p className="text-label-sm text-on-surface-variant">
+                Species identification powered by{' '}
+                <a href="https://my.plantnet.org/" target="_blank" rel="noopener noreferrer" className="underline">Pl@ntNet</a>
+              </p>
+            )}
           </div>
         </div>
 

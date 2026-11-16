@@ -271,6 +271,13 @@ class _AddPlantScreenState extends State<AddPlantScreen> {
             ],
             const SizedBox(height: 8),
             _buildSpeciesCaption(),
+            // Credit suggested by the Pl@ntNet API terms for free use
+            if (_idMatches != null) ...[
+              const SizedBox(height: 4),
+              Text('Species identification powered by Pl@ntNet (my.plantnet.org)',
+                  style: Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
             const SizedBox(height: 16),
             TextFormField(
               controller: _nameCtrl,
