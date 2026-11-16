@@ -30,9 +30,9 @@
     "semantic_hash": "1ff54092c54fcb47d208fcee7ad4338a"
   },
   "firmware/src/main.cpp": {
-    "mtime": 1794802155.1277287,
-    "seen": 1794802156.670491,
-    "ast_hash": "8ce408257a05561419afbfcee84091b8",
+    "mtime": 1794819168.0394914,
+    "seen": 1794819193.860584,
+    "ast_hash": "81d85af03eb903a28cb9b164954c0760",
     "semantic_hash": ""
   },
   "firmware_cam/include/secrets.example.h": {
@@ -282,9 +282,9 @@
     "semantic_hash": ""
   },
   "mobile_app/lib/screens/plants/zone_detail/plants_tab.dart": {
-    "mtime": 1794818569.9076803,
-    "seen": 1794818579.365556,
-    "ast_hash": "973d94fa11979fa8bea89b1dbd54ab5d",
+    "mtime": 1794818583.3409476,
+    "seen": 1794818735.829176,
+    "ast_hash": "407739ec1190b76fdcf3b7ad77d2258d",
     "semantic_hash": ""
   },
   "mobile_app/lib/screens/plants/zone_detail/zone_detail_screen.dart": {
@@ -912,9 +912,9 @@
     "semantic_hash": ""
   },
   "web_dashboard/server/src/services/mqttBridge.js": {
-    "mtime": 1794808384.155718,
-    "seen": 1794808582.114879,
-    "ast_hash": "8ec7f62e58d14517fd84782580827539",
+    "mtime": 1794819168.039767,
+    "seen": 1794819193.860689,
+    "ast_hash": "eb14c88054b8304752eb9912829085a5",
     "semantic_hash": ""
   },
   "web_dashboard/server/src/services/notifications.js": {
@@ -942,9 +942,9 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1794808580.133225,
-    "seen": 1794808582.1148832,
-    "ast_hash": "055ace6fab1e402b9e1db1e08788b9c5",
+    "mtime": 1794819180.695972,
+    "seen": 1794819193.860694,
+    "ast_hash": "09398d185a102fb6c2bf994e7c26b475",
     "semantic_hash": ""
   },
   "README.md": {

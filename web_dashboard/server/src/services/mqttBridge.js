@@ -113,11 +113,11 @@ async function handleSensors(deviceId, payload) {
 
   // History: one doc per UTC day, each hour's entry holding that hour's latest values, so 7 days of
   // charts cost 8 reads, not 168 (clients flatten it: zoneStats.js / ZoneService.getStats). The
-  // merge is deep, and a failed DHT11 read sends null temperature/humidity: leave them out so the
-  // hour keeps its last good ones. No raw per-reading docs: nothing read them.
+  // merge is deep, and a failed DHT11 read (null temperature/humidity) or a missing soil probe
+  // (null moisture): leave them out so the hour keeps its last good ones and the charts get no
+  // fake values. No raw per-reading docs: nothing read them.
   const stats = { ...sensorFields, timestamp: FieldValue.serverTimestamp() }
-  if (temperature == null) delete stats.temperature
-  if (humidity == null) delete stats.humidity
+  for (const k of ['temperature', 'humidity', 'moisture']) if (stats[k] == null) delete stats[k]
 
   // lastSync only backs "seen in the last 10 minutes" checks: refresh it at most every 4 minutes.
   const lastSyncMs = device.lastSync?.toMillis?.() ?? 0

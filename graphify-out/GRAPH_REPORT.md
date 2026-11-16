@@ -1,7 +1,7 @@
 # Graph Report - GrowNex  (2026-11-16)
 
 ## Corpus Check
-- 188 files · ~111,935 words
+- 188 files · ~112,062 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 71 file(s) not represented in the graph (top: (none) 17, .xcconfig 8, .xml 7)
 - WARNING: 71 of 271 files seen (26%) have no supported extractor and are missing from this graph entirely. It may look complete while representing only part of the codebase.
@@ -12,7 +12,7 @@
 - Token cost: 469,489 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `03ff6318`
+- Built from commit: `668bb0a6`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -148,10 +148,10 @@
   docs/superpowers/specs/2026-11-16-plant-image-diagnosis-design.md → web_dashboard/server/src/services/aiAnalytics.js
 - `MQTT contract (firmware ↔ bridge)` --references--> `Pump`  [INFERRED]
   CLAUDE.md → firmware/src/main.cpp
-- `Actuators and automation (`mqttBridge.js`)` --references--> `watchAutomationConfig()`  [INFERRED]
-  CLAUDE.md → web_dashboard/server/src/services/mqttBridge.js
-- `Firestore data model` --references--> `watchAutomationConfig()`  [INFERRED]
-  CLAUDE.md → web_dashboard/server/src/services/mqttBridge.js
+- `Task 1: Device contract (firmware + simulator)` --references--> `publishSensors()`  [INFERRED]
+  docs/superpowers/plans/2026-11-16-single-moisture-sensor.md → firmware/src/main.cpp
+- `MQTT contract (firmware ↔ bridge)` --references--> `failSafe()`  [INFERRED]
+  CLAUDE.md → firmware/src/main.cpp
 
 ## Import Cycles
 - None detected.
@@ -267,7 +267,7 @@ Nodes (21): _admin, adminCount, adminCountWhere, _adminDocs, adminExists, button
 
 ### Community 25 - "zone_card_widget.dart"
 Cohesion: 0.09
-Nodes (17): Zone, _badge, build, createState, initState, onTap, _plantsStream, _sensorInfo (+9 more)
+Nodes (19): Zone, _badge, build, createState, initState, onTap, _plantsStream, _sensorInfo (+11 more)
 
 ### Community 26 - "Mobile AI Summary Service"
 Cohesion: 0.07
@@ -303,11 +303,11 @@ Nodes (23): cors, dotenv, node-cron, openai, sharp, dependencies, cors@^2.8.5, d
 
 ### Community 34 - "Mobile Dashboard & Plants Screens"
 Cohesion: 0.07
-Nodes (21): _buildEmptyState, _buildSummaryCard, _contentPadding, createState, initState, _zonesStream, build, NotificationSettingsScreen (+13 more)
+Nodes (20): _buildEmptyState, _buildSummaryCard, _contentPadding, createState, initState, _zonesStream, build, NotificationSettingsScreen (+12 more)
 
 ### Community 35 - "Mobile Devices Screen"
-Cohesion: 0.17
-Nodes (8): _buildSummaryCard, createState, DevicesScreen, _DevicesScreenState, _devicesStream, initState, _isOnline, _summaryStatColumn
+Cohesion: 0.09
+Nodes (17): build, build, _buildDeviceCard, _buildSummaryCard, createState, DevicesScreen, _DevicesScreenState, _devicesStream (+9 more)
 
 ### Community 36 - "DeviceDetailPage.jsx"
 Cohesion: 0.15
@@ -398,12 +398,12 @@ Cohesion: 0.14
 Nodes (12): AppNotification, createdAt, fromDocument, id, isRead, message, severity, title (+4 more)
 
 ### Community 58 - "plants_tab.dart"
-Cohesion: 0.10
-Nodes (17): build, build, _buildDeviceCard, build, build, build, _buildPlantCard, createState (+9 more)
+Cohesion: 0.15
+Nodes (9): createState, _InfoChip, initState, label, _plantsStream, PlantsTab, _PlantsTabState, value (+1 more)
 
 ### Community 59 - "State"
-Cohesion: 0.17
-Nodes (14): DashboardScreen, _DashboardScreenState, DeviceDetailScreen, _DeviceDetailScreenState, ZoneSummaryCard, _ZoneSummaryCardState, MonitoringTab, _MonitoringTabState (+6 more)
+Cohesion: 0.20
+Nodes (12): DashboardScreen, _DashboardScreenState, DeviceDetailScreen, _DeviceDetailScreenState, MonitoringTab, _MonitoringTabState, _CameraCard, _CameraCardState (+4 more)
 
 ### Community 60 - "Desktop CMake Build"
 Cohesion: 0.24
@@ -586,7 +586,7 @@ Cohesion: 0.50
 Nodes (3): db, rand(), seed()
 
 ## Knowledge Gaps
-- **861 isolated node(s):** `zone`, `_plantsStream`, `label`, `value`, `createState` (+856 more)
+- **861 isolated node(s):** `name`, `ranKey`, `maxOnMs`, `cmd`, `onSince` (+856 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1274 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **18 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -594,16 +594,16 @@ Nodes (3): db, rand(), seed()
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Architecture` connect `Web Analytics Logic` to `AI Plan Validation`, `Actuators and automation (`mqttBridge.js`)`, `fireActuator`?**
-  _High betweenness centrality (0.047) - this node is a cross-community bridge._
-- **What connects `zone`, `_plantsStream`, `label` to the rest of the system?**
+  _High betweenness centrality (0.034) - this node is a cross-community bridge._
+- **What connects `name`, `ranKey`, `maxOnMs` to the rest of the system?**
   _861 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `package:flutter/material.dart` be split into smaller, more focused modules?**
   _Cohesion score 0.059743954480796585 - nodes in this community are weakly interconnected._
 - **Why does `firebase` connect `react` to `Server Dependencies`, `Web Analytics Logic`, `DeviceDetailPage.jsx`, `MonitoringTab.jsx`, `App.jsx`, `Web Zone Detail & Plants Tab`?**
-  _High betweenness centrality (0.024) - this node is a cross-community bridge._
+  _High betweenness centrality (0.023) - this node is a cross-community bridge._
 - **Should `mqttBridge.js` be split into smaller, more focused modules?**
   _Cohesion score 0.08505747126436781 - nodes in this community are weakly interconnected._
-- **Why does `Web ↔ mobile parity` connect `Web Analytics Logic` to `MonitoringTab.jsx`, `App.jsx`, `OverviewTab.jsx`?**
-  _High betweenness centrality (0.023) - this node is a cross-community bridge._
+- **Why does `Win32Window` connect `Win32 Window Content` to `Flutter Window Destroy`, `Win32 WndProc Handling`, `.Create`, `flutter_window.h`, `FlutterWindow::OnDestroy`, `win32_window.cpp`?**
+  _High betweenness centrality (0.020) - this node is a cross-community bridge._
 - **Should `Web Analytics Logic` be split into smaller, more focused modules?**
   _Cohesion score 0.06237424547283702 - nodes in this community are weakly interconnected._
