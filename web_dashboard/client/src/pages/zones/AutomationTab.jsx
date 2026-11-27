@@ -8,11 +8,8 @@ import Loading from '../../components/ui/Loading'
 import EmptyState from '../../components/ui/EmptyState'
 import { useAuth } from '../../context/AuthContext'
 import { fetchAutomationPlan } from '../../lib/aiSummary'
+import { scheduleList, upsertSchedule } from '../../lib/schedules'
 
-// Formats the bridge's schedule parsers accept (server/src/services/mqttBridge.js); "7:00" is fine there too
-const TIME_RE  = /^([01]?\d|2[0-3]):[0-5]\d$/
-const LIGHT_RE = /^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$/
-const FERT_RE  = /^(MON|TUE|WED|THU|FRI|SAT|SUN) ([01]?\d|2[0-3]):[0-5]\d$/
 const SAVE_FAILED = "Couldn't save the change. Please try again."
 const MAX_WATERING_S = 900, MAX_FERTILIZING_S = 1800  // validatePlan's caps (server/src/services/aiAnalytics.js)
 
@@ -32,6 +29,59 @@ function ToggleSetting({ icon, title, subtitle, value, onChange, busy, children 
   )
 }
 
+// Times are added to (or edited in) the list below the field; Save at the bottom stores the list.
+function ScheduleList({ kind, label, placeholder, support, list, onChange, onPending }) {
+  const [draft,   setDraft]   = useState('')
+  const [editing, setEditing] = useState(-1)  // index of the entry in the field, or -1 when adding
+  const [error,   setError]   = useState(null)
+  // Tells the tab a typed time hasn't been added yet, so Save can't silently drop it.
+  useEffect(() => { onPending(kind, !!draft.trim()); return () => onPending(kind, false) }, [kind, draft])
+
+  function submit() {
+    const r = upsertSchedule(list, kind, draft, editing)
+    if (r.error) return setError(r.error)
+    onChange(r.list); setDraft(''); setEditing(-1); setError(null)
+  }
+  function reset() { setDraft(''); setEditing(-1); setError(null) }
+  function edit(i) { setDraft(list[i]); setEditing(i); setError(null) }
+  function remove(i) {
+    onChange(list.filter((_, j) => j !== i))
+    if (editing === i) reset()
+    else if (editing > i) setEditing(editing - 1)
+  }
+
+  return (
+    <div className="sm:col-span-3">
+      <div className="flex items-start gap-2">
+        <TextField
+          className="flex-1 max-w-xs" label={editing >= 0 ? `Edit ${label.toLowerCase()}` : label}
+          value={draft} placeholder={placeholder} support={support} error={error}
+          onChange={(e) => { setDraft(e.target.value); setError(null) }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } else if (e.key === 'Escape') reset() }}
+        />
+        <button type="button" onClick={submit} disabled={!draft.trim()} className="btn-tonal mt-2">
+          <Icon name={editing >= 0 ? 'check' : 'add'} />{editing >= 0 ? 'Update' : 'Add'}
+        </button>
+        {editing >= 0 && <button type="button" onClick={reset} className="btn-text mt-2">Cancel</button>}
+      </div>
+      {list.length === 0 ? (
+        <p className="text-body-sm text-on-surface-variant mt-2">No times yet.</p>
+      ) : (
+        <ul className="mt-3 rounded-lg bg-surface-container divide-y divide-outline-variant max-w-md" aria-label={`${label} list`}>
+          {list.map((v, i) => (
+            <li key={v} className={`flex items-center gap-2 pl-4 pr-1 h-12 ${editing === i ? 'bg-secondary-container text-on-secondary-container' : ''}`}>
+              <Icon name="schedule" size={18} className="text-on-surface-variant" />
+              <span className="flex-1 text-body-lg tabular-nums">{v}</span>
+              <button type="button" onClick={() => edit(i)} className="icon-btn icon-btn-sm" aria-label={`Edit ${v}`} data-tip="Edit"><Icon name="edit" size={18} /></button>
+              <button type="button" onClick={() => remove(i)} className="icon-btn icon-btn-sm" aria-label={`Delete ${v}`} data-tip="Delete"><Icon name="delete" size={18} /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export default function AutomationTab({ zone }) {
   const { user } = useAuth()
   const [aiPlan,    setAiPlan]    = useState(null)   // { source, plan, rationale } | null
@@ -40,22 +90,27 @@ export default function AutomationTab({ zone }) {
   const [autoLight,    setAutoLight]    = useState(false)
   const [autoFert,     setAutoFert]     = useState(false)
   const [waterThresh,  setWaterThresh]  = useState('')
-  const [waterSched,   setWaterSched]   = useState('')
+  const [waterSched,   setWaterSched]   = useState([])
   const [waterDuration, setWaterDuration] = useState('')
-  const [lightSched,   setLightSched]   = useState('')
-  const [fertSched,    setFertSched]    = useState('')
+  const [lightSched,   setLightSched]   = useState([])
+  const [fertSched,    setFertSched]    = useState([])
   const [fertDuration, setFertDuration] = useState('')
   const [loading,  setLoading]  = useState(true)
   const [device,   setDevice]   = useState(null)
   const [configError, setConfigError] = useState(null)
   const [savingToggle, setSavingToggle] = useState({})  // field → save in flight
+  // Bumped when the lists are replaced from outside (Cancel, AI plan), so each
+  // ScheduleList drops a half-done edit that would point at the wrong entry.
+  const [formEpoch, setFormEpoch] = useState(0)
+  const [pending, setPending] = useState({})  // kind → a typed time not yet added to its list
+  const onPending = (kind, p) => setPending((s) => (s[kind] === p ? s : { ...s, [kind]: p }))
 
   // Saved-value mirrors for dirty detection and Cancel revert
   const [waterThreshOrig, setWaterThreshOrig] = useState('')
-  const [waterSchedOrig,  setWaterSchedOrig]  = useState('')
+  const [waterSchedOrig,  setWaterSchedOrig]  = useState([])
   const [waterDurOrig,    setWaterDurOrig]    = useState('')
-  const [lightSchedOrig,  setLightSchedOrig]  = useState('')
-  const [fertSchedOrig,   setFertSchedOrig]   = useState('')
+  const [lightSchedOrig,  setLightSchedOrig]  = useState([])
+  const [fertSchedOrig,   setFertSchedOrig]   = useState([])
   const [fertDurOrig,     setFertDurOrig]     = useState('')
 
   // Watch device doc for live module flag updates
@@ -94,10 +149,10 @@ export default function AutomationTab({ zone }) {
         setAutoFert(d.autoFertilizingEnabled ?? false)
 
         const wt  = d.wateringThreshold?.toString()  ?? ''
-        const ws  = d.wateringSchedule               ?? ''
+        const ws  = scheduleList(d.wateringSchedule)
         const wd  = d.wateringDuration?.toString()   ?? ''
-        const ls  = d.lightingSchedule               ?? ''
-        const fs  = d.fertilizingSchedule            ?? ''
+        const ls  = scheduleList(d.lightingSchedule)
+        const fs  = scheduleList(d.fertilizingSchedule)
         const fd  = d.fertilizingDuration?.toString() ?? ''
 
         setWaterThresh(wt);  setWaterThreshOrig(wt)
@@ -123,13 +178,10 @@ export default function AutomationTab({ zone }) {
   }
 
   async function saveTextConfig() {
-    const ws = waterSched.trim(), ls = lightSched.trim(), fs = fertSched.trim().toUpperCase()
-    // Only check fields the user changed: a hidden field (e.g. lighting without a light
-    // module) holding an old value must not block saving the others.
-    const bad = (v, orig, re) => v && v !== orig.trim() && !re.test(v)
-    if (bad(ws, waterSchedOrig, TIME_RE))              return setConfigError('Watering time must look like 07:00 (24-hour).')
-    if (bad(ls, lightSchedOrig, LIGHT_RE))             return setConfigError('Lighting schedule must look like 08:00–18:00.')
-    if (bad(fs, fertSchedOrig.toUpperCase(), FERT_RE)) return setConfigError('Fertilizing schedule must look like MON 06:00.')
+    if (Object.values(pending).some(Boolean)) return setConfigError('Add or update the time you typed (or clear it) before saving.')
+    // Schedule entries are checked as they're added to their list (upsertSchedule).
+    // Only check durations the user changed: a hidden field (e.g. fertilizing without a
+    // fertilizer module) holding an old value must not block saving the others.
     // The board stops a pump by itself after 20 / 40 min (firmware safety limit), so runs stay well inside it.
     const tooLong = (v, orig, max) => v && v !== orig && !(parseInt(v) > 0 && parseInt(v) <= max)
     if (tooLong(waterDuration, waterDurOrig, MAX_WATERING_S)) return setConfigError(`Watering duration must be 1 to ${MAX_WATERING_S} seconds.`)
@@ -138,10 +190,10 @@ export default function AutomationTab({ zone }) {
     try {
       await setDoc(doc(db, 'automationConfig', zone.id), {
         wateringThreshold:   waterThresh    ? parseFloat(waterThresh)   : null,
-        wateringSchedule:    ws             || null,
+        wateringSchedule:    waterSched,
         wateringDuration:    waterDuration  ? parseInt(waterDuration)   : null,
-        lightingSchedule:    ls             || null,
-        fertilizingSchedule: fs             || null,
+        lightingSchedule:    lightSched,
+        fertilizingSchedule: fertSched,
         fertilizingDuration: fertDuration   ? parseInt(fertDuration)    : null,
       }, { merge: true })
     } catch (e) {
@@ -158,6 +210,7 @@ export default function AutomationTab({ zone }) {
     setWaterThresh(waterThreshOrig); setWaterSched(waterSchedOrig)
     setWaterDuration(waterDurOrig);  setLightSched(lightSchedOrig)
     setFertSched(fertSchedOrig);     setFertDuration(fertDurOrig)
+    setFormEpoch((n) => n + 1)
   }
 
   async function requestAiPlan() {
@@ -173,8 +226,12 @@ export default function AutomationTab({ zone }) {
 
   async function applyAiPlan(plan) {
     setConfigError(null)
+    // The plan suggests one time per actuator; it replaces the lists.
+    const ws = scheduleList(plan.wateringSchedule), ls = scheduleList(plan.lightingSchedule), fs = scheduleList(plan.fertilizingSchedule)
     try {
-      await setDoc(doc(db, 'automationConfig', zone.id), { ...plan, aiRecommended: true }, { merge: true })
+      await setDoc(doc(db, 'automationConfig', zone.id), {
+        ...plan, wateringSchedule: ws, lightingSchedule: ls, fertilizingSchedule: fs, aiRecommended: true,
+      }, { merge: true })
     } catch (e) {
       console.error('Automation save failed:', e)
       return setConfigError(SAVE_FAILED)
@@ -183,32 +240,34 @@ export default function AutomationTab({ zone }) {
     setAutoLight(!!plan.autoLightingEnabled)
     setAutoFert(!!plan.autoFertilizingEnabled)
     const set = (v) => (v != null ? String(v) : '')
-    const wt = set(plan.wateringThreshold), ws = plan.wateringSchedule ?? '', wd = set(plan.wateringDuration)
-    const ls = plan.lightingSchedule ?? '', fs = plan.fertilizingSchedule ?? '', fd = set(plan.fertilizingDuration)
+    const wt = set(plan.wateringThreshold), wd = set(plan.wateringDuration), fd = set(plan.fertilizingDuration)
     setWaterThresh(wt);   setWaterThreshOrig(wt)
     setWaterSched(ws);    setWaterSchedOrig(ws)
     setWaterDuration(wd); setWaterDurOrig(wd)
     setLightSched(ls);    setLightSchedOrig(ls)
     setFertSched(fs);     setFertSchedOrig(fs)
     setFertDuration(fd);  setFertDurOrig(fd)
+    setFormEpoch((n) => n + 1)
     setAiPlan(null)
   }
 
+  const shown = (list) => list.join(', ') || '—'
   const planRows = aiPlan?.plan ? [
     ['Auto watering',            autoWater ? 'On' : 'Off',   aiPlan.plan.autoWateringEnabled ? 'On' : 'Off'],
     ['Moisture threshold (%)',   waterThresh   || '—',       aiPlan.plan.wateringThreshold ?? '—'],
-    ['Watering time',            waterSched    || '—',       aiPlan.plan.wateringSchedule ?? '—'],
+    ['Watering times',           shown(waterSched),          aiPlan.plan.wateringSchedule ?? '—'],
     ['Watering duration (s)',    waterDuration || '—',       aiPlan.plan.wateringDuration ?? '—'],
     ['Auto lighting',            autoLight ? 'On' : 'Off',   aiPlan.plan.autoLightingEnabled ? 'On' : 'Off'],
-    ['Lighting schedule',        lightSched    || '—',       aiPlan.plan.lightingSchedule ?? '—'],
+    ['Lighting schedule',        shown(lightSched),          aiPlan.plan.lightingSchedule ?? '—'],
     ['Auto fertilizing',         autoFert ? 'On' : 'Off',    aiPlan.plan.autoFertilizingEnabled ? 'On' : 'Off'],
-    ['Fertilizing schedule',     fertSched     || '—',       aiPlan.plan.fertilizingSchedule ?? '—'],
+    ['Fertilizing schedule',     shown(fertSched),           aiPlan.plan.fertilizingSchedule ?? '—'],
     ['Fertilizing duration (s)', fertDuration  || '—',       aiPlan.plan.fertilizingDuration ?? '—'],
   ] : []
 
-  const isDirty = waterThresh !== waterThreshOrig || waterSched !== waterSchedOrig ||
-    waterDuration !== waterDurOrig || lightSched !== lightSchedOrig ||
-    fertSched !== fertSchedOrig    || fertDuration !== fertDurOrig
+  const isDirty = waterThresh !== waterThreshOrig || shown(waterSched) !== shown(waterSchedOrig) ||
+    waterDuration !== waterDurOrig || shown(lightSched) !== shown(lightSchedOrig) ||
+    shown(fertSched) !== shown(fertSchedOrig) || fertDuration !== fertDurOrig ||
+    Object.values(pending).some(Boolean)
 
   if (!zone.deviceId) {
     return (
@@ -315,26 +374,26 @@ export default function AutomationTab({ zone }) {
         <ToggleSetting
           icon="water_drop"
           title="Water automation"
-          subtitle="Water when moisture drops below the threshold, and on a daily schedule"
+          subtitle="Water when moisture drops below the threshold, and at set daily times"
           value={autoWater}
           busy={savingToggle.autoWateringEnabled}
           onChange={(v) => { setAutoWater(v); saveToggle({ autoWateringEnabled: v }, () => setAutoWater(!v)) }}
         >
           <TextField label="Threshold (%)" type="number" value={waterThresh} onChange={(e) => setWaterThresh(e.target.value)} placeholder="e.g. 30" />
-          <TextField label="Daily time" value={waterSched} onChange={(e) => setWaterSched(e.target.value)} placeholder="07:00" support="24-hour, e.g. 07:00" />
           <TextField label="Duration (s)" type="number" value={waterDuration} onChange={(e) => setWaterDuration(e.target.value)} placeholder="300" />
+          <ScheduleList key={`water${formEpoch}`} kind="water" onPending={onPending} label="Daily time" list={waterSched} onChange={setWaterSched} placeholder="07:00" support="24-hour, e.g. 07:00" />
         </ToggleSetting>
 
         {hasLight && (
           <ToggleSetting
             icon="light_mode"
             title="Light automation"
-            subtitle="Keep the grow light on for a daily window"
+            subtitle="Keep the grow light on for one or more daily windows"
             value={autoLight}
             busy={savingToggle.autoLightingEnabled}
             onChange={(v) => { setAutoLight(v); saveToggle({ autoLightingEnabled: v }, () => setAutoLight(!v)) }}
           >
-            <TextField label="Schedule" value={lightSched} onChange={(e) => setLightSched(e.target.value)} placeholder="08:00–18:00" support="Start–end, e.g. 08:00–18:00" />
+            <ScheduleList key={`light${formEpoch}`} kind="light" onPending={onPending} label="Light window" list={lightSched} onChange={setLightSched} placeholder="08:00–18:00" support="Start–end, e.g. 08:00–18:00" />
           </ToggleSetting>
         )}
 
@@ -342,13 +401,13 @@ export default function AutomationTab({ zone }) {
           <ToggleSetting
             icon="compost"
             title="Fertilizer automation"
-            subtitle="Feed once a week"
+            subtitle="Feed on one or more weekly times"
             value={autoFert}
             busy={savingToggle.autoFertilizingEnabled}
             onChange={(v) => { setAutoFert(v); saveToggle({ autoFertilizingEnabled: v }, () => setAutoFert(!v)) }}
           >
-            <TextField label="Weekly schedule" value={fertSched} onChange={(e) => setFertSched(e.target.value)} placeholder="MON 06:00" support="Day and time, e.g. MON 06:00" />
             <TextField label="Duration (s)" type="number" value={fertDuration} onChange={(e) => setFertDuration(e.target.value)} placeholder="600" />
+            <ScheduleList key={`fert${formEpoch}`} kind="fert" onPending={onPending} label="Weekly time" list={fertSched} onChange={setFertSched} placeholder="MON 06:00" support="Day and time, e.g. MON 06:00" />
           </ToggleSetting>
         )}
 

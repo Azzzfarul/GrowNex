@@ -691,40 +691,49 @@ function cancelCronJobs(zoneId) {
   cronJobs.set(zoneId, [])
 }
 
+// Configs saved before multiple times per actuator hold one string; newer ones a list.
+export const scheduleList = v => (Array.isArray(v) ? v : v ? [v] : [])
+
+// Latest scheduled run per zone+actuator: an earlier run's auto-off must not cut a later,
+// overlapping run short (e.g. watering at 07:00 and 07:03 with a 5-minute duration). Runs that
+// chain like this stay on at most MAX_CHAIN_MS from the first start (validatePlan's duration caps),
+// well inside the firmware's 20 / 40 min pump limit.
+const MAX_CHAIN_MS = { irrigation: 900_000, fertilizer: 1_800_000 }
+const scheduledRuns = new Map()   // key → { since, until }
+async function runScheduled(zoneId, actuator, durationMs) {
+  const key = `${zoneId}:${actuator}`, prev = scheduledRuns.get(key), now = Date.now()
+  const since = prev && now < prev.until ? prev.since : now
+  const run = { since, until: Math.min(now + durationMs, since + MAX_CHAIN_MS[actuator]) }
+  scheduledRuns.set(key, run)
+  await fireActuator(zoneId, actuator, true)
+  setTimeout(() => scheduledRuns.get(key) === run && fireActuator(zoneId, actuator, false), run.until - now)
+}
+
 function scheduleCronJobsForZone(zoneId, config) {
   cancelCronJobs(zoneId)
   const jobs = []
+  const add = (expr, fn) => { if (cron.validate(expr)) jobs.push(cron.schedule(expr, fn)) }
+  // One bad entry is skipped without dropping the zone's other schedules.
+  const each = (list, fn) => scheduleList(list).forEach(s => {
+    try { fn(s) } catch (e) { console.warn(`[MQTT bridge] invalid schedule "${s}" for zone ${zoneId}:`, e.message) }
+  })
 
-  try {
-    if (config.autoWateringEnabled && config.wateringSchedule) {
-      const expr = dailyCron(config.wateringSchedule)
-      const waterDuration = (config.wateringDuration ?? 300) * 1000
-      if (cron.validate(expr))
-        jobs.push(cron.schedule(expr, async () => {
-          await fireActuator(zoneId, 'irrigation', true)
-          setTimeout(() => fireActuator(zoneId, 'irrigation', false), waterDuration)
-        }))
-    }
+  if (config.autoWateringEnabled) {
+    const waterDuration = (config.wateringDuration ?? 300) * 1000
+    each(config.wateringSchedule, s => add(dailyCron(s), () => runScheduled(zoneId, 'irrigation', waterDuration)))
+  }
 
-    if (config.autoLightingEnabled && config.lightingSchedule) {
-      const { onCron, offCron } = lightCron(config.lightingSchedule)
-      if (cron.validate(onCron))
-        jobs.push(cron.schedule(onCron,  () => fireActuator(zoneId, 'light', true)))
-      if (cron.validate(offCron))
-        jobs.push(cron.schedule(offCron, () => fireActuator(zoneId, 'light', false)))
-    }
+  if (config.autoLightingEnabled) {
+    each(config.lightingSchedule, s => {
+      const { onCron, offCron } = lightCron(s)
+      add(onCron,  () => fireActuator(zoneId, 'light', true))
+      add(offCron, () => fireActuator(zoneId, 'light', false))
+    })
+  }
 
-    if (config.autoFertilizingEnabled && config.fertilizingSchedule) {
-      const expr = weeklyCron(config.fertilizingSchedule)
-      const fertDuration = (config.fertilizingDuration ?? 600) * 1000
-      if (cron.validate(expr))
-        jobs.push(cron.schedule(expr, async () => {
-          await fireActuator(zoneId, 'fertilizer', true)
-          setTimeout(() => fireActuator(zoneId, 'fertilizer', false), fertDuration)
-        }))
-    }
-  } catch (e) {
-    console.warn(`[MQTT bridge] invalid schedule for zone ${zoneId}:`, e.message)
+  if (config.autoFertilizingEnabled) {
+    const fertDuration = (config.fertilizingDuration ?? 600) * 1000
+    each(config.fertilizingSchedule, s => add(weeklyCron(s), () => runScheduled(zoneId, 'fertilizer', fertDuration)))
   }
 
   cronJobs.set(zoneId, jobs)

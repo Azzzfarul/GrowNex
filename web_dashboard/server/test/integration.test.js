@@ -460,12 +460,13 @@ describe('server against emulators', { skip: !EMULATED && 'run via npm run test:
     const hm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
     const day = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][at.getDay()]
     const later = new Date(at.getTime() + 3 * 3600000)
+    // Lists (the apps' format) plus an old single-string config for lighting; a bad entry is skipped alone
     await db.doc(`automationConfig/${ids.zoneS}`).set({
-      autoWateringEnabled: true, wateringSchedule: hm(at), wateringDuration: 2,
+      autoWateringEnabled: true, wateringSchedule: [hm(at), hm(later), '7am'], wateringDuration: 2,
       autoLightingEnabled: true, lightingSchedule: `${hm(at)}–${hm(later)}`,
-      autoFertilizingEnabled: true, fertilizingSchedule: `${day} ${hm(at)}`, fertilizingDuration: 2,
+      autoFertilizingEnabled: true, fertilizingSchedule: [`${day} ${hm(at)}`], fertilizingDuration: 2,
     })
-    await waitForLog(new RegExp(`4 cron job\\(s\\) scheduled for zone ${ids.zoneS}`))
+    await waitForLog(new RegExp(`5 cron job\\(s\\) scheduled for zone ${ids.zoneS}`))
 
     const fireAt = new Date(at); fireAt.setSeconds(0, 0)
     await waitFor(() => commandsFor('ESP32-T2').some(c => c.state.irrigationState), 'scheduled irrigation on', fireAt - Date.now() + 15000)

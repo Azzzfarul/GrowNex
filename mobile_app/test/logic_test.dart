@@ -7,6 +7,7 @@ import 'package:mobile_app/models/zone_model.dart';
 import 'package:mobile_app/utils/analytics.dart';
 import 'package:mobile_app/utils/plant_diagnosis.dart';
 import 'package:mobile_app/utils/plant_health.dart';
+import 'package:mobile_app/utils/schedules.dart';
 import 'package:mobile_app/utils/zone_fit.dart';
 
 SensorReading reading(DateTime t, {num? temperature, num? moisture}) => SensorReading(
@@ -268,6 +269,58 @@ void main() {
       expect(diagnosisError('disabled'), 'Diagnosis unavailable right now.');
       expect(diagnosisError('error'), 'Diagnosis unavailable right now.');
       expect(diagnosisError(null), 'Diagnosis unavailable right now.');
+    });
+  });
+
+  // ── schedules ──────────────────────────────────────────────────────────────
+
+  group('schedules', () {
+    List<String>? ok(List<String> l, String k, String v, [int i = -1]) {
+      final r = upsertSchedule(l, k, v, i);
+      expect(r.error, isNull);
+      return r.list;
+    }
+    String err(List<String> l, String k, String v, [int i = -1]) => upsertSchedule(l, k, v, i).error!;
+
+    test('scheduleList reads old single-string configs and new lists', () {
+      expect(scheduleList('07:00'), ['07:00']);
+      expect(scheduleList(['07:00', '18:00']), ['07:00', '18:00']);
+      expect(scheduleList(null), isEmpty);
+      expect(scheduleList(''), isEmpty);
+    });
+
+    test('upsertSchedule adds, normalizes and sorts entries', () {
+      expect(ok(['18:00'], 'water', ' 7:30 '), ['07:30', '18:00']);
+      expect(ok([], 'light', '8:00 - 18:00'), ['08:00–18:00']);
+      expect(ok(['MON 06:00', 'SUN 06:00'], 'fert', 'wed  7:00'), ['MON 06:00', 'WED 07:00', 'SUN 06:00']);
+    });
+
+    test('upsertSchedule edits in place without flagging the entry as its own duplicate', () {
+      expect(ok(['07:00', '18:00'], 'water', '07:00', 0), ['07:00', '18:00']);
+      expect(ok(['07:00', '18:00'], 'water', '20:00', 0), ['18:00', '20:00']);
+      expect(err(['07:00', '18:00'], 'water', '18:00', 0), contains('already'));
+    });
+
+    test('upsertSchedule rejects bad formats and duplicates', () {
+      expect(err([], 'water', '7am'), contains('07:00'));
+      expect(err([], 'water', '24:00'), contains('07:00'));
+      expect(err([], 'light', '08:00'), contains('08:00–18:00'));
+      expect(err([], 'fert', 'monday 6'), contains('MON 06:00'));
+      expect(err(['07:00'], 'water', '7:00'), contains('already'));
+    });
+
+    test('upsertSchedule rejects light windows that overlap, touch or have no length', () {
+      expect(err([], 'light', '08:00–08:00'), contains('different time'));
+      expect(err(['08:00–12:00'], 'light', '11:00–14:00'), contains('overlaps or touches 08:00–12:00'));
+      expect(err(['22:00–02:00'], 'light', '01:00–03:00'), contains('overlaps'));
+      expect(err(['08:00-12:00'], 'light', '09:00–10:00'), contains('overlaps'));
+      expect(err(['08:00–12:00'], 'light', '12:00–14:00'), contains('touches'));
+      expect(err(['22:00–02:00'], 'light', '02:00–06:00'), contains('touches'));
+      expect(err(['20:00–00:00'], 'light', '00:00–05:00'), contains('touches'));
+      expect(ok(['08:00–12:00'], 'light', '12:01–14:00'), ['08:00–12:00', '12:01–14:00']);
+      expect(ok(['22:00–02:00'], 'light', '02:01–06:00'), ['02:01–06:00', '22:00–02:00']);
+      expect(ok(['20:00–00:00'], 'light', '06:00–10:00'), ['06:00–10:00', '20:00–00:00']);
+      expect(ok(['08:00–12:00'], 'light', '09:00–13:00', 0), ['09:00–13:00']);
     });
   });
 }

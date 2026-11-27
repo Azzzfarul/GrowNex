@@ -217,12 +217,12 @@ async function seed() {
   await db.collection('automationConfig').doc(zoneRef.id).set({
     autoWateringEnabled:    false,
     wateringThreshold:      40,
-    wateringSchedule:       '08:00',
+    wateringSchedule:       ['08:00', '18:00'],
     wateringDuration:       300,
     autoLightingEnabled:    false,
-    lightingSchedule:       '06:00–20:00',
+    lightingSchedule:       ['06:00–20:00'],
     autoFertilizingEnabled: false,
-    fertilizingSchedule:    'MON 06:00',
+    fertilizingSchedule:    ['MON 06:00', 'THU 06:00'],
     fertilizingDuration:    600,
     aiRecommended:          false,
   })

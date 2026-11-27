@@ -93,6 +93,16 @@ test('validatePlan drops malformed schedules and normalises the light dash', () 
   assert.equal(plan.fertilizingSchedule, 'MON 06:00')  // safe default when the module exists
 })
 
+test('validatePlan takes the first valid entry when the model answers with a list', () => {
+  const ctx = { hasLight: true, hasFert: true, plants }
+  const { plan } = validatePlan({ plan: {
+    wateringSchedule: ['7am', '07:30', '18:00'], lightingSchedule: ['09:00 - 17:00'], fertilizingSchedule: [3, 'thu 06:00'],
+  } }, ctx)
+  assert.equal(plan.wateringSchedule, '07:30')
+  assert.equal(plan.lightingSchedule, '09:00–17:00')
+  assert.equal(plan.fertilizingSchedule, 'THU 06:00')
+})
+
 test('validatePlan never enables a module the device lacks', () => {
   const { plan } = validatePlan({ plan: {
     autoLightingEnabled: true, lightingSchedule: '06:00–20:00',

@@ -178,25 +178,19 @@ export function validatePlan(obj, { hasLight, hasFert, plants }) {
   let fertilizingDuration = num(p.fertilizingDuration)
   fertilizingDuration = fertilizingDuration != null ? clamp(Math.round(fertilizingDuration), 60, 1800) : null
 
-  const wateringSchedule =
-    typeof p.wateringSchedule === 'string' && TIME_RE.test(p.wateringSchedule.trim())
-      ? p.wateringSchedule.trim()
-      : null
+  // The saved config holds lists of times, so the model may answer with a list too:
+  // the plan keeps its first valid entry.
+  const pick = (v, re, norm = x => x) =>
+    [].concat(v).map(x => (typeof x === 'string' ? norm(x.trim()) : '')).find(x => re.test(x)) ?? null
+  const wateringSchedule = pick(p.wateringSchedule, TIME_RE)
 
-  let lightingSchedule = null
-  if (typeof p.lightingSchedule === 'string' && LIGHT_RE.test(p.lightingSchedule.trim())) {
-    lightingSchedule = p.lightingSchedule.trim().replace(/\s*[–-]\s*/, '–')
-  }
+  let lightingSchedule = pick(p.lightingSchedule, LIGHT_RE, x => x.replace(/\s*[–-]\s*/, '–'))
   if (hasLight && !lightingSchedule) {
     lightingSchedule = lightScheduleFor(dominantLightCondition(plants))
   }
 
-  let fertilizingSchedule = null
-  if (typeof p.fertilizingSchedule === 'string' && FERT_RE.test(p.fertilizingSchedule.trim().toUpperCase())) {
-    fertilizingSchedule = p.fertilizingSchedule.trim().toUpperCase()
-  } else if (hasFert) {
-    fertilizingSchedule = 'MON 06:00'
-  }
+  let fertilizingSchedule = pick(p.fertilizingSchedule, FERT_RE, x => x.toUpperCase())
+  if (!fertilizingSchedule && hasFert) fertilizingSchedule = 'MON 06:00'
 
   const autoWateringEnabled     = !!p.autoWateringEnabled && wateringThreshold != null
   const autoLightingEnabled     = !!p.autoLightingEnabled && hasLight && !!lightingSchedule
