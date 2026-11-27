@@ -310,6 +310,12 @@ void main() {
       expect(err(['7:00'], 'water', '07:00'), contains('already'));
     });
 
+    test('upsertSchedule tolerates free-text entries saved by early app versions', () {
+      expect(ok(['6am-8pm'], 'light', '08:00–18:00'), ['08:00–18:00', '6am-8pm']);
+      expect(ok(['MON'], 'fert', 'TUE 06:00'), ['TUE 06:00', 'MON']);  // unparseable entries sort last
+      expect(err(['8:00-12:00'], 'light', '11:00–13:00'), contains('overlaps'));
+    });
+
     test('upsertSchedule rejects light windows that overlap, touch or have no length', () {
       expect(err([], 'light', '08:00–08:00'), contains('different time'));
       expect(err(['08:00–12:00'], 'light', '11:00–14:00'), contains('overlaps or touches 08:00–12:00'));

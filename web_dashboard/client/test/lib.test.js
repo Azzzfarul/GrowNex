@@ -247,6 +247,12 @@ test('upsertSchedule rejects bad formats and duplicates', () => {
   assert.match(upsertSchedule(['7:00'], 'water', '07:00').error, /already/)   // old unpadded entry
 })
 
+test('upsertSchedule tolerates free-text entries saved by early app versions', () => {
+  assert.deepEqual(upsertSchedule(['6am-8pm'], 'light', '08:00–18:00'), { list: ['08:00–18:00', '6am-8pm'] })
+  assert.deepEqual(upsertSchedule(['MON'], 'fert', 'TUE 06:00'), { list: ['TUE 06:00', 'MON'] })  // unparseable entries sort last
+  assert.match(upsertSchedule(['8:00-12:00'], 'light', '11:00–13:00').error, /overlaps/)  // old but parseable: still checked
+})
+
 test('upsertSchedule rejects light windows that overlap, touch or have no length', () => {
   assert.match(upsertSchedule([], 'light', '08:00–08:00').error, /different time/)
   assert.match(upsertSchedule(['08:00–12:00'], 'light', '11:00–14:00').error, /overlaps or touches 08:00–12:00/)

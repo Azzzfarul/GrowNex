@@ -264,9 +264,9 @@
     "semantic_hash": ""
   },
   "mobile_app/lib/screens/plants/zone_detail/automation_tab.dart": {
-    "mtime": 1795787499.656222,
-    "seen": 1795787604.675869,
-    "ast_hash": "7cec7df4ed717f2080ca7221c3ded181",
+    "mtime": 1795790948.6868763,
+    "seen": 1795791199.405497,
+    "ast_hash": "151d77eaf332fb96e3fae4f5d53f2068",
     "semantic_hash": ""
   },
   "mobile_app/lib/screens/plants/zone_detail/monitoring_tab.dart": {
@@ -468,15 +468,15 @@
     "semantic_hash": "97d3a20fd20a063c192e886d1822b4a8"
   },
   "mobile_app/pubspec.yaml": {
-    "mtime": 1793293301.1517384,
-    "seen": 1794734439.646112,
-    "ast_hash": "75422d02b3cf9637a52ff2c5373b9bfe",
-    "semantic_hash": "75422d02b3cf9637a52ff2c5373b9bfe"
+    "mtime": 1795796819.2206497,
+    "seen": 1795796820.0147011,
+    "ast_hash": "1f776518a89899237f1fd1f7d56a36ef",
+    "semantic_hash": ""
   },
   "mobile_app/test/logic_test.dart": {
-    "mtime": 1795787490.9392216,
-    "seen": 1795787604.6758962,
-    "ast_hash": "f84aa2059e59bcf87f2ec831285f7a89",
+    "mtime": 1795790667.7432842,
+    "seen": 1795791199.405523,
+    "ast_hash": "5fa6d9aab09b1bc9a62e7aacf1bba7e4",
     "semantic_hash": ""
   },
   "mobile_app/web/manifest.json": {
@@ -768,9 +768,9 @@
     "semantic_hash": ""
   },
   "web_dashboard/client/src/pages/zones/AutomationTab.jsx": {
-    "mtime": 1795785992.584395,
-    "seen": 1795786292.814584,
-    "ast_hash": "99a5a7a89689203d91c23a2ed4b7f6a7",
+    "mtime": 1795789235.8291945,
+    "seen": 1795789684.322765,
+    "ast_hash": "580d3064ade1b6fb112b901bcfe5b559",
     "semantic_hash": ""
   },
   "web_dashboard/client/src/pages/zones/MonitoringTab.jsx": {
@@ -798,9 +798,9 @@
     "semantic_hash": "be58350afd840f4de91d78c4cc47814e"
   },
   "web_dashboard/client/test/lib.test.js": {
-    "mtime": 1795787490.9388857,
-    "seen": 1795787604.6759338,
-    "ast_hash": "add389b3fad7031e6ea852510a04db73",
+    "mtime": 1795790667.7410107,
+    "seen": 1795791199.40556,
+    "ast_hash": "98de53af0807a57f0eb5f982aec28f21",
     "semantic_hash": ""
   },
   "web_dashboard/client/vite.config.js": {
@@ -852,9 +852,9 @@
     "semantic_hash": "99b816ac17245f2bb30d49055407a89b"
   },
   "web_dashboard/server/src/routes/ai.js": {
-    "mtime": 1794835372.5925229,
-    "seen": 1794836471.76113,
-    "ast_hash": "194ed2da26979738f3f7ed1eb2ce5bfa",
+    "mtime": 1795789311.6739857,
+    "seen": 1795789684.322777,
+    "ast_hash": "27dc3fbf0e3fad50890367b6478fae1c",
     "semantic_hash": ""
   },
   "web_dashboard/server/src/routes/auth.js": {
@@ -882,9 +882,9 @@
     "semantic_hash": ""
   },
   "web_dashboard/server/src/services/aiAnalytics.js": {
-    "mtime": 1795785936.3892083,
-    "seen": 1795786292.8145988,
-    "ast_hash": "1bf8d877597e6c2a04bf7de2b339c288",
+    "mtime": 1795790635.4680822,
+    "seen": 1795791199.4055722,
+    "ast_hash": "4f679ca45044ab32daaf83ba0a9ebed4",
     "semantic_hash": ""
   },
   "web_dashboard/server/src/services/aiClient.js": {
@@ -912,9 +912,9 @@
     "semantic_hash": ""
   },
   "web_dashboard/server/src/services/mqttBridge.js": {
-    "mtime": 1795787490.9380805,
-    "seen": 1795787604.67595,
-    "ast_hash": "37e802fe21c47a7bf6b094d3bad149d0",
+    "mtime": 1795790635.4679384,
+    "seen": 1795791199.405577,
+    "ast_hash": "69a99e170484e63c7833616e6f6c07f8",
     "semantic_hash": ""
   },
   "web_dashboard/server/src/services/notifications.js": {
@@ -936,15 +936,15 @@
     "semantic_hash": ""
   },
   "web_dashboard/server/test/unit.test.js": {
-    "mtime": 1795785944.3632998,
-    "seen": 1795786292.8146079,
-    "ast_hash": "75a7fcd32f4de2d4dfcdb6bba30a923a",
+    "mtime": 1795790640.2224576,
+    "seen": 1795791199.405581,
+    "ast_hash": "2e5dcb53ccb1becd5f9e53de259cc2cf",
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1795786297.7593863,
-    "seen": 1795786816.653839,
-    "ast_hash": "6cef6d2e1d179c0a47781c4f1e673141",
+    "mtime": 1795796819.2526186,
+    "seen": 1795796820.014763,
+    "ast_hash": "bbf5ebd2a07b66a8d7d81abda1b9f2f7",
     "semantic_hash": ""
   },
   "README.md": {
@@ -1206,15 +1206,21 @@
     "semantic_hash": ""
   },
   "mobile_app/lib/utils/schedules.dart": {
-    "mtime": 1795787518.310442,
-    "seen": 1795787604.675885,
-    "ast_hash": "4412ceac115d15e7117a010697f9b5ad",
+    "mtime": 1795790655.5392752,
+    "seen": 1795791199.4055119,
+    "ast_hash": "2f3759a22b811eb4efa031c08119f7ae",
     "semantic_hash": ""
   },
   "web_dashboard/client/src/lib/schedules.js": {
-    "mtime": 1795787518.310334,
-    "seen": 1795787604.675921,
-    "ast_hash": "9327541886323151ef1d4e82d52c5ba8",
+    "mtime": 1795790655.5394268,
+    "seen": 1795791199.405547,
+    "ast_hash": "34ec11c796f51445b4b92bf489d8ce25",
+    "semantic_hash": ""
+  },
+  "mobile_app/integration_test/schedule_pending_test.dart": {
+    "mtime": 1795791207.5824342,
+    "seen": 1795796820.014653,
+    "ast_hash": "720c87aa10d928b8f44dcdb13fa465bf",
     "semantic_hash": ""
   },
   "device_simulator/package-lock.json": {

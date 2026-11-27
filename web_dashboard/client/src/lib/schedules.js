@@ -24,7 +24,7 @@ const ranges = (w) => {
 // Touching counts: the bridge would fire one window's "off" and the next one's "on" in the same
 // minute, in no set order, so the light could stay off for the second window.
 const clashes = (a, b) => ranges(a).some(([s1, e1]) => ranges(b).some(([s2, e2]) => s1 <= e2 && s2 <= e1))
-const sortKey = (v) => (/^[A-Z]/.test(v) ? `${DAYS.indexOf(v.slice(0, 3))} ${v.slice(4)}` : v)
+const sortKey = (v) => (/^[A-Z]{3} \d/.test(v) ? `${DAYS.indexOf(v.slice(0, 3))} ${v.slice(4)}` : v)
 
 // Adds `raw` to `list` (or replaces list[editIndex]). Returns { list } (sorted) or { error }.
 export function upsertSchedule(list, kind, raw, editIndex = -1) {
@@ -37,7 +37,8 @@ export function upsertSchedule(list, kind, raw, editIndex = -1) {
     const [s, e] = v.split('–')
     if (s === e) return { error: 'The light must turn off at a different time than it turns on.' }
     // The earlier window's "off" would end an overlapping one early.
-    const clash = others.find((w) => clashes(w, v))
+    // Early app versions saved free text (e.g. "6am-8pm"): such entries can't be compared, so skip them.
+    const clash = others.find((w) => FORMATS.light.re.test(canonical(w)) && clashes(canonical(w), v))
     if (clash) return { error: `${v} overlaps or touches ${clash}. Leave at least a minute between windows.` }
   }
   return { list: [...others, v].sort((a, b) => sortKey(a).localeCompare(sortKey(b))) }

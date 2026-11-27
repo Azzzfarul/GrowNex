@@ -37,7 +37,7 @@ bool _clashes(String a, String b) =>
     _ranges(a).any((x) => _ranges(b).any((y) => x.$1 <= y.$2 && y.$1 <= x.$2));
 
 String _sortKey(String v) =>
-    RegExp('^[A-Z]').hasMatch(v) ? '${_days.indexOf(v.substring(0, 3))} ${v.substring(4)}' : v;
+    RegExp(r'^[A-Z]{3} \d').hasMatch(v) ? '${_days.indexOf(v.substring(0, 3))} ${v.substring(4)}' : v;
 
 /// Adds [raw] to [list] (or replaces list[editIndex]). Returns the sorted list, or an error.
 ({List<String>? list, String? error}) upsertSchedule(List<String> list, String kind, String raw,
@@ -54,8 +54,9 @@ String _sortKey(String v) =>
       return (list: null, error: 'The light must turn off at a different time than it turns on.');
     }
     // The earlier window's "off" would end an overlapping one early.
+    // Early app versions saved free text (e.g. "6am-8pm"): such entries can't be compared, so skip them.
     for (final w in others) {
-      if (_clashes(w, v)) {
+      if (re.hasMatch(_canonical(w)) && _clashes(_canonical(w), v)) {
         return (list: null, error: '$v overlaps or touches $w. Leave at least a minute between windows.');
       }
     }

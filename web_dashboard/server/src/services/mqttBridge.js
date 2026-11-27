@@ -182,9 +182,9 @@ async function handleSensors(deviceId, payload) {
         await db.collection('devices').doc(deviceId).update({ lastAutoWateringAt: Timestamp.now() })
         // Like the cron jobs: the auto-off is scheduled even if the "on" reports an error — the
         // write may have committed anyway, and nothing else would ever switch the pump off.
-        await fireActuator(assignedZoneId, 'irrigation', true)
+        // Shares the scheduled runs' tracker, so neither run's auto-off cuts the other short.
         const waterDuration = (cfg.wateringDuration ?? 300) * 1000
-        setTimeout(() => fireActuator(assignedZoneId, 'irrigation', false), waterDuration)
+        await runScheduled(assignedZoneId, 'irrigation', waterDuration)
         console.log(`[MQTT bridge] threshold trigger → ${deviceId} (moisture ${moisture}% < ${cfg.wateringThreshold}%), auto-off in ${waterDuration / 1000}s`)
       }
     }
@@ -694,10 +694,11 @@ function cancelCronJobs(zoneId) {
 // Configs saved before multiple times per actuator hold one string; newer ones a list.
 export const scheduleList = v => (Array.isArray(v) ? v : v ? [v] : [])
 
-// Latest scheduled run per zone+actuator: an earlier run's auto-off must not cut a later,
-// overlapping run short (e.g. watering at 07:00 and 07:03 with a 5-minute duration). Runs that
-// chain like this stay on at most MAX_CHAIN_MS from the first start (validatePlan's duration caps),
-// well inside the firmware's 20 / 40 min pump limit.
+// Latest automated run (schedule or moisture threshold) per zone+actuator: an earlier run's
+// auto-off must not cut a later, overlapping run short (e.g. watering at 07:00 and 07:03 with a
+// 5-minute duration). Runs that chain like this stay on at most MAX_CHAIN_MS from the first start
+// (validatePlan's duration caps), well inside the firmware's 20 / 40 min pump limit; a single run
+// keeps its own duration even if an older config saved a longer one.
 const MAX_CHAIN_MS = { irrigation: 900_000, fertilizer: 1_800_000 }
 const scheduledRuns = new Map()   // key → { since, until, off }
 async function runScheduled(zoneId, actuator, durationMs) {
@@ -705,7 +706,7 @@ async function runScheduled(zoneId, actuator, durationMs) {
   // The chain continues until the previous run's "off" has actually fired, even if its timer
   // is running late; otherwise a run starting right at its deadline would restart the cap.
   const since = prev && !prev.off ? prev.since : now
-  const run = { since, until: Math.min(now + durationMs, since + MAX_CHAIN_MS[actuator]), off: false }
+  const run = { since, until: Math.min(now + durationMs, since + Math.max(MAX_CHAIN_MS[actuator], durationMs)), off: false }
   if (run.until <= now) return   // cap reached: the previous run's "off" stands
   scheduledRuns.set(key, run)
   await fireActuator(zoneId, actuator, true)

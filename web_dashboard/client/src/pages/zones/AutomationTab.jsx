@@ -226,7 +226,7 @@ export default function AutomationTab({ zone }) {
 
   async function applyAiPlan(plan) {
     setConfigError(null)
-    // The plan suggests one time per actuator; it replaces the lists.
+    // The plan's lists replace the current ones (the server keeps the current times that suit the plants).
     const ws = scheduleList(plan.wateringSchedule), ls = scheduleList(plan.lightingSchedule), fs = scheduleList(plan.fertilizingSchedule)
     try {
       await setDoc(doc(db, 'automationConfig', zone.id), {
@@ -255,12 +255,12 @@ export default function AutomationTab({ zone }) {
   const planRows = aiPlan?.plan ? [
     ['Auto watering',            autoWater ? 'On' : 'Off',   aiPlan.plan.autoWateringEnabled ? 'On' : 'Off'],
     ['Moisture threshold (%)',   waterThresh   || '—',       aiPlan.plan.wateringThreshold ?? '—'],
-    ['Watering times',           shown(waterSched),          aiPlan.plan.wateringSchedule ?? '—'],
+    ['Watering times',           shown(waterSched),          shown(scheduleList(aiPlan.plan.wateringSchedule))],
     ['Watering duration (s)',    waterDuration || '—',       aiPlan.plan.wateringDuration ?? '—'],
     ['Auto lighting',            autoLight ? 'On' : 'Off',   aiPlan.plan.autoLightingEnabled ? 'On' : 'Off'],
-    ['Lighting schedule',        shown(lightSched),          aiPlan.plan.lightingSchedule ?? '—'],
+    ['Lighting schedule',        shown(lightSched),          shown(scheduleList(aiPlan.plan.lightingSchedule))],
     ['Auto fertilizing',         autoFert ? 'On' : 'Off',    aiPlan.plan.autoFertilizingEnabled ? 'On' : 'Off'],
-    ['Fertilizing schedule',     shown(fertSched),           aiPlan.plan.fertilizingSchedule ?? '—'],
+    ['Fertilizing schedule',     shown(fertSched),           shown(scheduleList(aiPlan.plan.fertilizingSchedule))],
     ['Fertilizing duration (s)', fertDuration  || '—',       aiPlan.plan.fertilizingDuration ?? '—'],
   ] : []
 

@@ -44,7 +44,9 @@ class _AutomationTabState extends State<AutomationTab> {
   // _ScheduleList drops a half-done edit that would point at the wrong entry.
   int _formEpoch = 0;
   final _pending = <String>{};  // kinds with a typed time not yet added to their list
-  void _setPending(String kind, bool p) => setState(() => p ? _pending.add(kind) : _pending.remove(kind));
+  void _setPending(String kind, bool p) {
+    if (mounted) setState(() => p ? _pending.add(kind) : _pending.remove(kind));
+  }
 
   String _savedWaterThreshold = '';
   List<String> _savedWaterSchedule = [];
@@ -214,7 +216,7 @@ class _AutomationTabState extends State<AutomationTab> {
   Future<void> _applyAiPlan(Map<String, dynamic> plan) async {
     num? asNum(dynamic v) => v is num ? v : (v is String ? num.tryParse(v) : null);
     int? asInt(dynamic v) => v is int ? v : (v is num ? v.toInt() : (v is String ? int.tryParse(v) : null));
-    // The plan suggests one time per actuator; it replaces the lists.
+    // The plan's lists replace the current ones (the server keeps the current times that suit the plants).
     List<String> asList(dynamic v) => scheduleList(v is String ? v.trim() : v);
 
     final config = AutomationConfig(
@@ -259,12 +261,12 @@ class _AutomationTabState extends State<AutomationTab> {
     final rows = <List<String>>[
       ['Auto watering',            _autoWater ? 'On' : 'Off',                s(plan['autoWateringEnabled'] == true ? 'On' : 'Off')],
       ['Moisture threshold (%)',   s(_wateringThresholdCtrl.text),           s(plan['wateringThreshold'])],
-      ['Watering times',           s(_waterSchedule.join(', ')),            s(plan['wateringSchedule'])],
+      ['Watering times',           s(_waterSchedule.join(', ')),            s(scheduleList(plan['wateringSchedule']).join(', '))],
       ['Watering duration (s)',    s(_wateringDurationCtrl.text),            s(plan['wateringDuration'])],
       ['Auto lighting',            _autoLight ? 'On' : 'Off',                plan['autoLightingEnabled'] == true ? 'On' : 'Off'],
-      ['Lighting schedule',        s(_lightSchedule.join(', ')),            s(plan['lightingSchedule'])],
+      ['Lighting schedule',        s(_lightSchedule.join(', ')),            s(scheduleList(plan['lightingSchedule']).join(', '))],
       ['Auto fertilizing',         _autoFertilizer ? 'On' : 'Off',           plan['autoFertilizingEnabled'] == true ? 'On' : 'Off'],
-      ['Fertilizing schedule',     s(_fertSchedule.join(', ')),             s(plan['fertilizingSchedule'])],
+      ['Fertilizing schedule',     s(_fertSchedule.join(', ')),             s(scheduleList(plan['fertilizingSchedule']).join(', '))],
       ['Fertilizing duration (s)', s(_fertilizingDurationCtrl.text),         s(plan['fertilizingDuration'])],
     ];
     return Container(
@@ -299,12 +301,13 @@ class _AutomationTabState extends State<AutomationTab> {
                 child: Row(
                   children: [
                     Expanded(child: Text(r[0], style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant))),
-                    Text(r[1], style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+                    // Lists of times can be long: let them wrap instead of overflowing the row
+                    Flexible(child: Text(r[1], textAlign: TextAlign.end, style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant))),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: Icon(Icons.arrow_forward, size: 14, color: cs.onSurfaceVariant),
                     ),
-                    Text(r[2], style: tt.labelLarge),
+                    Flexible(child: Text(r[2], style: tt.labelLarge)),
                   ],
                 ),
               )),
@@ -645,13 +648,21 @@ class _ScheduleList extends StatefulWidget {
   State<_ScheduleList> createState() => _ScheduleListState();
 }
 
-class _ScheduleListState extends State<_ScheduleList> {
+// Kept alive while scrolled out of view, so a typed time isn't lost with the off-screen card.
+class _ScheduleListState extends State<_ScheduleList> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final _ctrl = TextEditingController();
   int _editing = -1;  // index of the entry in the field, or -1 when adding
   String? _error;
 
   @override
   void dispose() {
+    // The list went away (module removed, switch off, tab closed): its typed time can't block Save.
+    // After the frame, since the tab can't rebuild while this one is being torn down.
+    final onPending = widget.onPending, kind = widget.kind;
+    WidgetsBinding.instance.addPostFrameCallback((_) => onPending(kind, false));
     _ctrl.dispose();
     super.dispose();
   }
@@ -692,6 +703,7 @@ class _ScheduleListState extends State<_ScheduleList> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final cs = Theme.of(context).colorScheme;
     final editing = _editing >= 0;
     return Column(

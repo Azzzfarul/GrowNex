@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { initializeApp } from 'firebase-admin/app'
-import { validatePlan, fallbackPlan, validateSummary } from '../src/services/aiAnalytics.js'
+import { validatePlan, fallbackPlan, validateSummary, cleanSchedule, buildPlanMessages } from '../src/services/aiAnalytics.js'
 import { validatePlantProfile } from '../src/services/aiPlant.js'
 import { parsePlantNetResults, isPlantPhoto } from '../src/services/plantId.js'
 import { memberIdsOf } from '../src/services/zoneMembers.js'
@@ -86,21 +86,68 @@ test('validatePlan clamps threshold and durations to safe bounds', () => {
 test('validatePlan drops malformed schedules and normalises the light dash', () => {
   const ctx = { hasLight: true, hasFert: true, plants }
   const { plan } = validatePlan({ plan: {
-    wateringSchedule: '7am', lightingSchedule: '08:00 - 18:00', fertilizingSchedule: 'monday 6',
+    wateringSchedule: '7am', lightingSchedule: '07:00 - 20:00', fertilizingSchedule: 'monday 6',
   } }, ctx)
-  assert.equal(plan.wateringSchedule, null)
-  assert.equal(plan.lightingSchedule, '08:00–18:00')
-  assert.equal(plan.fertilizingSchedule, 'MON 06:00')  // safe default when the module exists
+  assert.deepEqual(plan.wateringSchedule, [])
+  assert.deepEqual(plan.lightingSchedule, ['07:00–20:00'])
+  assert.deepEqual(plan.fertilizingSchedule, ['MON 06:00'])  // safe default when the module exists
 })
 
-test('validatePlan takes the first valid entry when the model answers with a list', () => {
+test('validatePlan returns schedule lists, cleaned like the apps do', () => {
   const ctx = { hasLight: true, hasFert: true, plants }
   const { plan } = validatePlan({ plan: {
-    wateringSchedule: ['7am', '07:30', '18:00'], lightingSchedule: ['09:00 - 17:00'], fertilizingSchedule: [3, 'thu 06:00'],
+    wateringSchedule: ['18:00', '7am', '7:30', '07:30'], wateringDuration: 300,
+    lightingSchedule: ['07:00 - 21:00'], fertilizingSchedule: [3, 'thu 6:00', 'mon 06:00'],
   } }, ctx)
-  assert.equal(plan.wateringSchedule, '07:30')
-  assert.equal(plan.lightingSchedule, '09:00–17:00')
-  assert.equal(plan.fertilizingSchedule, 'THU 06:00')
+  assert.deepEqual(plan.wateringSchedule, ['07:30', '18:00'])            // padded, deduped, sorted, junk dropped
+  assert.deepEqual(plan.lightingSchedule, ['07:00–21:00'])
+  assert.deepEqual(plan.fertilizingSchedule, ['MON 06:00', 'THU 06:00'])  // sorted by weekday
+})
+
+test('cleanSchedule drops overlapping pump runs, clashing light windows, and caps the count', () => {
+  // A 300 s run from 07:00 is still on at 07:04 and ends at 07:05 (touching); 23:58 → 00:02 wraps past midnight
+  assert.deepEqual(cleanSchedule(['07:00', '07:04', '07:05', '07:06', '23:58', '00:02'], 'water', 300), ['07:00', '07:06', '23:58'])
+  assert.deepEqual(cleanSchedule(['05:00', '09:00', '13:00', '17:00', '21:00'], 'water', 60), ['05:00', '09:00', '13:00', '17:00'])
+  assert.deepEqual(cleanSchedule(['08:00–12:00', '12:00–14:00', '11:00–13:00', '18:00–20:00', '09:00–09:00'], 'light'),
+    ['08:00–12:00', '18:00–20:00'])
+  assert.deepEqual(cleanSchedule(['22:00–02:00', '01:00–03:00'], 'light'), ['22:00–02:00'])
+  assert.deepEqual(cleanSchedule(['SUN 23:55', 'MON 00:05'], 'fert', 600), ['SUN 23:55'])  // wraps past the week's end
+  assert.deepEqual(cleanSchedule('mon 6:00', 'fert', 600), ['MON 06:00'])               // a single string still works
+  assert.deepEqual(cleanSchedule(null, 'water'), [])
+})
+
+test('validatePlan keeps watering out of the night, and out of the midday sun outdoors', () => {
+  const times = ['04:30', '06:00', '12:00', '17:00', '21:00']
+  const at = zoneType => validatePlan({ plan: { wateringSchedule: times } }, { hasLight: false, hasFert: false, plants, zoneType }).plan.wateringSchedule
+  assert.deepEqual(at('indoor'), ['06:00', '12:00', '17:00'])
+  assert.deepEqual(at('outdoor'), ['06:00', '17:00'])
+  // A night time the rules drop takes no slot and doesn't push out its neighbour
+  const ok = validatePlan({ plan: { wateringSchedule: ['04:58', '05:00', '01:00', '02:00', '03:00', '06:00', '18:00'], wateringDuration: 300 } },
+    { hasLight: false, hasFert: false, plants, zoneType: 'indoor' }).plan.wateringSchedule
+  assert.deepEqual(ok, ['05:00', '06:00', '18:00'])  // 04:58 no longer blocks 05:00, nor do the night times fill the cap
+})
+
+test('cacti and succulents get no scheduled watering, only the threshold', () => {
+  const cacti = [{ preferredMoistureMin: 10, preferredMoistureMax: 30 }, { preferredMoistureMin: 15, preferredMoistureMax: 40 }]
+  const ctx = { hasLight: false, hasFert: false, plants: cacti }
+  assert.deepEqual(validatePlan({ plan: { wateringSchedule: ['06:00'], autoWateringEnabled: true, wateringThreshold: 15 } }, ctx).plan.wateringSchedule, [])
+  assert.deepEqual(fallbackPlan(cacti, ctx).wateringSchedule, [])
+  assert.deepEqual(fallbackPlan([...cacti, { preferredMoistureMin: 40, preferredMoistureMax: 60 }], ctx).wateringSchedule, ['07:00'])
+})
+
+test('validatePlan replaces a light plan far from the plants\' needs with the standard window', () => {
+  const low = [{ preferredMoistureMin: 20, preferredMoistureMax: 40, preferredLightCondition: 'low' }]
+  const light = l => validatePlan({ plan: { lightingSchedule: l } }, { hasLight: true, hasFert: false, plants: low }).plan.lightingSchedule
+  assert.deepEqual(light(['08:00–22:00']), ['08:00–16:00'])               // 14 h for a low-light plant
+  assert.deepEqual(light(['07:00–16:00']), ['07:00–16:00'])               // 9 h: close enough to 8
+  assert.deepEqual(light(['07:00–10:00', '15:00–20:00']), ['07:00–10:00', '15:00–20:00'])  // 8 h in two windows
+})
+
+test('the plan prompt asks for lists and gets the zone type', () => {
+  const { system, user } = buildPlanMessages({ plants, device: {}, latest: null, current: null, zoneType: 'outdoor' })
+  assert.match(system, /"wateringSchedule": string\[\]/)
+  assert.equal(JSON.parse(user).zoneType, 'outdoor')
+  assert.equal(JSON.parse(user).targetLightHours, 14)  // dominant 'high'
 })
 
 test('validatePlan never enables a module the device lacks', () => {
@@ -109,9 +156,9 @@ test('validatePlan never enables a module the device lacks', () => {
     autoFertilizingEnabled: true, fertilizingSchedule: 'MON 06:00',
   } }, { hasLight: false, hasFert: false, plants })
   assert.equal(plan.autoLightingEnabled, false)
-  assert.equal(plan.lightingSchedule, null)
+  assert.deepEqual(plan.lightingSchedule, [])
   assert.equal(plan.autoFertilizingEnabled, false)
-  assert.equal(plan.fertilizingSchedule, null)
+  assert.deepEqual(plan.fertilizingSchedule, [])
   assert.equal(plan.fertilizingDuration, null)
 })
 
@@ -124,13 +171,17 @@ test('validatePlan only enables watering with a usable threshold', () => {
 test('fallbackPlan is valid with and without plant data', () => {
   const p = fallbackPlan(plants, { hasLight: true, hasFert: false })
   assert.equal(p.wateringThreshold, 40)          // avg min 45 − 5
-  assert.equal(p.lightingSchedule, '06:00–20:00') // dominant 'high'
+  assert.deepEqual(p.lightingSchedule, ['06:00–20:00']) // dominant 'high'
+  assert.deepEqual(p.wateringSchedule, ['07:00'])        // avg min 45: not thirsty
   assert.equal(p.autoFertilizingEnabled, false)
   assert.equal(fallbackPlan([], { hasLight: false, hasFert: false }).wateringThreshold, 35)
+  const thirsty = [{ preferredMoistureMin: 65, preferredMoistureMax: 85 }]
+  assert.deepEqual(fallbackPlan(thirsty, { hasLight: false, hasFert: true }).wateringSchedule, ['07:00', '17:00'])
   // A fallback plan must survive validatePlan unchanged in its schedules
-  const v = validatePlan({ plan: p }, { hasLight: true, hasFert: false, plants }).plan
-  assert.equal(v.lightingSchedule, p.lightingSchedule)
-  assert.equal(v.wateringSchedule, p.wateringSchedule)
+  for (const [ps, ctx] of [[plants, { hasLight: true, hasFert: false }], [thirsty, { hasLight: false, hasFert: true }]]) {
+    const fp = fallbackPlan(ps, ctx), v = validatePlan({ plan: fp }, { ...ctx, plants: ps }).plan
+    for (const k of ['wateringSchedule', 'lightingSchedule', 'fertilizingSchedule']) assert.deepEqual(v[k], fp[k], k)
+  }
 })
 
 // ── validateSummary / validatePlantProfile ───────────────────────────────────
