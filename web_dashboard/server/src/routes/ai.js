@@ -130,8 +130,8 @@ router.post('/automation-plan', verifyToken, async (req, res) => {
     }
 
     try {
-      const { system, user } = buildPlanMessages({ plants, device, latest, current })
-      const { plan, rationale } = validatePlan(await chatJson({ system, user, maxTokens: 700 }), { hasLight, hasFert, plants })
+      const { system, user } = buildPlanMessages({ plants, device, latest, current, zoneType: zone.data().zoneType })
+      const { plan, rationale } = validatePlan(await chatJson({ system, user, maxTokens: 700 }), { hasLight, hasFert, plants, zoneType: zone.data().zoneType })
       return res.json({ source: 'ai', plan, rationale })
     } catch (aiErr) {
       console.warn('[ai] automation-plan fallback:', aiErr.message)

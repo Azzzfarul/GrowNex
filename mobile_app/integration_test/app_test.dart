@@ -163,14 +163,36 @@ void main() {
     expect(cfg['wateringSchedule'], '06:30');
     expect(cfg['wateringThreshold'], 35);
 
-    await type(t, field('Daily schedule (e.g. 07:00)'), '7am');
-    await tap(t, button('Save'));
+    // Watering times: an old single-string config shows as a one-entry list
+    Future<List?> savedTimes() async => (await db.doc('automationConfig/$zoneId').get()).data()?['wateringSchedule'] as List?;
+    await pumpUntil(t, find.text('06:30'));
+    await type(t, field('Daily time (e.g. 07:00)'), '7am');
+    await tap(t, button('Add'));
     await pumpUntil(t, find.textContaining('Watering time must look like'));
-    expect((await db.doc('automationConfig/$zoneId').get()).data()?['wateringSchedule'], '06:30');
-    await type(t, field('Daily schedule (e.g. 07:00)'), '07:45');
+    await type(t, field('Daily time (e.g. 07:00)'), '18:00');
+    await tap(t, button('Add'));
+    await type(t, field('Daily time (e.g. 07:00)'), '7:45');
+    await tap(t, button('Add'));
+    await pumpUntil(t, find.text('07:45'));
+    await type(t, field('Daily time (e.g. 07:00)'), '18:00');
+    await tap(t, button('Add'));
+    await pumpUntil(t, find.textContaining('already in the list'));
+    // A typed time that wasn't added blocks Save instead of being dropped
     await tap(t, button('Save'));
-    await waitFor(() async => (await db.doc('automationConfig/$zoneId').get()).data()?['wateringSchedule'] == '07:45',
-        'schedule saved');
+    await pumpUntil(t, find.textContaining('Add or update the time you typed'));
+    expect((await db.doc('automationConfig/$zoneId').get()).data()?['wateringSchedule'], '06:30');  // untouched
+    ScaffoldMessenger.of(t.element(find.byType(Scaffold).first)).clearSnackBars();
+    await t.pump(const Duration(milliseconds: 500));
+    await type(t, field('Daily time (e.g. 07:00)'), '');
+    await tap(t, button('Save'));
+    await waitFor(() async => (await savedTimes())?.join(',') == '06:30,07:45,18:00' ? true : null, 'times added');
+    // Edit one, delete another
+    await tap(t, find.byTooltip('Edit 06:30'));
+    await type(t, field('Edit 06:30'), '06:00');
+    await tap(t, button('Update'));
+    await tap(t, find.byTooltip('Delete 18:00'));
+    await tap(t, button('Save'));
+    await waitFor(() async => (await savedTimes())?.join(',') == '06:00,07:45' ? true : null, 'times edited');
 
     // ── Analytics: history from last week plus today's live readings ──
     final now = DateTime.now();

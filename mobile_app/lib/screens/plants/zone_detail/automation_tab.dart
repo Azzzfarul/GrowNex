@@ -6,12 +6,8 @@ import '../../../models/zone_model.dart';
 import '../../../services/ai_summary_service.dart';
 import '../../../services/firestore/automation_config_service.dart';
 import '../../../services/firestore/device_service.dart';
+import '../../../utils/schedules.dart';
 
-// Formats the bridge's schedule parsers accept (web_dashboard/server/src/services/mqttBridge.js).
-// Same rules as the web Automation tab.
-final _timeRe  = RegExp(r'^([01]?\d|2[0-3]):[0-5]\d$');
-final _lightRe = RegExp(r'^([01]?\d|2[0-3]):[0-5]\d\s*[–-]\s*([01]?\d|2[0-3]):[0-5]\d$');
-final _fertRe  = RegExp(r'^(MON|TUE|WED|THU|FRI|SAT|SUN) ([01]?\d|2[0-3]):[0-5]\d$');
 const _maxWateringS = 900, _maxFertilizingS = 1800;  // validatePlan's caps (server/src/services/aiAnalytics.js)
 
 class AutomationTab extends StatefulWidget {
@@ -41,17 +37,22 @@ class _AutomationTabState extends State<AutomationTab> {
   final _savingToggles = <String>{};  // config fields with a toggle save in flight
 
   final _wateringThresholdCtrl   = TextEditingController();
-  final _wateringScheduleCtrl    = TextEditingController();
   final _wateringDurationCtrl    = TextEditingController();
-  final _lightingScheduleCtrl    = TextEditingController();
-  final _fertilizingScheduleCtrl = TextEditingController();
   final _fertilizingDurationCtrl = TextEditingController();
+  List<String> _waterSchedule = [], _lightSchedule = [], _fertSchedule = [];
+  // Bumped when the lists are replaced from outside (load, Cancel, AI plan), so each
+  // _ScheduleList drops a half-done edit that would point at the wrong entry.
+  int _formEpoch = 0;
+  final _pending = <String>{};  // kinds with a typed time not yet added to their list
+  void _setPending(String kind, bool p) {
+    if (mounted) setState(() => p ? _pending.add(kind) : _pending.remove(kind));
+  }
 
   String _savedWaterThreshold = '';
-  String _savedWaterSchedule  = '';
+  List<String> _savedWaterSchedule = [];
   String _savedWaterDuration  = '';
-  String _savedLightSchedule  = '';
-  String _savedFertSchedule   = '';
+  List<String> _savedLightSchedule = [];
+  List<String> _savedFertSchedule = [];
   String _savedFertDuration   = '';
 
   @override
@@ -78,10 +79,7 @@ class _AutomationTabState extends State<AutomationTab> {
   @override
   void dispose() {
     _wateringThresholdCtrl.dispose();
-    _wateringScheduleCtrl.dispose();
     _wateringDurationCtrl.dispose();
-    _lightingScheduleCtrl.dispose();
-    _fertilizingScheduleCtrl.dispose();
     _fertilizingDurationCtrl.dispose();
     super.dispose();
   }
@@ -98,27 +96,32 @@ class _AutomationTabState extends State<AutomationTab> {
     }
     if (!mounted) return;
     setState(() => _loaded = true);
-    if (config case final config?) {
-      setState(() {
-        _autoWater      = config.autoWateringEnabled;
-        _autoLight      = config.autoLightingEnabled;
-        _autoFertilizer = config.autoFertilizingEnabled;
+    if (config case final config?) setState(() => _showConfig(config));
+  }
 
-        _wateringThresholdCtrl.text   = config.wateringThreshold?.toString() ?? '';
-        _wateringScheduleCtrl.text    = config.wateringSchedule ?? '';
-        _wateringDurationCtrl.text    = config.wateringDuration?.toString() ?? '';
-        _lightingScheduleCtrl.text    = config.lightingSchedule ?? '';
-        _fertilizingScheduleCtrl.text = config.fertilizingSchedule ?? '';
-        _fertilizingDurationCtrl.text = config.fertilizingDuration?.toString() ?? '';
+  // Puts a saved config into the form and marks it as saved.
+  void _showConfig(AutomationConfig config) {
+    _autoWater      = config.autoWateringEnabled;
+    _autoLight      = config.autoLightingEnabled;
+    _autoFertilizer = config.autoFertilizingEnabled;
+    _wateringThresholdCtrl.text   = config.wateringThreshold?.toString() ?? '';
+    _wateringDurationCtrl.text    = config.wateringDuration?.toString() ?? '';
+    _fertilizingDurationCtrl.text = config.fertilizingDuration?.toString() ?? '';
+    _waterSchedule = config.wateringSchedule;
+    _lightSchedule = config.lightingSchedule;
+    _fertSchedule  = config.fertilizingSchedule;
+    _markSaved();
+    _formEpoch++;
+    _pending.clear();
+  }
 
-        _savedWaterThreshold = _wateringThresholdCtrl.text;
-        _savedWaterSchedule  = _wateringScheduleCtrl.text;
-        _savedWaterDuration  = _wateringDurationCtrl.text;
-        _savedLightSchedule  = _lightingScheduleCtrl.text;
-        _savedFertSchedule   = _fertilizingScheduleCtrl.text;
-        _savedFertDuration   = _fertilizingDurationCtrl.text;
-      });
-    }
+  void _markSaved() {
+    _savedWaterThreshold = _wateringThresholdCtrl.text;
+    _savedWaterSchedule  = _waterSchedule;
+    _savedWaterDuration  = _wateringDurationCtrl.text;
+    _savedLightSchedule  = _lightSchedule;
+    _savedFertSchedule   = _fertSchedule;
+    _savedFertDuration   = _fertilizingDurationCtrl.text;
   }
 
   void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -141,60 +144,62 @@ class _AutomationTabState extends State<AutomationTab> {
   }
 
   Future<void> _saveTextConfig() async {
-    String? text(TextEditingController c, {bool upper = false}) {
-      final v = upper ? c.text.trim().toUpperCase() : c.text.trim();
-      return v.isEmpty ? null : v;
-    }
-    final ws = text(_wateringScheduleCtrl), ls = text(_lightingScheduleCtrl), fs = text(_fertilizingScheduleCtrl, upper: true);
-    // Only check fields the user changed: a hidden field (e.g. lighting without a light
-    // module) holding an old value must not block saving the others.
-    bool bad(String? v, String saved, RegExp re) => v != null && v != saved.trim() && !re.hasMatch(v);
+    // Schedule entries are checked as they're added to their list (upsertSchedule).
+    // Only check durations the user changed: a hidden field (e.g. fertilizing without a
+    // fertilizer module) holding an old value must not block saving the others.
     bool tooLong(TextEditingController c, String saved, int max) {
       final v = c.text.trim(), n = int.tryParse(v);
       return v.isNotEmpty && v != saved.trim() && !(n != null && n > 0 && n <= max);
     }
-    final error = bad(ws, _savedWaterSchedule, _timeRe) ? 'Watering time must look like 07:00 (24-hour).'
-        : bad(ls, _savedLightSchedule, _lightRe) ? 'Lighting schedule must look like 08:00–18:00.'
-        : bad(fs, _savedFertSchedule, _fertRe) ? 'Fertilizing schedule must look like MON 06:00.'
-        // The board stops a pump by itself after 20 / 40 min (firmware safety limit), so runs stay well inside it.
+    // The board stops a pump by itself after 20 / 40 min (firmware safety limit), so runs stay well inside it.
+    final error = _pending.isNotEmpty ? 'Add or update the time you typed (or clear it) before saving.'
         : tooLong(_wateringDurationCtrl, _savedWaterDuration, _maxWateringS) ? 'Watering duration must be 1 to $_maxWateringS seconds.'
         : tooLong(_fertilizingDurationCtrl, _savedFertDuration, _maxFertilizingS) ? 'Fertilizing duration must be 1 to $_maxFertilizingS seconds.'
         : null;
     if (error != null) return _snack(error);
 
+    final sent = (
+      threshold: _wateringThresholdCtrl.text, water: _waterSchedule, waterDur: _wateringDurationCtrl.text,
+      light: _lightSchedule, fert: _fertSchedule, fertDur: _fertilizingDurationCtrl.text,
+    );
+
     try {
       await _configService.saveFields(widget.zone.id, {
-        'wateringThreshold':   num.tryParse(_wateringThresholdCtrl.text.trim()),
-        'wateringSchedule':    ws,
-        'wateringDuration':    int.tryParse(_wateringDurationCtrl.text.trim()),
-        'lightingSchedule':    ls,
-        'fertilizingSchedule': fs,
-        'fertilizingDuration': int.tryParse(_fertilizingDurationCtrl.text.trim()),
+        'wateringThreshold':   num.tryParse(sent.threshold.trim()),
+        'wateringSchedule':    sent.water,
+        'wateringDuration':    int.tryParse(sent.waterDur.trim()),
+        'lightingSchedule':    sent.light,
+        'fertilizingSchedule': sent.fert,
+        'fertilizingDuration': int.tryParse(sent.fertDur.trim()),
       });
     } catch (e) {
       debugPrint('Failed to save: $e');
       if (mounted) _snack('Failed to save. Please try again.');
       return;
     }
-    if (!mounted) return;
-    setState(() {
-      _savedWaterThreshold = _wateringThresholdCtrl.text;
-      _savedWaterSchedule  = _wateringScheduleCtrl.text;
-      _savedWaterDuration  = _wateringDurationCtrl.text;
-      _savedLightSchedule  = _lightingScheduleCtrl.text;
-      _savedFertSchedule   = _fertilizingScheduleCtrl.text;
-      _savedFertDuration   = _fertilizingDurationCtrl.text;
-    });
+    // Mark what was sent as saved: edits made while the write was in flight stay unsaved.
+    if (mounted) {
+      setState(() {
+        _savedWaterThreshold = sent.threshold;
+        _savedWaterSchedule  = sent.water;
+        _savedWaterDuration  = sent.waterDur;
+        _savedLightSchedule  = sent.light;
+        _savedFertSchedule   = sent.fert;
+        _savedFertDuration   = sent.fertDur;
+      });
+    }
   }
 
   void _cancelTextConfig() {
     setState(() {
       _wateringThresholdCtrl.text   = _savedWaterThreshold;
-      _wateringScheduleCtrl.text    = _savedWaterSchedule;
+      _waterSchedule                = _savedWaterSchedule;
       _wateringDurationCtrl.text    = _savedWaterDuration;
-      _lightingScheduleCtrl.text    = _savedLightSchedule;
-      _fertilizingScheduleCtrl.text = _savedFertSchedule;
+      _lightSchedule                = _savedLightSchedule;
+      _fertSchedule                 = _savedFertSchedule;
       _fertilizingDurationCtrl.text = _savedFertDuration;
+      _formEpoch++;
+      _pending.clear();
     });
   }
 
@@ -211,38 +216,25 @@ class _AutomationTabState extends State<AutomationTab> {
   Future<void> _applyAiPlan(Map<String, dynamic> plan) async {
     num? asNum(dynamic v) => v is num ? v : (v is String ? num.tryParse(v) : null);
     int? asInt(dynamic v) => v is int ? v : (v is num ? v.toInt() : (v is String ? int.tryParse(v) : null));
-    String? asStr(dynamic v) => (v is String && v.trim().isNotEmpty) ? v.trim() : null;
+    // The plan's lists replace the current ones (the server keeps the current times that suit the plants).
+    List<String> asList(dynamic v) => scheduleList(v is String ? v.trim() : v);
 
     final config = AutomationConfig(
       autoWateringEnabled:    plan['autoWateringEnabled'] == true,
       wateringThreshold:      asNum(plan['wateringThreshold']),
-      wateringSchedule:       asStr(plan['wateringSchedule']),
+      wateringSchedule:       asList(plan['wateringSchedule']),
       wateringDuration:       asInt(plan['wateringDuration']),
       autoLightingEnabled:    plan['autoLightingEnabled'] == true,
-      lightingSchedule:       asStr(plan['lightingSchedule']),
+      lightingSchedule:       asList(plan['lightingSchedule']),
       autoFertilizingEnabled: plan['autoFertilizingEnabled'] == true,
-      fertilizingSchedule:    asStr(plan['fertilizingSchedule']),
+      fertilizingSchedule:    asList(plan['fertilizingSchedule']),
       fertilizingDuration:    asInt(plan['fertilizingDuration']),
       aiRecommended:          true,
     );
     await _configService.saveConfig(widget.zone.id, config);
     if (!mounted) return;
     setState(() {
-      _autoWater      = config.autoWateringEnabled;
-      _autoLight      = config.autoLightingEnabled;
-      _autoFertilizer = config.autoFertilizingEnabled;
-      _wateringThresholdCtrl.text   = config.wateringThreshold?.toString() ?? '';
-      _wateringScheduleCtrl.text    = config.wateringSchedule ?? '';
-      _wateringDurationCtrl.text    = config.wateringDuration?.toString() ?? '';
-      _lightingScheduleCtrl.text    = config.lightingSchedule ?? '';
-      _fertilizingScheduleCtrl.text = config.fertilizingSchedule ?? '';
-      _fertilizingDurationCtrl.text = config.fertilizingDuration?.toString() ?? '';
-      _savedWaterThreshold = _wateringThresholdCtrl.text;
-      _savedWaterSchedule  = _wateringScheduleCtrl.text;
-      _savedWaterDuration  = _wateringDurationCtrl.text;
-      _savedLightSchedule  = _lightingScheduleCtrl.text;
-      _savedFertSchedule   = _fertilizingScheduleCtrl.text;
-      _savedFertDuration   = _fertilizingDurationCtrl.text;
+      _showConfig(config);
       _aiPlan = null;
     });
   }
@@ -269,12 +261,12 @@ class _AutomationTabState extends State<AutomationTab> {
     final rows = <List<String>>[
       ['Auto watering',            _autoWater ? 'On' : 'Off',                s(plan['autoWateringEnabled'] == true ? 'On' : 'Off')],
       ['Moisture threshold (%)',   s(_wateringThresholdCtrl.text),           s(plan['wateringThreshold'])],
-      ['Watering time',            s(_wateringScheduleCtrl.text),            s(plan['wateringSchedule'])],
+      ['Watering times',           s(_waterSchedule.join(', ')),            s(scheduleList(plan['wateringSchedule']).join(', '))],
       ['Watering duration (s)',    s(_wateringDurationCtrl.text),            s(plan['wateringDuration'])],
       ['Auto lighting',            _autoLight ? 'On' : 'Off',                plan['autoLightingEnabled'] == true ? 'On' : 'Off'],
-      ['Lighting schedule',        s(_lightingScheduleCtrl.text),            s(plan['lightingSchedule'])],
+      ['Lighting schedule',        s(_lightSchedule.join(', ')),            s(scheduleList(plan['lightingSchedule']).join(', '))],
       ['Auto fertilizing',         _autoFertilizer ? 'On' : 'Off',           plan['autoFertilizingEnabled'] == true ? 'On' : 'Off'],
-      ['Fertilizing schedule',     s(_fertilizingScheduleCtrl.text),         s(plan['fertilizingSchedule'])],
+      ['Fertilizing schedule',     s(_fertSchedule.join(', ')),             s(scheduleList(plan['fertilizingSchedule']).join(', '))],
       ['Fertilizing duration (s)', s(_fertilizingDurationCtrl.text),         s(plan['fertilizingDuration'])],
     ];
     return Container(
@@ -309,12 +301,13 @@ class _AutomationTabState extends State<AutomationTab> {
                 child: Row(
                   children: [
                     Expanded(child: Text(r[0], style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant))),
-                    Text(r[1], style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+                    // Lists of times can be long: let them wrap instead of overflowing the row
+                    Flexible(child: Text(r[1], textAlign: TextAlign.end, style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant))),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
                       child: Icon(Icons.arrow_forward, size: 14, color: cs.onSurfaceVariant),
                     ),
-                    Text(r[2], style: tt.labelLarge),
+                    Flexible(child: Text(r[2], style: tt.labelLarge)),
                   ],
                 ),
               )),
@@ -390,12 +383,14 @@ class _AutomationTabState extends State<AutomationTab> {
       );
     }
 
+    bool changed(List<String> a, List<String> b) => a.join('\n') != b.join('\n');
     final isDirty = _wateringThresholdCtrl.text != _savedWaterThreshold ||
-        _wateringScheduleCtrl.text    != _savedWaterSchedule  ||
+        changed(_waterSchedule, _savedWaterSchedule) ||
         _wateringDurationCtrl.text    != _savedWaterDuration  ||
-        _lightingScheduleCtrl.text    != _savedLightSchedule  ||
-        _fertilizingScheduleCtrl.text != _savedFertSchedule   ||
-        _fertilizingDurationCtrl.text != _savedFertDuration;
+        changed(_lightSchedule, _savedLightSchedule) ||
+        changed(_fertSchedule, _savedFertSchedule)   ||
+        _fertilizingDurationCtrl.text != _savedFertDuration ||
+        _pending.isNotEmpty;
 
     return StreamBuilder<Device?>(
       stream: _deviceStream,
@@ -463,11 +458,11 @@ class _AutomationTabState extends State<AutomationTab> {
             if (_aiPlan != null) _buildAiPlanPreview(),
             _buildToggleSetting(
               title: 'Water automation',
-              subtitle: 'Trigger at moisture threshold or schedule',
+              subtitle: 'Trigger at moisture threshold or set daily times',
               value: _autoWater,
               busy: _savingToggles.contains('autoWateringEnabled'),
               onChanged: (v) {
-                setState(() => _autoWater = v);
+                setState(() { _autoWater = v; if (!v) _pending.remove('water'); });
                 _saveToggle('autoWateringEnabled', v, () => _autoWater = !v);
               },
               expandedContent: Column(
@@ -480,12 +475,6 @@ class _AutomationTabState extends State<AutomationTab> {
                   ),
                   const SizedBox(height: 12),
                   TextField(
-                    controller: _wateringScheduleCtrl,
-                    decoration: const InputDecoration(labelText: 'Daily schedule (e.g. 07:00)', border: OutlineInputBorder()),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
                     controller: _wateringDurationCtrl,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
@@ -494,6 +483,13 @@ class _AutomationTabState extends State<AutomationTab> {
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
+                  const SizedBox(height: 12),
+                  _ScheduleList(
+                    key: ValueKey('water$_formEpoch'),
+                    kind: 'water', onPending: _setPending, label: 'Daily time (e.g. 07:00)',
+                    list: _waterSchedule,
+                    onChanged: (l) => setState(() => _waterSchedule = l),
+                  ),
                 ],
               ),
             ),
@@ -501,17 +497,18 @@ class _AutomationTabState extends State<AutomationTab> {
               const SizedBox(height: 12),
               _buildToggleSetting(
                 title: 'Light automation',
-                subtitle: 'Schedule lighting times',
+                subtitle: 'One or more daily light windows',
                 value: _autoLight,
                 busy: _savingToggles.contains('autoLightingEnabled'),
                 onChanged: (v) {
-                  setState(() => _autoLight = v);
+                  setState(() { _autoLight = v; if (!v) _pending.remove('light'); });
                   _saveToggle('autoLightingEnabled', v, () => _autoLight = !v);
                 },
-                expandedContent: TextField(
-                  controller: _lightingScheduleCtrl,
-                  decoration: const InputDecoration(labelText: 'Schedule (e.g. 08:00–18:00)', border: OutlineInputBorder()),
-                  onChanged: (_) => setState(() {}),
+                expandedContent: _ScheduleList(
+                  key: ValueKey('light$_formEpoch'),
+                  kind: 'light', onPending: _setPending, label: 'Light window', hint: '08:00–18:00',
+                  list: _lightSchedule,
+                  onChanged: (l) => setState(() => _lightSchedule = l),
                 ),
               ),
             ],
@@ -519,21 +516,15 @@ class _AutomationTabState extends State<AutomationTab> {
               const SizedBox(height: 12),
               _buildToggleSetting(
                 title: 'Fertilizer automation',
-                subtitle: 'Trigger on schedule',
+                subtitle: 'One or more weekly times',
                 value: _autoFertilizer,
                 busy: _savingToggles.contains('autoFertilizingEnabled'),
                 onChanged: (v) {
-                  setState(() => _autoFertilizer = v);
+                  setState(() { _autoFertilizer = v; if (!v) _pending.remove('fert'); });
                   _saveToggle('autoFertilizingEnabled', v, () => _autoFertilizer = !v);
                 },
                 expandedContent: Column(
                   children: [
-                    TextField(
-                      controller: _fertilizingScheduleCtrl,
-                      decoration: const InputDecoration(labelText: 'Weekly schedule (e.g. MON 06:00)', border: OutlineInputBorder()),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 12),
                     TextField(
                       controller: _fertilizingDurationCtrl,
                       keyboardType: TextInputType.number,
@@ -542,6 +533,13 @@ class _AutomationTabState extends State<AutomationTab> {
                         border: OutlineInputBorder(),
                       ),
                       onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 12),
+                    _ScheduleList(
+                      key: ValueKey('fert$_formEpoch'),
+                      kind: 'fert', onPending: _setPending, label: 'Weekly time', hint: 'MON 06:00',
+                      list: _fertSchedule,
+                      onChanged: (l) => setState(() => _fertSchedule = l),
                     ),
                   ],
                 ),
@@ -632,6 +630,148 @@ class _AutomationTabState extends State<AutomationTab> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// Times are added to (or edited in) the list below the field; Save at the bottom stores the list.
+class _ScheduleList extends StatefulWidget {
+  final String kind, label;
+  final String? hint;  // example value, shown in the empty field
+  final List<String> list;
+  final ValueChanged<List<String>> onChanged;
+  final void Function(String kind, bool pending) onPending;  // a typed time not yet added, so Save can't drop it
+
+  const _ScheduleList({super.key, required this.kind, required this.label, this.hint, required this.list, required this.onChanged, required this.onPending});
+
+  @override
+  State<_ScheduleList> createState() => _ScheduleListState();
+}
+
+// Kept alive while scrolled out of view, so a typed time isn't lost with the off-screen card.
+class _ScheduleListState extends State<_ScheduleList> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  final _ctrl = TextEditingController();
+  int _editing = -1;  // index of the entry in the field, or -1 when adding
+  String? _error;
+
+  @override
+  void dispose() {
+    // The list went away (module removed, switch off, tab closed): its typed time can't block Save.
+    // After the frame, since the tab can't rebuild while this one is being torn down.
+    final onPending = widget.onPending, kind = widget.kind;
+    WidgetsBinding.instance.addPostFrameCallback((_) => onPending(kind, false));
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final r = upsertSchedule(widget.list, widget.kind, _ctrl.text, _editing);
+    if (r.error != null) return setState(() => _error = r.error);
+    widget.onChanged(r.list!);
+    _reset();
+  }
+
+  void _reset() {
+    setState(() {
+      _ctrl.clear();
+      _editing = -1;
+      _error = null;
+    });
+    widget.onPending(widget.kind, false);
+  }
+
+  void _edit(int i) {
+    setState(() {
+      _ctrl.text = widget.list[i];
+      _editing = i;
+      _error = null;
+    });
+    widget.onPending(widget.kind, true);
+  }
+
+  void _remove(int i) {
+    widget.onChanged([...widget.list]..removeAt(i));
+    if (_editing == i) {
+      _reset();
+    } else if (_editing > i) {
+      setState(() => _editing--);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final cs = Theme.of(context).colorScheme;
+    final editing = _editing >= 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                decoration: InputDecoration(
+                  labelText: editing ? 'Edit ${widget.list[_editing]}' : widget.label,
+                  hintText: widget.hint,
+                  border: const OutlineInputBorder(),
+                  errorText: _error,
+                  errorMaxLines: 2,
+                ),
+                textInputAction: TextInputAction.done,
+                onChanged: (v) {
+                  setState(() => _error = null);
+                  widget.onPending(widget.kind, v.trim().isNotEmpty);
+                },
+                onSubmitted: (_) => _submit(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: FilledButton.tonalIcon(
+                onPressed: _ctrl.text.trim().isEmpty ? null : _submit,
+                icon: Icon(editing ? Icons.check : Icons.add),
+                label: Text(editing ? 'Update' : 'Add'),
+              ),
+            ),
+            if (editing)
+              IconButton(onPressed: _reset, tooltip: 'Cancel edit', icon: const Icon(Icons.close)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (widget.list.isEmpty)
+          Text('No times yet.', style: TextStyle(color: cs.onSurfaceVariant))
+        else
+          Material(
+            color: cs.surfaceContainer,
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                for (var i = 0; i < widget.list.length; i++)
+                  ListTile(
+                    dense: true,
+                    selected: _editing == i,
+                    selectedTileColor: cs.secondaryContainer,
+                    leading: const Icon(Icons.schedule, size: 20),
+                    title: Text(widget.list[i], style: Theme.of(context).textTheme.bodyLarge),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(onPressed: () => _edit(i), tooltip: 'Edit ${widget.list[i]}', icon: const Icon(Icons.edit_outlined)),
+                        IconButton(onPressed: () => _remove(i), tooltip: 'Delete ${widget.list[i]}', icon: const Icon(Icons.delete_outline)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

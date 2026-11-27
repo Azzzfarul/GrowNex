@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { flattenDailyStats, buildChartData, describeTrend, buildOverviewSummary, moistureBucketSeries, healthScoreForPlant, generateInsights, plantStatus } from '../src/lib/analytics.js'
 import { plantHealth, plantHealthSummary, compliancePercent } from '../src/lib/plantHealth.js'
 import { plantZoneFit, zoneFitHint } from '../src/lib/zoneFit.js'
+import { scheduleList, upsertSchedule } from '../src/lib/schedules.js'
 
 const HOUR = 3600000, DAY = 24 * HOUR
 const reading = (ms, temperature) => ({ timestamp: new Date(ms), temperature })
@@ -213,4 +214,56 @@ test('flattenDailyStats ignores the camera check fields the server adds to an ho
     '23': { visualStatus: 'healthy', visualConfidence: 0.9, sensorStatus: 'healthy' },  // camera only: no reading
   } }]
   assert.deepEqual(flattenDailyStats(days, t0).map(r => r.temperature), [22])
+})
+
+// ── schedules ────────────────────────────────────────────────────────────────
+
+test('scheduleList reads old single-string configs and new lists', () => {
+  assert.deepEqual(scheduleList('07:00'), ['07:00'])
+  assert.deepEqual(scheduleList(['07:00', '18:00']), ['07:00', '18:00'])
+  assert.deepEqual(scheduleList(null), [])
+  assert.deepEqual(scheduleList(undefined), [])
+  assert.deepEqual(scheduleList(''), [])
+})
+
+test('upsertSchedule adds, normalizes and sorts entries', () => {
+  assert.deepEqual(upsertSchedule(['18:00'], 'water', ' 7:30 '), { list: ['07:30', '18:00'] })
+  assert.deepEqual(upsertSchedule([], 'light', '8:00 - 18:00'), { list: ['08:00–18:00'] })
+  assert.deepEqual(upsertSchedule(['MON 06:00', 'SUN 06:00'], 'fert', 'wed  7:00'), { list: ['MON 06:00', 'WED 07:00', 'SUN 06:00'] })
+})
+
+test('upsertSchedule edits in place without flagging the entry as its own duplicate', () => {
+  assert.deepEqual(upsertSchedule(['07:00', '18:00'], 'water', '07:00', 0), { list: ['07:00', '18:00'] })
+  assert.deepEqual(upsertSchedule(['07:00', '18:00'], 'water', '20:00', 0), { list: ['18:00', '20:00'] })
+  assert.match(upsertSchedule(['07:00', '18:00'], 'water', '18:00', 0).error, /already/)
+})
+
+test('upsertSchedule rejects bad formats and duplicates', () => {
+  assert.match(upsertSchedule([], 'water', '7am').error, /07:00/)
+  assert.match(upsertSchedule([], 'water', '24:00').error, /07:00/)
+  assert.match(upsertSchedule([], 'light', '08:00').error, /08:00–18:00/)
+  assert.match(upsertSchedule([], 'fert', 'monday 6').error, /MON 06:00/)
+  assert.match(upsertSchedule(['07:00'], 'water', '7:00').error, /already/)
+  assert.match(upsertSchedule(['7:00'], 'water', '07:00').error, /already/)   // old unpadded entry
+})
+
+test('upsertSchedule tolerates free-text entries saved by early app versions', () => {
+  assert.deepEqual(upsertSchedule(['6am-8pm'], 'light', '08:00–18:00'), { list: ['08:00–18:00', '6am-8pm'] })
+  assert.deepEqual(upsertSchedule(['MON'], 'fert', 'TUE 06:00'), { list: ['TUE 06:00', 'MON'] })  // unparseable entries sort last
+  assert.match(upsertSchedule(['8:00-12:00'], 'light', '11:00–13:00').error, /overlaps/)  // old but parseable: still checked
+})
+
+test('upsertSchedule rejects light windows that overlap, touch or have no length', () => {
+  assert.match(upsertSchedule([], 'light', '08:00–08:00').error, /different time/)
+  assert.match(upsertSchedule(['08:00–12:00'], 'light', '11:00–14:00').error, /overlaps or touches 08:00–12:00/)
+  assert.match(upsertSchedule(['22:00–02:00'], 'light', '01:00–03:00').error, /overlaps/)   // past midnight
+  assert.match(upsertSchedule(['08:00-12:00'], 'light', '09:00–10:00').error, /overlaps/)   // old hyphen entry
+  assert.match(upsertSchedule(['08:00–12:00'], 'light', '12:00–14:00').error, /touches/)
+  assert.match(upsertSchedule(['22:00–02:00'], 'light', '02:00–06:00').error, /touches/)
+  assert.match(upsertSchedule(['20:00–00:00'], 'light', '00:00–05:00').error, /touches/)   // at midnight
+  assert.deepEqual(upsertSchedule(['08:00–12:00'], 'light', '12:01–14:00'), { list: ['08:00–12:00', '12:01–14:00'] })
+  assert.deepEqual(upsertSchedule(['22:00–02:00'], 'light', '02:01–06:00'), { list: ['02:01–06:00', '22:00–02:00'] })
+  assert.deepEqual(upsertSchedule(['20:00–00:00'], 'light', '06:00–10:00'), { list: ['06:00–10:00', '20:00–00:00'] })
+  // editing a window may move it over its own old slot
+  assert.deepEqual(upsertSchedule(['08:00–12:00'], 'light', '09:00–13:00', 0), { list: ['09:00–13:00'] })
 })

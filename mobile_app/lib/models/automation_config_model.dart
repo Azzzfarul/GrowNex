@@ -1,26 +1,28 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../utils/schedules.dart';
+
 class AutomationConfig {
   final bool autoWateringEnabled;
   final num? wateringThreshold;
-  final String? wateringSchedule;
+  final List<String> wateringSchedule;
   final int? wateringDuration;
   final bool autoLightingEnabled;
-  final String? lightingSchedule;
+  final List<String> lightingSchedule;
   final bool autoFertilizingEnabled;
-  final String? fertilizingSchedule;
+  final List<String> fertilizingSchedule;
   final int? fertilizingDuration;
   final bool aiRecommended;
 
   AutomationConfig({
     this.autoWateringEnabled = false,
     this.wateringThreshold,
-    this.wateringSchedule,
+    this.wateringSchedule = const [],
     this.wateringDuration,
     this.autoLightingEnabled = false,
-    this.lightingSchedule,
+    this.lightingSchedule = const [],
     this.autoFertilizingEnabled = false,
-    this.fertilizingSchedule,
+    this.fertilizingSchedule = const [],
     this.fertilizingDuration,
     this.aiRecommended = false,
   });
@@ -34,12 +36,12 @@ class AutomationConfig {
     return AutomationConfig(
       autoWateringEnabled: map['autoWateringEnabled'] as bool? ?? false,
       wateringThreshold: map['wateringThreshold'] as num?,
-      wateringSchedule: map['wateringSchedule'] as String?,
+      wateringSchedule: scheduleList(map['wateringSchedule']),
       wateringDuration: map['wateringDuration'] as int?,
       autoLightingEnabled: map['autoLightingEnabled'] as bool? ?? false,
-      lightingSchedule: map['lightingSchedule'] as String?,
+      lightingSchedule: scheduleList(map['lightingSchedule']),
       autoFertilizingEnabled: map['autoFertilizingEnabled'] as bool? ?? false,
-      fertilizingSchedule: map['fertilizingSchedule'] as String?,
+      fertilizingSchedule: scheduleList(map['fertilizingSchedule']),
       fertilizingDuration: map['fertilizingDuration'] as int?,
       aiRecommended: map['aiRecommended'] as bool? ?? false,
     );
