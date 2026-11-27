@@ -31,7 +31,8 @@ export function upsertSchedule(list, kind, raw, editIndex = -1) {
   const v = canonical(raw)
   if (!FORMATS[kind].re.test(v)) return { error: FORMATS[kind].error }
   const others = list.filter((_, i) => i !== editIndex)
-  if (others.includes(v)) return { error: `${v} is already in the list.` }
+  // Older saved entries may be written "7:00".
+  if (others.some((x) => canonical(x) === v)) return { error: `${v} is already in the list.` }
   if (kind === 'light') {
     const [s, e] = v.split('–')
     if (s === e) return { error: 'The light must turn off at a different time than it turns on.' }

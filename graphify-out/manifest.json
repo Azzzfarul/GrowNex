@@ -264,9 +264,9 @@
     "semantic_hash": ""
   },
   "mobile_app/lib/screens/plants/zone_detail/automation_tab.dart": {
-    "mtime": 1795786005.517402,
-    "seen": 1795786292.814524,
-    "ast_hash": "9f128f7f3fbf778f60f53d6f94388444",
+    "mtime": 1795787499.656222,
+    "seen": 1795787604.675869,
+    "ast_hash": "7cec7df4ed717f2080ca7221c3ded181",
     "semantic_hash": ""
   },
   "mobile_app/lib/screens/plants/zone_detail/monitoring_tab.dart": {
@@ -474,9 +474,9 @@
     "semantic_hash": "75422d02b3cf9637a52ff2c5373b9bfe"
   },
   "mobile_app/test/logic_test.dart": {
-    "mtime": 1795785969.873111,
-    "seen": 1795786292.814549,
-    "ast_hash": "a169f6e5ec967f52510f4505a623cb12",
+    "mtime": 1795787490.9392216,
+    "seen": 1795787604.6758962,
+    "ast_hash": "f84aa2059e59bcf87f2ec831285f7a89",
     "semantic_hash": ""
   },
   "mobile_app/web/manifest.json": {
@@ -798,9 +798,9 @@
     "semantic_hash": "be58350afd840f4de91d78c4cc47814e"
   },
   "web_dashboard/client/test/lib.test.js": {
-    "mtime": 1795785969.8710766,
-    "seen": 1795786292.8145869,
-    "ast_hash": "20302b5863ded783afbc590521a5bf05",
+    "mtime": 1795787490.9388857,
+    "seen": 1795787604.6759338,
+    "ast_hash": "add389b3fad7031e6ea852510a04db73",
     "semantic_hash": ""
   },
   "web_dashboard/client/vite.config.js": {
@@ -912,9 +912,9 @@
     "semantic_hash": ""
   },
   "web_dashboard/server/src/services/mqttBridge.js": {
-    "mtime": 1795785936.3895128,
-    "seen": 1795786292.814604,
-    "ast_hash": "5b5da5dc10fa1e34c354c721abe75f3a",
+    "mtime": 1795787490.9380805,
+    "seen": 1795787604.67595,
+    "ast_hash": "37e802fe21c47a7bf6b094d3bad149d0",
     "semantic_hash": ""
   },
   "web_dashboard/server/src/services/notifications.js": {
@@ -942,9 +942,9 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1795783815.9405918,
-    "seen": 1795783817.89309,
-    "ast_hash": "a74a5452daa5c062f4a5d29ea2dc352a",
+    "mtime": 1795786297.7593863,
+    "seen": 1795786816.653839,
+    "ast_hash": "6cef6d2e1d179c0a47781c4f1e673141",
     "semantic_hash": ""
   },
   "README.md": {
@@ -1206,15 +1206,15 @@
     "semantic_hash": ""
   },
   "mobile_app/lib/utils/schedules.dart": {
-    "mtime": 1795785959.8780193,
-    "seen": 1795786292.814539,
-    "ast_hash": "660218fd8bd5e0b3e5cc241bbf2c37a3",
+    "mtime": 1795787518.310442,
+    "seen": 1795787604.675885,
+    "ast_hash": "4412ceac115d15e7117a010697f9b5ad",
     "semantic_hash": ""
   },
   "web_dashboard/client/src/lib/schedules.js": {
-    "mtime": 1795785959.8779142,
-    "seen": 1795786292.814574,
-    "ast_hash": "a0d41d1354d0436b38d20b018f717404",
+    "mtime": 1795787518.310334,
+    "seen": 1795787604.675921,
+    "ast_hash": "9327541886323151ef1d4e82d52c5ba8",
     "semantic_hash": ""
   },
   "device_simulator/package-lock.json": {

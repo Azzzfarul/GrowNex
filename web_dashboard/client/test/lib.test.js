@@ -244,6 +244,7 @@ test('upsertSchedule rejects bad formats and duplicates', () => {
   assert.match(upsertSchedule([], 'light', '08:00').error, /08:00–18:00/)
   assert.match(upsertSchedule([], 'fert', 'monday 6').error, /MON 06:00/)
   assert.match(upsertSchedule(['07:00'], 'water', '7:00').error, /already/)
+  assert.match(upsertSchedule(['7:00'], 'water', '07:00').error, /already/)   // old unpadded entry
 })
 
 test('upsertSchedule rejects light windows that overlap, touch or have no length', () => {

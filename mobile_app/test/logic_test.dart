@@ -307,6 +307,7 @@ void main() {
       expect(err([], 'light', '08:00'), contains('08:00–18:00'));
       expect(err([], 'fert', 'monday 6'), contains('MON 06:00'));
       expect(err(['07:00'], 'water', '7:00'), contains('already'));
+      expect(err(['7:00'], 'water', '07:00'), contains('already'));
     });
 
     test('upsertSchedule rejects light windows that overlap, touch or have no length', () {

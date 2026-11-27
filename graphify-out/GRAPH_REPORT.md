@@ -1,7 +1,7 @@
 # Graph Report - GrowNex  (2026-11-27)
 
 ## Corpus Check
-- 191 files · ~116,499 words
+- 191 files · ~116,701 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 71 file(s) not represented in the graph (top: (none) 17, .xcconfig 8, .xml 7)
 - WARNING: 71 of 274 files seen (26%) have no supported extractor and are missing from this graph entirely. It may look complete while representing only part of the codebase.
@@ -12,7 +12,7 @@
 - Token cost: 469,489 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3567a14a`
+- Built from commit: `9add1562`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -143,21 +143,21 @@
 5. `Win32Window` - 27 edges
 6. `react` - 26 edges
 7. `Dialog()` - 24 edges
-8. `PlantDetailModal()` - 19 edges
-9. `ZoneDetailPage()` - 19 edges
+8. `ZoneDetailPage()` - 19 edges
+9. `PlantDetailModal()` - 19 edges
 10. `firebase-admin` - 19 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Constraints` --references--> `validatePlan()`  [INFERRED]
-  docs/superpowers/specs/2026-11-16-plant-image-diagnosis-design.md → web_dashboard/server/src/services/aiAnalytics.js
 - `Global Constraints` --references--> `downscaleToJpeg()`  [INFERRED]
   docs/superpowers/plans/2026-11-16-plant-image-diagnosis.md → web_dashboard/client/src/lib/photoUpload.js
 - `Evaluation` --references--> `downscaleToJpeg()`  [INFERRED]
   docs/superpowers/specs/2026-11-16-plant-image-diagnosis-design.md → web_dashboard/client/src/lib/photoUpload.js
-- `Actuators and automation (`mqttBridge.js`)` --references--> `validatePlan()`  [INFERRED]
-  CLAUDE.md → web_dashboard/server/src/services/aiAnalytics.js
-- `MQTT contract (firmware ↔ bridge)` --references--> `validatePlan()`  [INFERRED]
-  CLAUDE.md → web_dashboard/server/src/services/aiAnalytics.js
+- `Constraints` --references--> `validatePlan()`  [INFERRED]
+  docs/superpowers/specs/2026-11-16-plant-image-diagnosis-design.md → web_dashboard/server/src/services/aiAnalytics.js
+- `Task 5: Zone check on camera snapshots` --references--> `handleCameraImage()`  [INFERRED]
+  docs/superpowers/plans/2026-11-16-plant-image-diagnosis.md → web_dashboard/server/src/services/mqttBridge.js
+- `Firestore data model` --references--> `triggerActuator()`  [INFERRED]
+  CLAUDE.md → web_dashboard/server/src/services/mqttBridge.js
 
 ## Import Cycles
 - None detected.
@@ -612,7 +612,7 @@ Cohesion: 0.33
 Nodes (4): AppBottomNav, build, currentIndex, onTabSelected
 
 ## Knowledge Gaps
-- **887 isolated node(s):** `deviceId`, `_adminDocs`, `_admin`, `res`, `end` (+882 more)
+- **887 isolated node(s):** `_maxWateringS`, `zone`, `_configService`, `_aiPlan`, `_aiLoading` (+882 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1296 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **17 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -620,16 +620,16 @@ Nodes (4): AppBottomNav, build, currentIndex, onTabSelected
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Architecture` connect `Architecture` to `AI Plan Validation`, `mqttBridge.js`, `Web Analytics Logic`?**
-  _High betweenness centrality (0.044) - this node is a cross-community bridge._
-- **What connects `deviceId`, `_adminDocs`, `_admin` to the rest of the system?**
+  _High betweenness centrality (0.040) - this node is a cross-community bridge._
+- **What connects `_maxWateringS`, `zone`, `_configService` to the rest of the system?**
   _887 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `package:flutter/material.dart` be split into smaller, more focused modules?**
   _Cohesion score 0.1111111111111111 - nodes in this community are weakly interconnected._
-- **Why does `Firestore data model` connect `Web Analytics Logic` to `dailySummary.js`, `mqttBridge.js`, `Architecture`?**
-  _High betweenness centrality (0.023) - this node is a cross-community bridge._
-- **Should `mqttBridge.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.06504494976203067 - nodes in this community are weakly interconnected._
 - **Why does `Web ↔ mobile parity` connect `Web Analytics Logic` to `Icon`, `Architecture`, `useAuth`, `OverviewTab.jsx`?**
   _High betweenness centrality (0.019) - this node is a cross-community bridge._
+- **Should `mqttBridge.js` be split into smaller, more focused modules?**
+  _Cohesion score 0.06504494976203067 - nodes in this community are weakly interconnected._
+- **Why does `Firestore data model` connect `Web Analytics Logic` to `dailySummary.js`, `mqttBridge.js`, `Architecture`?**
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **Should `Web Analytics Logic` be split into smaller, more focused modules?**
   _Cohesion score 0.10638297872340426 - nodes in this community are weakly interconnected._

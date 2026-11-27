@@ -699,14 +699,21 @@ export const scheduleList = v => (Array.isArray(v) ? v : v ? [v] : [])
 // chain like this stay on at most MAX_CHAIN_MS from the first start (validatePlan's duration caps),
 // well inside the firmware's 20 / 40 min pump limit.
 const MAX_CHAIN_MS = { irrigation: 900_000, fertilizer: 1_800_000 }
-const scheduledRuns = new Map()   // key → { since, until }
+const scheduledRuns = new Map()   // key → { since, until, off }
 async function runScheduled(zoneId, actuator, durationMs) {
   const key = `${zoneId}:${actuator}`, prev = scheduledRuns.get(key), now = Date.now()
-  const since = prev && now < prev.until ? prev.since : now
-  const run = { since, until: Math.min(now + durationMs, since + MAX_CHAIN_MS[actuator]) }
+  // The chain continues until the previous run's "off" has actually fired, even if its timer
+  // is running late; otherwise a run starting right at its deadline would restart the cap.
+  const since = prev && !prev.off ? prev.since : now
+  const run = { since, until: Math.min(now + durationMs, since + MAX_CHAIN_MS[actuator]), off: false }
+  if (run.until <= now) return   // cap reached: the previous run's "off" stands
   scheduledRuns.set(key, run)
   await fireActuator(zoneId, actuator, true)
-  setTimeout(() => scheduledRuns.get(key) === run && fireActuator(zoneId, actuator, false), run.until - now)
+  setTimeout(() => {
+    if (scheduledRuns.get(key) !== run) return
+    run.off = true
+    fireActuator(zoneId, actuator, false)
+  }, Math.max(0, run.until - Date.now()))
 }
 
 function scheduleCronJobsForZone(zoneId, config) {

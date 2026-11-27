@@ -46,7 +46,8 @@ String _sortKey(String v) =>
   final (re, formatError) = _formats[kind]!;
   if (!re.hasMatch(v)) return (list: null, error: formatError);
   final others = [for (var i = 0; i < list.length; i++) if (i != editIndex) list[i]];
-  if (others.contains(v)) return (list: null, error: '$v is already in the list.');
+  // Older saved entries may be written "7:00".
+  if (others.any((x) => _canonical(x) == v)) return (list: null, error: '$v is already in the list.');
   if (kind == 'light') {
     final p = v.split('–');
     if (p[0] == p[1]) {

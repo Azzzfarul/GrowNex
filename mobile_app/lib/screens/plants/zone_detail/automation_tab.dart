@@ -156,21 +156,36 @@ class _AutomationTabState extends State<AutomationTab> {
         : null;
     if (error != null) return _snack(error);
 
+    final sent = (
+      threshold: _wateringThresholdCtrl.text, water: _waterSchedule, waterDur: _wateringDurationCtrl.text,
+      light: _lightSchedule, fert: _fertSchedule, fertDur: _fertilizingDurationCtrl.text,
+    );
+
     try {
       await _configService.saveFields(widget.zone.id, {
-        'wateringThreshold':   num.tryParse(_wateringThresholdCtrl.text.trim()),
-        'wateringSchedule':    _waterSchedule,
-        'wateringDuration':    int.tryParse(_wateringDurationCtrl.text.trim()),
-        'lightingSchedule':    _lightSchedule,
-        'fertilizingSchedule': _fertSchedule,
-        'fertilizingDuration': int.tryParse(_fertilizingDurationCtrl.text.trim()),
+        'wateringThreshold':   num.tryParse(sent.threshold.trim()),
+        'wateringSchedule':    sent.water,
+        'wateringDuration':    int.tryParse(sent.waterDur.trim()),
+        'lightingSchedule':    sent.light,
+        'fertilizingSchedule': sent.fert,
+        'fertilizingDuration': int.tryParse(sent.fertDur.trim()),
       });
     } catch (e) {
       debugPrint('Failed to save: $e');
       if (mounted) _snack('Failed to save. Please try again.');
       return;
     }
-    if (mounted) setState(_markSaved);
+    // Mark what was sent as saved: edits made while the write was in flight stay unsaved.
+    if (mounted) {
+      setState(() {
+        _savedWaterThreshold = sent.threshold;
+        _savedWaterSchedule  = sent.water;
+        _savedWaterDuration  = sent.waterDur;
+        _savedLightSchedule  = sent.light;
+        _savedFertSchedule   = sent.fert;
+        _savedFertDuration   = sent.fertDur;
+      });
+    }
   }
 
   void _cancelTextConfig() {
